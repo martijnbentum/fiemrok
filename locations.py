@@ -2,7 +2,7 @@ from pathlib import Path
 data = Path(__file__).parent.parent
 
 
-excel_filename = '../../trialsNewTryWithReps.ods'
+excel_filename = '../trialsNewTryWithReps.ods'
 
 audio_info_dict = Path('../audio_info.json')
 
