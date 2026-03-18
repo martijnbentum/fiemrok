@@ -1,0 +1,7 @@
+pandas
+odfpy
+TextGrid
+git+ssh://git@github.com/martijnbentum/ssh-audio-play.git
+git+https://github.com/martijnbentum/phraser.git
+git+https://github.com/martijnbentum/frame.git
+git+https://github.com/martijnbentum/to_vector.git
