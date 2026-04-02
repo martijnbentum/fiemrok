@@ -1,9 +1,11 @@
+import string
+
+import pandas as pd
+
 import annotation
 import audio
 import locations
-import pandas as pd
 import ssh_audio_play
-import string
 
 
 def load_excel(filename = locations.excel_filename):
@@ -17,11 +19,15 @@ def get_experiment_data(df = None):
     data = [list(line) for line in df.values]
     return header, data
 
+
 class Experiment:
-    def __init__(self, header = None, data = None):
+    def __init__(self, header = None, data = None, audio_info_dict = None):
         if header is None or data is None:
             header, data = get_experiment_data()
-        self.audio_info_dict = audio.make_or_load_audio_info_dict()
+            if audio_info_dict is None:
+                audio_info_dict = audio.make_or_load_audio_info_dict()
+        if audio_info_dict is None: audio_info_dict = {}
+        self.audio_info_dict = audio_info_dict
         self.header = header
         self.data = data
         self._create_trials_and_stimuli()
@@ -41,9 +47,11 @@ class Experiment:
                 self.bad_stimuli.append(stimulus)
 
     def _set_info(self):
-        targets=[x for x in self.stimuli if x.target and x.word_type == 'word']
+        targets = [x for x in self.stimuli if x.target and
+            x.word_type == 'word']
         self.targets = targets
-        fillers=[x for x in self.stimuli if x.filler and x.word_type == 'word']
+        fillers = [x for x in self.stimuli if x.filler and
+            x.word_type == 'word']
         self.fillers = fillers
         initial_targets = [x for x in self.targets if x.position == 'Initial']
         self.initial_targets = initial_targets
@@ -51,14 +59,13 @@ class Experiment:
 
         target_words = sorted(list(set([x.trial.word for x in self.targets])))
         self.target_words = target_words
-        ftw= sorted(list(set([x.trial.word for x in self.final_targets])))
+        ftw = sorted(list(set([x.trial.word for x in self.final_targets])))
         self.final_target_words = ftw
         itw = sorted(list(set([x.trial.word for x in self.initial_targets])))
         self.initial_target_words = itw
         filler_words = sorted(list(set([x.trial.word for x in self.fillers])))
         self.filler_words = filler_words
-
-    
+ 
 
 class Trial:
     def __init__(self, line, experiment):
@@ -80,8 +87,8 @@ class Trial:
         self.disc_target_phoneme = self.line[9]
         self.position = self.line[13]
         self.target = 'F' not in self.condition
-        self.fillter = not self.target
-
+        self.filler = not self.target
+        self.fillter = self.filler
 
     def __repr__(self):
         return f'Trial({self.word} {self.condition} {self.position})'
@@ -101,7 +108,8 @@ class Trial:
         return m
 
     def print_line(self):
-        for h,v,c in zip(self.experiment.header, self.line, string.ascii_uppercase):
+        for h, v, c in zip(self.experiment.header, self.line,
+            string.ascii_uppercase):
             print(f'{c}:   {h[:10]}:   {v}')
 
     def _make_stimuli(self):
@@ -112,7 +120,6 @@ class Trial:
                 s = Stimulus(self, word_type, aligned_type)
                 if s.ok: self.stimuli.append(s)
                 else: self.bad_stimuli.append(s)
-        
 
 class Stimulus():
     def __init__(self, trial, word_type = 'word', aligned_type = 'aligned'):
@@ -128,7 +135,7 @@ class Stimulus():
         self._make_segments()
 
     def __repr__(self):
-        m = f'Stimulus({self.trial.word} {self.word_type}' 
+        m = f'Stimulus({self.trial.word} {self.word_type}'
         m += f' {self.aligned_type} {self.position})'
         m = f'{m:<44} disc: {self.disc:<12}'
         m += f' audio: {self.audio_filename}'
@@ -136,32 +143,33 @@ class Stimulus():
     
     def _set_info(self):
         self.audio_filename = f'{self.trial.word}'
-        self.disc_word= ''
+        self.disc_word = ''
         self.disc_context = ''
         self.ok = True
-        if self.word_type == 'word': 
+        if self.word_type == 'word':
             self.audio_filename += 'W'
             self.disc_word += self.trial.disc_word
-        elif self.word_type == 'non-word': 
+        elif self.word_type == 'non-word':
             self.audio_filename += 'N'
             self.disc_word += self.trial.disc_non_word
-        else: 
-            m = f'word_type should be word or non-word, not {word_type}'
+        else:
+            m = f'word_type should be word or non-word, not {self.word_type}'
             raise ValueError(m)
-        if self.aligned_type == 'aligned': 
+        if self.aligned_type == 'aligned':
             self.audio_filename += 'A'
-            try:self.disc_context += self.trial.disc_context
+            try: self.disc_context += self.trial.disc_context
             except TypeError:
                 self.ok = False
                 pass
-        elif self.aligned_type == 'misaligned': 
+        elif self.aligned_type == 'misaligned':
             self.audio_filename += 'M'
             try: self.disc_context += self.trial.disc_alternation
             except TypeError:
                 self.ok = False
                 pass
-        else: 
-            m = f'aligned_type should be aligned / misaligned, not {aligned_type}'
+        else:
+            m = f'aligned_type should be aligned / misaligned, not '
+            m += f'{self.aligned_type}'
             raise ValueError(m)
         self.audio_filename += '.wav'
         if self.position == 'Initial':
@@ -169,8 +177,7 @@ class Stimulus():
         elif self.position == 'Final':
             self.disc = self.disc_context + self.disc_word
         self.textgrid_filename = self.audio_filename.replace('.wav', '.tim')
-    
-        
+
     def _get_audio_info(self):
         try: d = self.trial.experiment.audio_info_dict[self.audio_filename]
         except KeyError:
@@ -223,13 +230,11 @@ class Stimulus():
             self, 'cluster')
 
     @property
-    def play(self):    
+    def play(self):
         print(f'Playing {self.audio_filename}, {self.disc}')
         ssh_audio_play.play_audio(self.audio_path)
 
-        
 
-    
 class Segment:
     def __init__(self, start, end, label, stimulus, segment_type = None):
         self.start = start
@@ -245,10 +250,9 @@ class Segment:
             m += f' type: {self.segment_type}'
         return m
 
-
     @property
-    def play(self):    
-        m = f'Playing {self.audio_path}, {self.label}' 
+    def play(self):
+        m = f'Playing {self.audio_path}, {self.label}'
         m += f' {self.stimulus.disc} {self.stimulus.trial.word}'
         print(m)
         ssh_audio_play.play_audio(self.audio_path, start = self.start,
