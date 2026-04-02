@@ -24,12 +24,12 @@ finetuned_models = list(finetuned_root.glob('*'))
 
 def get_pretrained_model(model_name = 'wav2vec2', checkpoint = None, 
     version = 1):
-    if model_name == 'wav2vec2' and not finetuned:
+    if model_name == 'wav2vec2': 
         return get_pretrained_wav2vec2_model_path(checkpoint, version)
-    if model_name == 'hubert' and not finetuned:
+    if model_name == 'hubert': 
         return get_pretrained_hubert_model_path(checkpoint, version)
-    if model_namel == 'spidr' or model_name == 'spider':
-        return get_spidr_model_path(version, checkpoint)
+    if model_name == 'spidr' or model_name == 'spider':
+        return get_pretrained_spidr_model_path(version, checkpoint)
 
 def get_pretrained_wav2vec2_model_path(checkpoint = 200_000, version= 1):
     version = _handle_version(version)
