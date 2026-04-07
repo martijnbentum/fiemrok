@@ -9,6 +9,7 @@ audio_info_dict = Path('../audio_info.json')
 
 stimuli = data / 'tom-eye'
 embedding_store_path = data / 'embeddings'
+phone_embedding_store_path = data / 'phone_embeddings'
 
 audio_fn= list(stimuli.glob('*.wav'))
 textgrid_fn = list(stimuli.glob('*.tim'))
