@@ -5,10 +5,103 @@ import frame
 import numpy
 import phraser
 from progressbar import progressbar
+import numpy as np
 import to_vector
+import speech_vector_search as svs
 
 import locations
 import model_paths
+
+def make_prototypes(o = None, store = None, model_name = 'wav2vec2',
+    tag = 'filler',layer = 6, subset_size = 10, n_subsets = 10, method = 'mean'):
+    if o is None: 
+        o = make_embeddings_for_word_types(store, model_name,  tag, 
+            layer,  n_tokens = subset_size * n_subsets, method = method)
+    X = np.empty((len(o)*n_subsets, 768))
+    index = 0
+    rows, configs = [], []
+    for word_label in progressbar(o.keys()):
+        embeddings = o[word_label]['embeddings']
+        metadatas = o[word_label]['metadatas']
+        vectors, metadata_rows, config = svs.build_subset_prototypes(word_label, 
+            embeddings, metadatas, subset_size = subset_size, 
+            n_subsets = n_subsets)
+        X[index:index+n_subsets] = vectors
+        index += n_subsets
+        rows.extend(metadata_rows)
+        configs.append(config)
+    return X, rows, configs
+
+        
+
+def make_embeddings_for_word_types(store, model_name = 'wav2vec', 
+    tag= 'filler', layer = 6, n_tokens = 100, method = 'mean'):
+    word_type_dict = load_store_word_dict(store, model_name = model_name,
+        tag = tag, layer = layer)
+    o = {}
+    for word_label in progressbar(word_type_dict):
+        try:
+            embeddings, metadatas = make_embeddings_for_word_tokens(word_label, 
+                word_type_dict, store, n_tokens = n_tokens, method = method)
+        except ValueError as e:
+            print(f'Error making embeddings for word label {word_label}: {e}')
+            continue
+        o[word_label] = {'embeddings': embeddings, 'metadatas': metadatas}
+    return o
+
+def load_store_word_dict(store, model_name = 'wav2vec', tag= 'filler', 
+    layer = 6):
+    wd = {}
+    for md in store.metadata:
+        if model_name in md.model_name and tag in md.tags:
+            key = md.phraser_key
+            word_token = phraser.models.cache.load(bytes.fromhex(key))
+            word_label = word_token.label
+            if word_label not in wd: wd[word_label] = []
+            md.label = word_label
+            md.phraser_word_token = word_token
+            wd[word_label].append(md)
+    return wd
+
+def make_embeddings_for_word_tokens(label, store_word_dict, store, 
+    n_tokens = 100,method = 'mean'):
+    random.seed(0)
+    echoframe_metadatas = store_word_dict[label]
+    if len(echoframe_metadatas) < n_tokens: 
+        m = f'Not enough tokens for label {label}. Requested {n_tokens},'
+        m += ' but only {len(echoframe_metadatas)} available.'
+        raise ValueError(m)
+    metadatas = random.sample(echoframe_metadatas, n_tokens)
+    mds, embeddings = [], []
+    for md in metadatas:
+        embedding_array = load_embedding_array(store, md)
+        embedding = aggregate_embedding_array(embedding_array, method = method)
+        embeddings.append(embedding)
+        mds.append(md.__dict__)
+        mds[-1]['echoframe_key'] = md.entry_id
+    return numpy.array(embeddings), mds
+
+def load_embedding_array(store, echoframe_metadata):
+    return store.metadata_to_payload(echoframe_metadata)
+
+def aggregate_embedding_array(embedding_array, method = 'mean'):
+    '''aggregate frames in embedding_array to a single vector using method.
+    embedding_array     2D array of shape (n_frames, embedding_dim)
+    method              method of aggregation. One of 'mean', 'center_frame',
+                    'centroid'. 
+    '''
+    if method == 'mean': return numpy.mean(embedding_array, axis = 0)
+    if method == 'center_frame': 
+        return embedding_array[len(embedding_array) // 2]
+    if method == 'centroid':
+        centroid = svs.centroid(embedding_array)
+        distances = numpy.linalg.norm(embedding_array - centroid, axis = 1)
+        closest_index = numpy.argmin(distances)
+        return embedding_array[closest_index]
+    else: raise ValueError(f'Unknown aggregation method {method}')
+   
+
+
 
 
 def load_store():
