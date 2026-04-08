@@ -12,6 +12,32 @@ import speech_vector_search as svs
 import locations
 import model_paths
 
+
+def test_prototypes(prototype_index, word_type_dict, store):
+    random.seed = 0
+    results = {}
+    for word_label, metadata in word_type_dict.items():
+        if len(metadata) < 100:continue
+        mds = random.sample(metadata, 10)
+        results[word_label] = {'items':[]}
+        all_labels, accuracies = [], []
+        for md in mds:
+            embedding_array = load_embedding_array(store, md)
+            embedding = aggregate_embedding_array(embedding_array, 
+                method = 'mean')
+            closest_prototypes = prototype_index.query(embedding, 10)
+            labels = [x['label'] for x in closest_prototypes['metadata']]
+            accuracy = labels.count(word_label) / len(labels)
+            items = {'metadata':md, 'closest_prototypes': closest_prototypes,
+                'labels': labels, 'accuracy': accuracy}
+            results[word_label]['items'].append(items)
+            accuracies.append(accuracy)
+            all_labels.extend(labels)
+        results[word_label]['avg_accuracy'] = np.mean(accuracies)
+        results[word_label]['labels'] = all_labels
+    return results
+
+
 def make_prototypes(o = None, store = None, model_name = 'wav2vec2',
     tag = 'filler',layer = 6, subset_size = 10, n_subsets = 10, method = 'mean'):
     if o is None: 
@@ -30,7 +56,8 @@ def make_prototypes(o = None, store = None, model_name = 'wav2vec2',
         index += n_subsets
         rows.extend(metadata_rows)
         configs.append(config)
-    return X, rows, configs
+    prototype_index = (X, rows)
+    return prototype_index, X, rows, configs
 
         
 
