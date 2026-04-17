@@ -16,8 +16,8 @@ spidr_root = Path('/vol/mlusers/mbentum/spidr_models')
 spinnetje = spidr_root / 'spinnetje-train'
 anansie = spidr_root / 'anansie-nl_training'
 
-spidr_checkpoints = list(spinnetje.glob('checkpoint_*'))
-anansie_checkpoints = list(anansie.glob('checkpoint_*'))
+spidr_checkpoints = list(spinnetje.glob('*.pt'))
+anansie_checkpoints = list(anansie.glob('*.pt'))
 
 finetuned_root = Path('/vol/mlusers/mbentum/speech_training/finetuned')
 finetuned_models = list(finetuned_root.glob('*'))
