@@ -7,19 +7,21 @@ from progressbar import progressbar
 import to_vector 
 
 def load_spider_model():
-    p = model_paths.get_pretrained_spidr_model_path()
+    p = model_paths.get_pretrained_spidr_model_path(version = 1, 
+        checkpoint = 400_000)
     sm = to_vector.load.load_model(p)
-    return sm
+    model_name = 'spinnetje-train_checkpoint-400000'
+    return sm, model_name
 
 def load_phone_labels():
     with open('data/phone_labels', 'r') as f:
         phone_labels = f.read().split('\n')
     return phone_labels
 
-def compute_load_ci(phone_labels = None, model = None, store = None,
-    n_tokens = 1000):
+def compute_load_ci(phone_labels = None, model = None, model_name = None,
+    store = None, n_tokens = 1000):
     if phone_labels is None: phone_labels = load_phone_labels()
-    if model is None: model = load_spider_model()
+    if model is None: model, model_name = load_spider_model()
     if store is None: store = Store('phone_store')
     random.seed(42)
     ci_dict = {}
@@ -37,8 +39,11 @@ def compute_load_ci(phone_labels = None, model = None, store = None,
         ci_dict[phone_label] = []
         n = 0
         for token in x:
-            try:ci = se.get_codebook_indices(token, model = sm, store = store )
-            except: continue
+            try:ci = sf.get_codebook_indices(token, model = model, 
+                store = store, model_name = model_name)
+            except Exception as e: 
+                print(f'error computing ci for {phone_label} token {token} {e}')
+                continue
             ci_dict[phone_label].append(ci)
             n += 1
             if n >= n_tokens: break
