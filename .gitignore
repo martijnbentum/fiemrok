@@ -4,3 +4,12 @@ AGENTS.md
 .env
 *.json
 phone_store/
+phrases_cgn/
+test_store/
+test_*
+lexicon100_2466_cgn/
+data/*.pkl
+data/*.npy
+data/spider_*
+data/pnmi_results
+echoframe/
