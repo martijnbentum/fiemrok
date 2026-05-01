@@ -9,23 +9,27 @@ from pathlib import Path
 import random
 from collections import Counter
 
-def load_filtered_words():
+
+def load_filtered_word_keys():
     print('loading filtered word keys')
     with open('data/filtered_word_keys.pkl', 'rb') as f:
         filtered_word_keys = pickle.load(f)
+    return filtered_word_keys
+
+def load_filtered_words():
+    filtered_word_keys = load_filtered_word_keys()
     print(f'found {len(filtered_word_keys)} filtered word keys, loading words')
     words = models.cache.load_many(filtered_word_keys)
     return words
 
 def filter_word_tokens_for_lexicon(words = None, min_freq = 100,max_freq = None,
-    min_dur = 100, max_dur = 1500, random_seed = 0):
+    min_dur = 100, max_dur = 1500):
     if words is None: words = load_words()
     words = filter_components(words)
     words = filter_duration(words, min_dur, max_dur)
     frequency_dict = make_frequency_dict(words)
     words = filter_frequency(frequency_dict, words, min_freq, max_freq)
     return words
-
 
 def select_words_for_lexicon(filtered_words, n_tokens = 100, random_seed = 0):
     random.seed(random_seed)
