@@ -52,6 +52,14 @@ def load_words():
     words = list(models.Word.objects.all())
     return words
 
+def load_phones():
+    phones = list(models.Phones.objects.all())
+    return phones
+
+def load_syllables():
+    syllables = list(models.Syllable.objects.all())
+    return syllables
+
 def filter_components(words = None, remove_components = 'acdhm'):
     if words is None:words = load_words()
     filtered = []
