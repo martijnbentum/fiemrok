@@ -23,11 +23,11 @@ def load_filtered_words():
     return words
 
 def filter_word_tokens_for_lexicon(words = None, min_freq = 100,max_freq = None,
-    min_dur = 100, max_dur = 1500):
+    min_dur = 100, max_dur = 1500, min_len_label = 2):
     if words is None: words = load_words()
     words = filter_components(words)
     words = filter_duration(words, min_dur, max_dur)
-    frequency_dict = make_frequency_dict(words)
+    frequency_dict = make_frequency_dict(words, min_len_label = min_len_label)
     words = filter_frequency(frequency_dict, words, min_freq, max_freq)
     return words
 
@@ -53,7 +53,7 @@ def load_words():
     return words
 
 def load_phones():
-    phones = list(models.Phones.objects.all())
+    phones = list(models.Phone.objects.all())
     return phones
 
 def load_syllables():
@@ -98,13 +98,13 @@ def filter_frequency(frequency_dict, words = None, min_freq = 100,
     print(f'filtered {len(words) - len(filtered)} words') 
     return filtered
 
-def make_frequency_dict(words = None):
+def make_frequency_dict(words = None, min_len_label = 2):
     if words is None:words = load_words()
     c = Counter([x.label for x in words])
     frequency_dict = {}
     print('making frequency dict')
     for word in progressbar(words):
-        if len(word.label) == 1: continue
+        if len(word.label) < min_len_label: continue
         frequency_dict[word.label] = c[word.label]
     print(f'found {len(frequency_dict)} unique labels')
     return frequency_dict
