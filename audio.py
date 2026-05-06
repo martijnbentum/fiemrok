@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 import locations
 import subprocess
 
@@ -25,6 +26,14 @@ def soxinfo_to_dict(soxinfo):
     d['duration'] = clock_to_duration_in_seconds(t)
     return d
 
+def _update_filenames_to_relative_path(d):
+    for k, v in d.items():
+        p = Path(v['filename'])
+        v['filename'] = str(locations.stimuli / p.name)
+    return d
+    
+    
+
 def make_or_load_audio_info_dict(audio_filenames = None, overwrite = False):
     if locations.audio_info_dict.exists() and not overwrite:
         with open(locations.audio_info_dict, 'r') as f:
@@ -36,4 +45,5 @@ def make_or_load_audio_info_dict(audio_filenames = None, overwrite = False):
         d[filename.name] = info
     with open(locations.audio_info_dict, 'w') as f:
         json.dump(d, f, indent=4)
+    d = _update_filenames_to_relative_path(d)
     return d
