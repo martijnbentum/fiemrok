@@ -3,7 +3,7 @@ import random
 import echoframe
 import frame
 import numpy
-import phraser
+from stores import cgn
 from progressbar import progressbar
 import numpy as np
 import to_vector
@@ -82,7 +82,7 @@ def load_store_word_dict(store, model_name = 'wav2vec', tag= 'filler',
     for md in store.metadata:
         if model_name in md.model_name and tag in md.tags:
             key = md.phraser_key
-            word_token = phraser.models.cache.load(bytes.fromhex(key))
+            word_token = cgn.load(bytes.fromhex(key))
             word_label = word_token.label
             if word_label not in wd: wd[word_label] = []
             md.label = word_label
@@ -189,7 +189,7 @@ def handle_phraser_word_token(phraser_word_token, model, store, layers = [6],
     
 
 def load_phraser_word_token(word_label):
-    return phraser.models.cache.label_to_instances(word_label, 'Word')
+    return cgn.label_to_instances(word_label, 'Word')
 
 def load_audio(phraser_word, collar = 500, enforce_collar = True):
     filename = phraser_word.audio.filename

@@ -2,7 +2,7 @@ import random
 
 import frame
 import numpy
-import phraser
+from stores import cgn
 from progressbar import progressbar
 import to_vector
 
@@ -50,7 +50,7 @@ def load_phraser_words(words = None):
     if words is None: words = load_words()
     d = {}
     for word in progressbar(words):
-        pw = phraser.models.cache.label_to_instances(word, 'Word')
+        pw = cgn.label_to_instances(word, 'Word')
         d[word] = pw
     return d
 

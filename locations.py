@@ -7,6 +7,8 @@ excel_filename = '../trialsNewTryWithReps.ods'
 audio_info_dict = Path('../audio_info.json')
 
 
+cgn_lmdb = '/vol/mlusers/mbentum/phraser/data/cgn_lmdb'
+
 stimuli = data / 'tom-eye'
 embedding_store_path = data / 'embeddings'
 phone_embedding_store_path = data / 'phone_embeddings'

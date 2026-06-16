@@ -2,7 +2,7 @@ from echoframe.store import Store
 from echoframe import segment_features as sf
 import random
 import model_paths
-from phraser import models
+from stores import cgn
 from progressbar import progressbar
 import to_vector 
 
@@ -27,7 +27,7 @@ def compute_load_ci(phone_labels = None, model = None, model_name = None,
     ci_dict = {}
     for phone_label in progressbar(phone_labels):
         print(phone_label)
-        x = models.cache.label_to_instances(phone_label, 'Phone')
+        x = cgn.label_to_instances(phone_label, 'Phone')
         if len(x) < n_tokens:
             print(phone_label, len(x), 'skipping')
             continue

@@ -4,7 +4,7 @@ import random
 import echoframe
 import frame
 import numpy
-import phraser
+from stores import cgn
 from progressbar import progressbar
 import to_vector
 
@@ -66,7 +66,7 @@ def handle_phraser_token(phraser_token, model, store, layers = [6],
     
 
 def load_phraser_tokens(token_label, token_type):
-    return phraser.models.cache.label_to_instances(token_label, token_type)
+    return cgn.label_to_instances(token_label, token_type)
 
 def load_audio(phraser_token, collar = 500, enforce_collar = True):
     filename = phraser_token.audio.filename

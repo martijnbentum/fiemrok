@@ -1,6 +1,6 @@
 import pickle
 from progressbar import progressbar
-from phraser import models
+from stores import cgn
 import echoframe
 import to_vector
 from echoframe import store
@@ -19,7 +19,7 @@ def load_filtered_word_keys():
 def load_filtered_words():
     filtered_word_keys = load_filtered_word_keys()
     print(f'found {len(filtered_word_keys)} filtered word keys, loading words')
-    words = models.cache.load_many(filtered_word_keys)
+    words = cgn.load_many(filtered_word_keys)
     return words
 
 def filter_word_tokens_for_lexicon(words = None, min_freq = 100,max_freq = None,
@@ -49,15 +49,15 @@ def select_words_for_lexicon(filtered_words, n_tokens = 100, random_seed = 0):
     return selection
 
 def load_words():
-    words = list(models.Word.objects.all())
+    words = list(cgn.words.all())
     return words
 
 def load_phones():
-    phones = list(models.Phone.objects.all())
+    phones = list(cgn.phones.all())
     return phones
 
 def load_syllables():
-    syllables = list(models.Syllable.objects.all())
+    syllables = list(cgn.syllables.all())
     return syllables
 
 def filter_components(words = None, remove_components = 'acdhm'):
