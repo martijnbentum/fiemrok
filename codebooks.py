@@ -3,6 +3,7 @@ from echoframe import segment_features as sf
 import random
 import model_paths
 from stores import cgn
+import stores
 from progressbar import progressbar
 import to_vector 
 
@@ -22,7 +23,9 @@ def compute_load_ci(phone_labels = None, model = None, model_name = None,
     store = None, n_tokens = 1000):
     if phone_labels is None: phone_labels = load_phone_labels()
     if model is None: model, model_name = load_spider_model()
-    if store is None: store = Store('phone_store')
+    if store is None:
+        store = Store('phone_store')
+        stores.attach_cgn(store)
     random.seed(42)
     ci_dict = {}
     for phone_label in progressbar(phone_labels):
@@ -39,7 +42,12 @@ def compute_load_ci(phone_labels = None, model = None, model_name = None,
         ci_dict[phone_label] = []
         n = 0
         for token in x:
-            try:ci = sf.get_codebook_indices(token, model = model, 
+            # TODO: sf.get_codebook_indices is gone; replaced by
+            # sf.compute_codebook_indices(segment, model_name, store=store)
+            # which loads the model internally via store.load_model(model_name).
+            # Requires the spider model to be registered in the echoframe store
+            # via store.register_model(model_name, local_path=...) before use.
+            try:ci = sf.get_codebook_indices(token, model = model,
                 store = store, model_name = model_name)
             except Exception as e: 
                 print(f'error computing ci for {phone_label} token {token} {e}')

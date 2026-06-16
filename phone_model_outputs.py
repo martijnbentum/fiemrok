@@ -4,7 +4,8 @@ import random
 import echoframe
 import frame
 import numpy
-from stores import cgn
+from stores import cgn, CGN_SOURCE_ID
+import stores
 from progressbar import progressbar
 import to_vector
 
@@ -14,6 +15,7 @@ import model_paths
 
 def load_store():
     store = echoframe.Store(locations.phone_embedding_store_path)
+    stores.attach_cgn(store)
     return store
 
 def load_models_final_checkpoint():
@@ -56,13 +58,19 @@ def handle_phraser_token(phraser_token, model, store, layers = [6],
         print(f'Error loading audio for {phraser_token.key.hex()}: {e}')
         return
     outputs = to_vector.to_embeddings.audio_to_vector(audio, model)
-    data = select_transformer_frames(phraser_token, outputs, 
+    data = select_transformer_frames(phraser_token, outputs,
         collar = collar)
-    phraser_key = phraser_token.key.hex()
-    print(f'Putting {phraser_key} in store with tags {tags}')
+    phraser_key = phraser_token.key
+    model_name = model.model_name[-1]
+    print(f'Putting {phraser_key.hex()} in store with tags {tags}')
     for layer in layers:
-        store.put(phraser_key, collar, model.model_name[-1], 'hidden_state',
-            layer = layer, data = data, tags = tags)
+        echoframe_key = store.make_echoframe_key('hidden_state',
+            model_name=model_name, phraser_key=phraser_key,
+            layer=layer, collar=collar)
+        metadata = echoframe.EchoframeMetadata(echoframe_key,
+            model_name=model_name, phraser_source_id=CGN_SOURCE_ID,
+            tags=tags)
+        store.save(echoframe_key, metadata, data)
     
 
 def load_phraser_tokens(token_label, token_type):
