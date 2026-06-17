@@ -42,3 +42,4 @@ def audio_filename_to_webmaus_textgrid_path(audio_filename):
     return f
 
 phraser_stimuli_store_root = data / 'phraser_stimuli_store'
+echoframe_stimuli_store_root = data / 'echoframe_stimuli_store'
