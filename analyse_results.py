@@ -1,4 +1,6 @@
 import numpy
+import matplotlib.pyplot as plt
+from imgcat import imgcat
 
 def analyse_results(results, o, layer):
     r = results[layer]
@@ -35,6 +37,38 @@ def overall_result(output):
     for label, acc in output.items():
         accs += acc
     return numpy.mean(accs), numpy.std(accs)
+
+
+def plot_precision(results_per_layer, save_path='_plot.png'):
+    '''bar plot of average precision at 10 with 95% CI per layer.
+    results_per_layer   {layer: output_dict} where output_dict is from
+                        analyse_results(); each value is a list of per-item
+                        precision scores for one word type
+    save_path           path to save the plot
+    '''
+    layers = sorted(results_per_layer.keys())
+    means, cis = [], []
+    for layer in layers:
+        output = results_per_layer[layer]
+        mean, std = overall_result(output)
+        n = sum(len(v) for v in output.values())
+        ci = 1.96 * std / numpy.sqrt(n)
+        means.append(mean)
+        cis.append(ci)
+
+    x = range(len(layers))
+    fig, ax = plt.subplots(figsize=(max(4, len(layers) * 0.6), 4))
+    ax.bar(x, means, yerr=cis, capsize=5, color='steelblue', alpha=0.85)
+    ax.set_xticks(list(x))
+    ax.set_xticklabels([str(l) for l in layers])
+    ax.set_xlabel('layer')
+    ax.set_ylabel('average precision at 10')
+    ax.set_title('CGN lexicon: average precision at 10 with 95% CI')
+    ax.set_ylim(0, 1)
+    fig.tight_layout()
+    fig.savefig(save_path)
+    imgcat(open(save_path, 'rb'))
+    return fig, ax
 
 
     
