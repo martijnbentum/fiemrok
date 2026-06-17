@@ -1,8 +1,9 @@
-from phraser import models
+from phraser import store
 import locations
 
 CGN_SOURCE_ID = 'cgn'
-cgn = models.open_store(locations.cgn_lmdb)
+cgn = store.Store(locations.cgn_lmdb)
+stimulus_store = store.Store(locations.phraser_stimuli_store_root)
 
 def attach_cgn(echoframe_store):
     '''Attach the cgn phraser store as a registered source on an echoframe

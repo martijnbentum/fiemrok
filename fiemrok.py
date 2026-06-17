@@ -21,7 +21,8 @@ def get_experiment_data(df = None):
 
 
 class Experiment:
-    def __init__(self, header = None, data = None, audio_info_dict = None):
+    def __init__(self, header = None, data = None, audio_info_dict = None,
+        store = None):
         if header is None or data is None:
             header, data = get_experiment_data()
             if audio_info_dict is None:
@@ -32,6 +33,7 @@ class Experiment:
         self.data = data
         self._create_trials_and_stimuli()
         self._set_info()
+        if store is not None: self.add_phraser_stimuli_store(store = store)
 
     def __repr__(self):
         return f'Experiment with {len(self.final_targets)} stimuli'
@@ -65,6 +67,14 @@ class Experiment:
         self.initial_target_words = itw
         filler_words = sorted(list(set([x.trial.word for x in self.fillers])))
         self.filler_words = filler_words
+
+    def add_phraser_stimuli_store(self, store):
+        for stimulus in self.stimuli:
+            stimulus._store = store
+            stimulus.audio = store.audios.get(filename = stimulus.audio_path)
+            stimulus.word = stimulus.audio.words[0]
+            stimulus.syllables = stimulus.audio.syllables
+            stimulus.phones = stimulus.audio.phones
  
 
 class Trial:
