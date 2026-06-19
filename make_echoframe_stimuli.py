@@ -1,12 +1,15 @@
 import echoframe
 import locations
 import phraser
+import stores
 from progressbar import progressbar
 
 from echoframe import segment_features
 
 def load_echoframe_stimuli_store(path = locations.echoframe_stimuli_store_root):
-    return echoframe.store.Store(path)
+    echoframe_store = echoframe.store.Store(path)
+    stores.attach_stimuli(echoframe_store)
+    return echoframe_store
 
 def compute_stimuli_embeddings_for_experiment(experiment, echoframe_store, 
     layers = [3,6,12]):
