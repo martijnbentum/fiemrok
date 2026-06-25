@@ -22,7 +22,7 @@ def get_experiment_data(df = None):
 
 class Experiment:
     def __init__(self, header = None, data = None, audio_info_dict = None,
-        store = None):
+        phraser_store = None, echoframe_store = None):
         if header is None or data is None:
             header, data = get_experiment_data()
             if audio_info_dict is None:
@@ -33,7 +33,10 @@ class Experiment:
         self.data = data
         self._create_trials_and_stimuli()
         self._set_info()
-        if store is not None: self.add_phraser_stimuli_store(store = store)
+        if phraser_store is not None: 
+            self.add_phraser_stimuli_store(store = phraser_store)
+        if echoframe_store is not None:
+            self.add_echoframe_stimuli_store(store = echoframe_store)
 
     def __repr__(self):
         return f'Experiment with {len(self.final_targets)} stimuli'
@@ -42,11 +45,19 @@ class Experiment:
         self.trials = [Trial(line, self) for line in self.data]
         self.stimuli = []
         self.bad_stimuli = []
+        self.target_trials, self.filler_trials = [], []
         for trial in self.trials:
             for stimulus in trial.stimuli:
                 self.stimuli.append(stimulus)
             for stimulus in trial.bad_stimuli:
                 self.bad_stimuli.append(stimulus)
+        for trial in self.trials:
+            if trial.target: self.target_trials.append(trial)
+            elif trial.filler: self.filler_trials.append(trial)
+            else: 
+                m = f'Trial should be target or filler, not {trial}'
+                raise ValueError(m)
+            
 
     def _set_info(self):
         targets = [x for x in self.stimuli if x.target and
@@ -76,6 +87,17 @@ class Experiment:
             stimulus.syllables = stimulus.audio.syllables
             stimulus.phones = stimulus.audio.phones
  
+    def add_echoframe_stimuli_store(self, store):
+        metadatas = store.metadatas
+        for stimulus in self.fillers + self.targets:
+            if not hasattr(stimulus, 'word'):
+                print(f'{stimulus} does not have a word attribute, skipping')
+            stimulus.metadatas = []
+            for metadata in metadatas:
+                if metadata.label == stimulus.word.label:
+                    stimulus.metadatas.append(metadata)
+            
+    
 
 class Trial:
     def __init__(self, line, experiment):
