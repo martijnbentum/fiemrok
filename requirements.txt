@@ -11,3 +11,4 @@ git+https://github.com/martijnbentum/echoframe.git
 git+https://github.com/martijnbentum/frame.git
 git+https://github.com/martijnbentum/speech-vector-search.git
 git+https://github.com/martijnbentum/ssh-audio-play.git
+git+https://github.com/martijnbentum/dutch-syllabifier.git
