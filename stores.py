@@ -45,7 +45,7 @@ def load_echoframe_stimuli_store(path = locations.echoframe_stimuli_store_root):
     _attach_stimuli(echoframe_stimuli)
     return echoframe_stimuli
 
-def load_echoframe_cgn_store(path = 'lexicon100_2466_cgn_hubert'):
+def load_echoframe_cgn_store(path = locations.echoframe_cgn_lexicon_store):
     global echoframe_cgn
     if echoframe_cgn: 
         if str(echoframe_cgn.root) == str(path):
