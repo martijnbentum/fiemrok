@@ -10,13 +10,13 @@ def load_echoframe_stimuli_store(path = locations.echoframe_stimuli_store_root):
     return stores.load_echoframe_stimuli_store(path)
 
 def compute_stimuli_embeddings_for_experiment(experiment, echoframe_store, 
-    layers = [3,6,12]):
+    layers = [3,6,12], model_name = 'wav2vec2_nl1_checkpoint-200000'):
     for stimulus in progressbar(experiment.fillers):
         compute_stimulus_embeddings(echoframe_store, stimulus, layers = layers,
-        tags = ['filler'])
+        tags = ['filler'], model_name = model_name)
     for stimulus in progressbar(experiment.targets):
         compute_stimulus_embeddings(echoframe_store, stimulus, layers = layers,
-        tags = ['target'])
+        tags = ['target'], model_name = model_name)
 
 def compute_stimulus_embeddings(echoframe_store, stimulus, layers = [3,6,12],
     tags = None, model_name = 'wav2vec2_nl1_checkpoint-200000'):
