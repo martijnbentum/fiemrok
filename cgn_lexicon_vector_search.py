@@ -85,40 +85,4 @@ def make_vector_search_index_for_layer(store, layer, name,
 
 
 
-# OLD
-
-def OLD_load_speech_vectors(metadatas):
-    print(f'loading center frame vectors for {len(metadatas)} metadata entries')
-    vectors = []
-    for m in progressbar(metadatas):
-        v = m.load_payload()
-        v = svs.util_math.pool_frames(v, 'center')
-        vectors.append(v)
-    print(f'loaded {len(vectors)} vectors')
-    return np.asarray(vectors)
-
-def OLD_make_vsi_for_layers(layers, model = 'w2v', save = True, 
-    overwrite = False):
-    if model == 'w2v':store = load_store_w2v()
-    elif model == 'hubert1':store = load_store_hubert1()
-    else:raise ValueError(f'unknown model {model}')
-    print(f'making vector search indices for layer {layers} and model {model}')
-    vsis = {}
-    for layer in progressbar(layers):
-        name = f'{model}_{layer}'
-        vsi, emd = make_vector_search_index_for_layer(store, layer, name, save, 
-            overwrite)
-        vsis[layer] = [vsi, emd]
-    return vsis
-   
-
-def OLD_load_store_w2v(root = 'lexicon100_2466_cgn'):
-    print(f'loading store from {root}')
-    s= store.Store(root)
-    return s
-
-def OLD_load_store_hubert1(root = 'lexicon100_2466_cgn_hubert'):
-    print(f'loading store from {root}')
-    s= store.Store(root)
-    return s
 
