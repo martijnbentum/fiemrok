@@ -64,13 +64,15 @@ def make_vector_search_index(vectors, vector_metadata):
     index = svs.search.VectorIndex(vectors, vector_metadata)
     return index
 
-def make_vector_search_index_for_layer(store, layer, name, 
-    model_name = final_wav2vec2_model_name, save = True, overwrite = False):
+def make_vector_search_index_for_layer(store, layer, name_prefix = '', 
+    directory = 'svs_experiment_data', model_name = final_wav2vec2_model_name,
+    save = True, overwrite = False):
+    name = f'{name_prefix}_layer-{layer}_model-{model_name}'
     metadatas = filter_metadatas(store.metadatas, layer = layer, 
         model_name = model_name)
-    vector_metadata = make_vector_metadata(metadatas[:3], name = name)
-    if vector_metadata.path.exists() and not overwrite: 
-        print(f'files already exist {vector_metadata.path}, doing nothing ')
+    path = svs.metadata.make_metadata_path(directory, name)
+    if path.exists() and not overwrite: 
+        print(f'files already exist {path}, doing nothing ')
         return
     vectors, mds, e = metadatas_to_center_frame_nucleus_speech_vectors(metadatas)
     metadatas, errors = mds, e
