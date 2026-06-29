@@ -1,122 +1,122 @@
-| Target | Stimulus | Prefix coda | Target onset | Boundary cluster | Legal | Hits | Cluster competitors | Coda competitors | Accuracy |
-|--------|----------|-------------|--------------|------------------|-------|-----:|---------------------|------------------|---------:|
-| lans | pamlans | m | l | ml | no | 1 | — | — | 0.10 |
-| lans | pablans | b | l | bl | yes | 1 | — | — | 0.10 |
-| lap | fuumlap | m | l | ml | no | 3 | — | — | 0.30 |
-| lap | fuublap | b | l | bl | yes | 3 | — | — | 0.30 |
-| lied | keemliet | m | l | ml | no | 4 | — | — | 0.40 |
-| lied | keebliet | b | l | bl | yes | 2 | — | bier:2, been:1 | 0.20 |
-| loep | kuumloep | m | l | ml | no | 2 | — | — | 0.20 |
-| loep | kuubloep | b | l | bl | yes | 5 | bloed:1 | broek:2 | 0.50 |
-| luik | nuimluik | m | l | ml | no | 3 | — | — | 0.30 |
-| luik | nuibluik | b | l | bl | yes | 2 | blij:1, blijft:1 | buik:3 | 0.20 |
-| leem | hoomleem | m | l | ml | no | 9 | — | — | 0.90 |
-| leem | hoovleem | v | l | vl | yes | 10 | — | — | 1.00 |
-| loods | suimloots | m | l | ml | no | 7 | — | — | 0.70 |
-| loods | suivloots | v | l | vl | yes | 3 | — | — | 0.30 |
-| loon | soemloon | m | l | ml | no | 5 | — | — | 0.50 |
-| loon | soevloon | v | l | vl | yes | 4 | — | — | 0.40 |
-| rond | simront | m | r | mr | no | 9 | — | — | 0.90 |
-| rond | sibront | b | r | br | yes | 8 | — | — | 0.80 |
-| rots | huimrots | m | r | mr | no | 5 | — | — | 0.50 |
-| rots | huibrots | b | r | br | yes | 6 | — | — | 0.60 |
-| rauw | kuumrouw | m | r | mr | no | 4 | — | — | 0.40 |
-| rauw | kuudrouw | d | r | dr | yes | 5 | — | — | 0.50 |
-| reus | peemreus | m | r | mr | no | 4 | — | — | 0.40 |
-| reus | peedreus | d | r | dr | yes | 4 | — | — | 0.40 |
-| riem | vomriem | m | r | mr | no | 7 | — | — | 0.70 |
-| riem | voodriem | d | r | dr | yes | 4 | drie:5 | — | 0.40 |
-| rijm | hiemreim | m | r | mr | no | 2 | — | — | 0.20 |
-| rijm | hiedreim | d | r | dr | yes | 0 | — | — | 0.00 |
-| roet | poemroet | m | r | mr | no | 0 | — | — | 0.00 |
-| roet | poedroet | d | r | dr | yes | 0 | — | — | 0.00 |
-| rok | fiemrok | m | r | mr | no | 3 | — | — | 0.30 |
-| rok | fiedrok | d | r | dr | yes | 8 | — | — | 0.80 |
-| raaf | fuimraaf | m | r | mr | no | 1 | — | — | 0.10 |
-| raaf | fuivraaf | v | r | vr | yes | 0 | vraag:6, vraagt:4 | — | 0.00 |
-| ram | haamram | m | r | mr | no | 3 | — | — | 0.30 |
-| ram | haavram | v | r | vr | yes | 1 | vrouw:1, vrouwen:1 | — | 0.10 |
-| ramp | keemramp | m | r | mr | no | 3 | — | — | 0.30 |
-| ramp | keevramp | v | r | vr | yes | 1 | — | — | 0.10 |
-| riet | foemriet | m | r | mr | no | 2 | — | — | 0.20 |
-| riet | foevriet | v | r | vr | yes | 0 | — | — | 0.00 |
-| long | suunlong | n | l | nl | no | 1 | — | — | 0.10 |
-| long | suublong | b | l | bl | yes | 0 | — | — | 0.00 |
-| lamp | fienlamp | n | l | nl | no | 10 | — | — | 1.00 |
-| lamp | fievlamp | v | l | vl | yes | 8 | — | — | 0.80 |
-| lift | kluinlift | n | l | nl | no | 8 | — | — | 0.80 |
-| lift | kluivlift | v | l | vl | yes | 10 | — | — | 1.00 |
-| lont | puunlont | n | l | nl | no | 0 | — | — | 0.00 |
-| lont | puuvlont | v | l | vl | yes | 1 | — | — | 0.10 |
-| luis | sanluis | n | l | nl | no | 1 | — | — | 0.10 |
-| luis | savluis | v | l | vl | yes | 1 | — | — | 0.10 |
-| reep | luunreep | n | r | nr | no | 1 | — | — | 0.10 |
-| reep | luubreep | b | r | br | yes | 1 | breed:9 | — | 0.10 |
-| ring | kreinring | n | r | nr | no | 7 | — | — | 0.70 |
-| ring | kreibring | b | r | br | yes | 5 | — | — | 0.50 |
-| rit | luunrit | n | r | nr | no | 9 | — | — | 0.90 |
-| rit | luudrit | d | r | dr | yes | 0 | — | — | 0.00 |
-| rib | sanrip | n | r | nr | no | 0 | — | — | 0.00 |
-| rib | savrip | v | r | vr | yes | 0 | — | — | 0.00 |
-| romp | suunromp | n | r | nr | no | 4 | — | — | 0.40 |
-| romp | suuvromp | v | r | vr | yes | 0 | — | — | 0.00 |
-| rund | lounrunt | n | r | nr | no | 4 | — | — | 0.40 |
-| rund | louvrunt | v | r | vr | yes | 4 | — | — | 0.40 |
-| lek | satlek | t | l | tl | no | 5 | — | — | 0.50 |
-| lek | sablek | b | l | bl | yes | 1 | blik:3, bleef:1, bleek:1 | — | 0.10 |
-| lijm | vuitleim | t | l | tl | no | 0 | — | — | 0.00 |
-| lijm | vuibleim | b | l | bl | yes | 0 | — | — | 0.00 |
-| lot | footlot | t | l | tl | no | 9 | — | — | 0.90 |
-| lot | fooblot | b | l | bl | yes | 10 | — | — | 1.00 |
-| lus | guutlus | t | l | tl | no | 0 | — | — | 0.00 |
-| lus | guuvlus | v | l | vl | yes | 1 | — | — | 0.10 |
-| leus | fomleus | m | l | ml | no | 0 | — | — | 0.00 |
-| leus | fovleus | v | l | vl | yes | 0 | — | — | 0.00 |
-| lol | zimlol | m | l | ml | no | 6 | — | — | 0.60 |
-| lol | zivlol | v | l | vl | yes | 6 | — | — | 0.60 |
-| lijf | meunleif | n | l | nl | no | 10 | — | — | 1.00 |
-| lijf | meuvleif | v | l | vl | yes | 6 | — | — | 0.60 |
-| reuk | goonreuk | n | r | nr | no | 2 | — | — | 0.20 |
-| reuk | goodreuk | d | r | dr | yes | 2 | druk:7 | — | 0.20 |
-| roem | wienroem | n | r | nr | no | 0 | — | — | 0.00 |
-| roem | wiedroem | d | r | dr | yes | 0 | — | — | 0.00 |
-| lak | reumlak | m | l | ml | no | 3 | — | — | 0.30 |
-| lak | reublak | b | l | bl | yes | 1 | — | bas:1 | 0.10 |
-| last | roumlast | m | l | ml | no | 9 | — | — | 0.90 |
-| last | roublast | b | l | bl | yes | 9 | — | — | 0.90 |
-| leeuw | rimleew | i | l | il | no | 5 | — | — | 0.50 |
-| leeuw | rivleew | i | l | il | no | 3 | — | — | 0.30 |
-| les | ruumles | m | l | ml | no | 10 | — | — | 1.00 |
-| les | ruuvles | v | l | vl | yes | 0 | — | — | 0.00 |
-| roes | lemroes | m | r | mr | no | 3 | — | — | 0.30 |
-| roes | lebroes | b | r | br | yes | 2 | broek:5, broer:1 | — | 0.20 |
-| rijk | leumreik | m | r | mr | no | 7 | — | — | 0.70 |
-| rijk | leudreik | d | r | dr | yes | 7 | — | — | 0.70 |
-| rot | lemrot | m | r | mr | no | 2 | — | — | 0.20 |
-| rot | ledrot | d | r | dr | yes | 2 | — | — | 0.20 |
-| rum | lumrum | m | r | mr | no | 0 | — | — | 0.00 |
-| rum | luvrum | v | r | vr | yes | 1 | — | — | 0.10 |
-| lier | roonlier | n | l | nl | no | 4 | — | — | 0.40 |
-| lier | rooblier | b | l | bl | yes | 3 | — | bier:3 | 0.30 |
-| lomp | ruunlomp | n | l | nl | no | 5 | — | — | 0.50 |
-| lomp | ruublomp | b | l | bl | yes | 7 | — | — | 0.70 |
-| laf | rounlaf | n | l | nl | no | 5 | — | — | 0.50 |
-| laf | rouvlaf | v | l | vl | yes | 5 | — | — | 0.50 |
-| lof | roenlof | n | l | nl | no | 10 | — | — | 1.00 |
-| lof | roevlof | v | l | vl | yes | 10 | — | — | 1.00 |
-| rat | linrat | n | r | nr | no | 3 | — | — | 0.30 |
-| rat | librat | b | r | br | yes | 4 | bracht:1 | — | 0.40 |
-| rek | lunrek | n | r | nr | no | 7 | — | — | 0.70 |
-| rek | lubrek | b | r | br | yes | 5 | brengt:1 | — | 0.50 |
-| roos | lanroos | n | r | nr | no | 10 | — | — | 1.00 |
-| roos | ladroos | d | r | dr | yes | 9 | — | — | 0.90 |
-| rug | lonrug | n | r | nr | no | 10 | — | — | 1.00 |
-| rug | lodrug | d | r | dr | yes | 10 | — | — | 1.00 |
-| rem | lenrem | n | r | nr | no | 5 | — | — | 0.50 |
-| rem | levrem | v | r | vr | yes | 0 | — | vent:2 | 0.00 |
-| laan | routlaan | t | l | tl | no | 3 | — | — | 0.30 |
-| laan | roublaan | b | l | bl | yes | 5 | — | baan:3 | 0.50 |
-| loom | keitloom | t | l | tl | no | 1 | — | — | 0.10 |
-| loom | keibloom | b | l | bl | yes | 1 | — | — | 0.10 |
-| lens | routlens | t | l | tl | no | 9 | — | — | 0.90 |
-| lens | rouvlens | v | l | vl | yes | 0 | — | — | 0.00 |
+| Target | Stimulus | Boundary cluster | Hits | Cluster competitors | Coda competitors | Accuracy |
+|--------|----------|------------------|-----:|---------------------|------------------|---------:|
+| lans | pamlans | ml | 1 | — | — | 0.10 |
+| lans | pablans | bl | 1 | — | — | 0.10 |
+| lap | fuumlap | ml | 3 | — | — | 0.30 |
+| lap | fuublap | bl | 3 | — | — | 0.30 |
+| lied | keemliet | ml | 4 | — | — | 0.40 |
+| lied | keebliet | bl | 2 | — | bier:2, been:1 | 0.20 |
+| loep | kuumloep | ml | 2 | — | — | 0.20 |
+| loep | kuubloep | bl | 5 | bloed:1 | broek:2 | 0.50 |
+| luik | nuimluik | ml | 3 | — | — | 0.30 |
+| luik | nuibluik | bl | 2 | blij:1, blijft:1 | buik:3 | 0.20 |
+| leem | hoomleem | ml | 9 | — | — | 0.90 |
+| leem | hoovleem | vl | 10 | — | — | 1.00 |
+| loods | suimloots | ml | 7 | — | — | 0.70 |
+| loods | suivloots | vl | 3 | — | — | 0.30 |
+| loon | soemloon | ml | 5 | — | — | 0.50 |
+| loon | soevloon | vl | 4 | — | — | 0.40 |
+| rond | simront | mr | 9 | — | — | 0.90 |
+| rond | sibront | br | 8 | — | — | 0.80 |
+| rots | huimrots | mr | 5 | — | — | 0.50 |
+| rots | huibrots | br | 6 | — | — | 0.60 |
+| rauw | kuumrouw | mr | 4 | — | — | 0.40 |
+| rauw | kuudrouw | dr | 5 | — | — | 0.50 |
+| reus | peemreus | mr | 4 | — | — | 0.40 |
+| reus | peedreus | dr | 4 | — | — | 0.40 |
+| riem | vomriem | mr | 7 | — | — | 0.70 |
+| riem | voodriem | dr | 4 | drie:5 | — | 0.40 |
+| rijm | hiemreim | mr | 2 | — | — | 0.20 |
+| rijm | hiedreim | dr | 0 | — | — | 0.00 |
+| roet | poemroet | mr | 0 | — | — | 0.00 |
+| roet | poedroet | dr | 0 | — | — | 0.00 |
+| rok | fiemrok | mr | 3 | — | — | 0.30 |
+| rok | fiedrok | dr | 8 | — | — | 0.80 |
+| raaf | fuimraaf | mr | 1 | — | — | 0.10 |
+| raaf | fuivraaf | vr | 0 | vraag:6, vraagt:4 | — | 0.00 |
+| ram | haamram | mr | 3 | — | — | 0.30 |
+| ram | haavram | vr | 1 | vrouw:1, vrouwen:1 | — | 0.10 |
+| ramp | keemramp | mr | 3 | — | — | 0.30 |
+| ramp | keevramp | vr | 1 | — | — | 0.10 |
+| riet | foemriet | mr | 2 | — | — | 0.20 |
+| riet | foevriet | vr | 0 | — | — | 0.00 |
+| long | suunlong | nl | 1 | — | — | 0.10 |
+| long | suublong | bl | 0 | — | — | 0.00 |
+| lamp | fienlamp | nl | 10 | — | — | 1.00 |
+| lamp | fievlamp | vl | 8 | — | — | 0.80 |
+| lift | kluinlift | nl | 8 | — | — | 0.80 |
+| lift | kluivlift | vl | 10 | — | — | 1.00 |
+| lont | puunlont | nl | 0 | — | — | 0.00 |
+| lont | puuvlont | vl | 1 | — | — | 0.10 |
+| luis | sanluis | nl | 1 | — | — | 0.10 |
+| luis | savluis | vl | 1 | — | — | 0.10 |
+| reep | luunreep | nr | 1 | — | — | 0.10 |
+| reep | luubreep | br | 1 | breed:9 | — | 0.10 |
+| ring | kreinring | nr | 7 | — | — | 0.70 |
+| ring | kreibring | br | 5 | — | — | 0.50 |
+| rit | luunrit | nr | 9 | — | — | 0.90 |
+| rit | luudrit | dr | 0 | — | — | 0.00 |
+| rib | sanrip | nr | 0 | — | — | 0.00 |
+| rib | savrip | vr | 0 | — | — | 0.00 |
+| romp | suunromp | nr | 4 | — | — | 0.40 |
+| romp | suuvromp | vr | 0 | — | — | 0.00 |
+| rund | lounrunt | nr | 4 | — | — | 0.40 |
+| rund | louvrunt | vr | 4 | — | — | 0.40 |
+| lek | satlek | tl | 5 | — | — | 0.50 |
+| lek | sablek | bl | 1 | blik:3, bleef:1, bleek:1 | — | 0.10 |
+| lijm | vuitleim | tl | 0 | — | — | 0.00 |
+| lijm | vuibleim | bl | 0 | — | — | 0.00 |
+| lot | footlot | tl | 9 | — | — | 0.90 |
+| lot | fooblot | bl | 10 | — | — | 1.00 |
+| lus | guutlus | tl | 0 | — | — | 0.00 |
+| lus | guuvlus | vl | 1 | — | — | 0.10 |
+| leus | fomleus | ml | 0 | — | — | 0.00 |
+| leus | fovleus | vl | 0 | — | — | 0.00 |
+| lol | zimlol | ml | 6 | — | — | 0.60 |
+| lol | zivlol | vl | 6 | — | — | 0.60 |
+| lijf | meunleif | nl | 10 | — | — | 1.00 |
+| lijf | meuvleif | vl | 6 | — | — | 0.60 |
+| reuk | goonreuk | nr | 2 | — | — | 0.20 |
+| reuk | goodreuk | dr | 2 | druk:7 | — | 0.20 |
+| roem | wienroem | nr | 0 | — | — | 0.00 |
+| roem | wiedroem | dr | 0 | — | — | 0.00 |
+| lak | reumlak | ml | 3 | — | — | 0.30 |
+| lak | reublak | bl | 1 | — | bas:1 | 0.10 |
+| last | roumlast | ml | 9 | — | — | 0.90 |
+| last | roublast | bl | 9 | — | — | 0.90 |
+| leeuw | rimleew | il | 5 | — | — | 0.50 |
+| leeuw | rivleew | il | 3 | — | — | 0.30 |
+| les | ruumles | ml | 10 | — | — | 1.00 |
+| les | ruuvles | vl | 0 | — | — | 0.00 |
+| roes | lemroes | mr | 3 | — | — | 0.30 |
+| roes | lebroes | br | 2 | broek:5, broer:1 | — | 0.20 |
+| rijk | leumreik | mr | 7 | — | — | 0.70 |
+| rijk | leudreik | dr | 7 | — | — | 0.70 |
+| rot | lemrot | mr | 2 | — | — | 0.20 |
+| rot | ledrot | dr | 2 | — | — | 0.20 |
+| rum | lumrum | mr | 0 | — | — | 0.00 |
+| rum | luvrum | vr | 1 | — | — | 0.10 |
+| lier | roonlier | nl | 4 | — | — | 0.40 |
+| lier | rooblier | bl | 3 | — | bier:3 | 0.30 |
+| lomp | ruunlomp | nl | 5 | — | — | 0.50 |
+| lomp | ruublomp | bl | 7 | — | — | 0.70 |
+| laf | rounlaf | nl | 5 | — | — | 0.50 |
+| laf | rouvlaf | vl | 5 | — | — | 0.50 |
+| lof | roenlof | nl | 10 | — | — | 1.00 |
+| lof | roevlof | vl | 10 | — | — | 1.00 |
+| rat | linrat | nr | 3 | — | — | 0.30 |
+| rat | librat | br | 4 | bracht:1 | — | 0.40 |
+| rek | lunrek | nr | 7 | — | — | 0.70 |
+| rek | lubrek | br | 5 | brengt:1 | — | 0.50 |
+| roos | lanroos | nr | 10 | — | — | 1.00 |
+| roos | ladroos | dr | 9 | — | — | 0.90 |
+| rug | lonrug | nr | 10 | — | — | 1.00 |
+| rug | lodrug | dr | 10 | — | — | 1.00 |
+| rem | lenrem | nr | 5 | — | — | 0.50 |
+| rem | levrem | vr | 0 | — | vent:2 | 0.00 |
+| laan | routlaan | tl | 3 | — | — | 0.30 |
+| laan | roublaan | bl | 5 | — | baan:3 | 0.50 |
+| loom | keitloom | tl | 1 | — | — | 0.10 |
+| loom | keibloom | bl | 1 | — | — | 0.10 |
+| lens | routlens | tl | 9 | — | — | 0.90 |
+| lens | rouvlens | vl | 0 | — | — | 0.00 |
