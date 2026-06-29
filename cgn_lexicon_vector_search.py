@@ -64,10 +64,20 @@ def make_vector_search_index(vectors, vector_metadata):
     index = svs.search.VectorIndex(vectors, vector_metadata)
     return index
 
+def make_vector_search_index_name(layer, model_name, name_prefix = ''):
+    name = f'{name_prefix}_layer-{layer}_model-{model_name}'
+    return name
+
+def load_search_vector_index(layer, name_prefix = '', 
+    directory = 'svs_experiment_data', model_name = final_wav2vec2_model_name):
+    name = make_vector_search_index_name(layer, model_name, name_prefix)
+    search_index = svs.VectorIndex.load(directory, name)
+    return search_index
+
 def make_vector_search_index_for_layer(store, layer, name_prefix = '', 
     directory = 'svs_experiment_data', model_name = final_wav2vec2_model_name,
     save = True, overwrite = False):
-    name = f'{name_prefix}_layer-{layer}_model-{model_name}'
+    name = make_vector_search_index_name(layer, model_name, name_prefix)
     metadatas = filter_metadatas(store.metadatas, layer = layer, 
         model_name = model_name)
     path = svs.metadata.make_metadata_path(directory, name)
