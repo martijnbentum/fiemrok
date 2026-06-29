@@ -11,7 +11,9 @@
 
   <img width="1392" height="496" alt="Screenshot 2026-06-29 at 14 31 53" src="https://github.com/user-attachments/assets/f82383af-2458-4a9f-bc09-a0ddbec3cac9" />
 
-  results for wav2vec layer 6
+
+
+  
 
   
 
