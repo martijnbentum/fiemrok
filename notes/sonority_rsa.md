@@ -10,6 +10,5 @@ sampling at the syllable level ensures balanced sampling from all syllable posit
 Applied dutch Wav2vec 2 (200k checkpoint) and dutch HuBERT (200k checkpoint)
 Extract the hidden state at later 1, 3, 6, 9 & 12 at the center frame of each phone.
 
-<img width="1609" height="978" alt="sonority_rsa_w2v2_hubert_compk" src="https://github.com/user-attachments/assets/c3274c14-457b-4d2a-998b-9a71ed40561a" />
-
+<img width="700" height="500" alt="sonority_rsa_w2v2_hubert_compk" src="https://github.com/user-attachments/assets/26e16d14-5ded-4065-833a-26db8e55bb0c" />
 
