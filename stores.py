@@ -9,6 +9,15 @@ stimuli = None
 
 echoframe_cgn = None
 echoframe_stimuli = None
+echoframe_sonority = None
+
+def load_echoframe_sonority_store(path=locations.echoframe_sonority_store_root):
+    global echoframe_sonority
+    if echoframe_sonority: return echoframe_sonority
+    echoframe_sonority = echoframe.store.Store(path)
+    _attach_cgn(echoframe_sonority)
+    _attach_stimuli(echoframe_sonority)
+    return echoframe_sonority
 
 def load_phraser_cgn_store(path = locations.cgn_lmdb):
     global cgn

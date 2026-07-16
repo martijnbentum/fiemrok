@@ -44,3 +44,5 @@ def audio_filename_to_webmaus_textgrid_path(audio_filename):
 phraser_stimuli_store_root = data / 'phraser_stimuli_store'
 echoframe_stimuli_store_root = data / 'echoframe_stimuli_store'
 echoframe_cgn_lexicon_store = data / 'echoframe_cgn_lexicon_store'
+
+echoframe_sonority_store =  '../sonority'

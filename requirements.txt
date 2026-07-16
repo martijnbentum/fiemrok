@@ -12,3 +12,5 @@ git+https://github.com/martijnbentum/frame.git
 git+https://github.com/martijnbentum/speech-vector-search.git
 git+https://github.com/martijnbentum/ssh-audio-play.git
 git+https://github.com/martijnbentum/dutch-syllabifier.git
+git+https://github.com/martijnbentum/celex.git
+git+https://github.com/martijnbentum/sonority_rsa.git
