@@ -21,7 +21,8 @@ A comparison of pairwise distances of sonority and pairwise distances of intensi
 
 To show the contribution of sonority and intensity while controlling for the other, a partial RSA is computed for both intensity and sonority.
 
-<img width="1190" height="547" alt="Screenshot 2026-07-21 at 15 24 07" src="https://github.com/user-attachments/assets/7faee85d-d899-4fd7-aa83-fa6d93831c68" />
+<img width="1189" height="541" alt="Screenshot 2026-07-21 at 16 01 55" src="https://github.com/user-attachments/assets/c0adf515-e8f7-4d55-83b7-ed28db8945f9" />
+
 
 
 
