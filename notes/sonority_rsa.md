@@ -13,7 +13,13 @@ Extract the hidden state at later 1, 3, 6, 9 & 12 at the center frame of each ph
 A random baseline is computed based on shuffled sonority values
 A intensity baseline is computed with sonority_rsa.intensity compute_intensity(signal) based on the phone interval (established by Webmaus FA)
 
-A partial RSA is computed for both intensity and sonority.
+The spearman correlation of sonority and intensity: ρ = 0.647
+Strong positive association; phones with higher sonority ranks generally also have higher intensity ranks
+
+The spearman correlation the representational dissimilarity matrix for sonority and intensity: ρ = 0.3403
+A comparison of pairwise distances of sonority and pairwise distances of intensity. A moderate positive association between their pairwise distances. If phone pairs differ substantially in sonority, they tend to differ in intensity.
+
+To show the RSA score forA partial RSA is computed for both intensity and sonority.
 
 <img width="1190" height="547" alt="Screenshot 2026-07-21 at 15 24 07" src="https://github.com/user-attachments/assets/7faee85d-d899-4fd7-aa83-fa6d93831c68" />
 
