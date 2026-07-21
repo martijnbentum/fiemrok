@@ -25,7 +25,7 @@ def select_cgn_data(cgn):
     for x in sd:
         selection.extend(sd[x][:30])
     for phrase in selection:
-        syllables.extend(x.syllables)
+        syllables.extend(phrase.syllables)
     return syllables, selection, sd
 
 def compute_and_store_vectors(model_name, batch_size= 32, selection = None,
@@ -55,4 +55,3 @@ def run_sonority_analysis(model_name, syllables = None, layers = [1, 3, 6, 9, 12
         
 
     
-

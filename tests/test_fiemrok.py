@@ -1,6 +1,7 @@
 import pathlib
 import sys
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 
@@ -8,6 +9,7 @@ REPO_DIR = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_DIR))
 
 import fiemrok
+import sonority
 
 
 def make_header():
@@ -133,6 +135,26 @@ class StimulusValidationTests(unittest.TestCase):
             'aligned_type should be aligned / misaligned, not invalid',
         ):
             fiemrok.Stimulus(self.trial, aligned_type='invalid')
+
+
+class SonoritySelectionTests(unittest.TestCase):
+    def test_select_cgn_data_collects_each_selected_phrases_syllables(self):
+        first_speaker = mock.Mock(syllables=['wrong-first-speaker'])
+        second_speaker = mock.Mock(syllables=['wrong-second-speaker'])
+        first_phrase = SimpleNamespace(
+            audio=SimpleNamespace(filename='comp-k/nl/first.wav'),
+            speaker=first_speaker,
+            syllables=['first-1', 'first-2'])
+        second_phrase = SimpleNamespace(
+            audio=SimpleNamespace(filename='comp-k/nl/second.wav'),
+            speaker=second_speaker,
+            syllables=['second-1'])
+        cgn = SimpleNamespace(phrases=[first_phrase, second_phrase])
+
+        syllables, selection, _ = sonority.select_cgn_data(cgn)
+
+        self.assertEqual(selection, [first_phrase, second_phrase])
+        self.assertEqual(syllables, ['first-1', 'first-2', 'second-1'])
 
 
 if __name__ == '__main__':
