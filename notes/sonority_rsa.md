@@ -19,7 +19,7 @@ Strong positive association; phones with higher sonority ranks generally also ha
 The spearman correlation the representational dissimilarity matrix for sonority and intensity: ρ = 0.3403
 A comparison of pairwise distances of sonority and pairwise distances of intensity. A moderate positive association between their pairwise distances. If phone pairs differ substantially in sonority, they tend to differ in intensity.
 
-To show the RSA score forA partial RSA is computed for both intensity and sonority.
+To show the contribution of sonority and intensity while controlling for the other, a partial RSA is computed for both intensity and sonority.
 
 <img width="1190" height="547" alt="Screenshot 2026-07-21 at 15 24 07" src="https://github.com/user-attachments/assets/7faee85d-d899-4fd7-aa83-fa6d93831c68" />
 
