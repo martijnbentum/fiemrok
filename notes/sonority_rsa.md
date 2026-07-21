@@ -15,7 +15,8 @@ A intensity baseline is computed with sonority_rsa.intensity compute_intensity(s
 
 A partial RSA is computed for both intensity and sonority.
 
-<img width="1197" height="553" alt="Screenshot 2026-07-21 at 12 52 24" src="https://github.com/user-attachments/assets/a2a7b833-cb6b-4c04-9080-8c3a893de2aa" />
+<img width="1190" height="547" alt="Screenshot 2026-07-21 at 15 24 07" src="https://github.com/user-attachments/assets/7faee85d-d899-4fd7-aa83-fa6d93831c68" />
+
 
 
 Partial RSA measures whether a model's representational geometry reflects one explanatory factor (e.g., sonority) after removing the variation it shares with another factor (e.g., intensity). It does this by regressing the control variable out of both the model RDM and the explanatory RDM and then correlating the resulting residuals. The resulting partial correlation indicates whether the model still aligns with the unique structure of sonority beyond what can be explained by intensity. Positive values indicate that the unique sonority structure is preserved in the model, values near zero indicate little unique relationship, and negative values indicate that the model is organized in opposition to the residual structure of the explanatory variable. Because the residual represents only the component not shared with the control variable, partial RSA quantifies unique association rather than explained variance or causal influence.
