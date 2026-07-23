@@ -7,6 +7,14 @@ sampled 1000 syllables 12 times from approximately 10K syllable pool (1000 sylla
 computed sonority values based on phone labels with https://github.com/martijnbentum/dutch-syllabifier (used in sonority_rsa)
 sampling at the syllable level ensures balanced sampling from all syllable positions
 
+Sonority scale:
+0 stop
+1 fricative
+2 nasal
+3 liquid
+4 glide
+5 vowel
+
 Applied dutch Wav2vec 2 (200k checkpoint) and dutch HuBERT (200k checkpoint)
 Extract the hidden state at later 1, 3, 6, 9 & 12 at the center frame of each phone.
 
