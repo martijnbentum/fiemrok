@@ -18,8 +18,12 @@ original index names. Both query and reference vectors use the chosen method.
 word type, suitable for `per_word()`, `overall_result()`, and
 `plot_precision()`. It requests 11 neighbours and excludes self-matches by
 source key before scoring ten neighbours. The existing `analyse_results()`
-function now also excludes self-matches by key, which can change old scores
-when self was not the first neighbour. This comparison uses the available
+function also excludes self-matches by key and scores exactly ten remaining
+neighbours. Saved results with ten neighbours already excluding self can
+be scored directly; results with fewer than ten non-self neighbours raise
+an error. This can change old scores that dropped a neighbour or used a
+denominator of nine. Both saved-result analysis and new retrieval assume
+the correct query-to-metadata correspondence. This comparison uses the available
 store entries; reproducing the original token set requires checking source
 keys against the original saved index.
 

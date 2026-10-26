@@ -99,12 +99,32 @@ class PrecisionTests(unittest.TestCase):
 
     def test_legacy_analysis_removes_self_by_key(self):
         query = metadata('rok', b'query')
-        result = {'metadatas': [metadata('rok', b'other'), query,
-            metadata('dak', b'wrong')]}
+        neighbours = [metadata('rok', bytes([i])) for i in range(4)]
+        neighbours += [metadata('dak', bytes([i])) for i in range(4, 10)]
+        neighbours.insert(1, query)
+        result = {'metadatas': neighbours}
         index = SimpleNamespace(metadatas=[query])
         output = analyse_results.analyse_results({6: [result]},
             {6: [index, None]}, 6)
-        self.assertEqual(output, {'rok': [.5]})
+        self.assertEqual(output, {'rok': [.4]})
+
+    def test_saved_results_without_self_score_all_ten_neighbours(self):
+        query = metadata('rok', b'query')
+        neighbours = [metadata('dak', bytes([i])) for i in range(9)]
+        neighbours.append(metadata('rok', b'tenth'))
+        index = SimpleNamespace(metadatas=[query])
+        output = analyse_results.analyse_results(
+            {6: [{'metadatas': neighbours}]}, {6: [index, None]}, 6)
+        self.assertEqual(output, {'rok': [.1]})
+
+    def test_saved_results_with_only_nine_non_self_neighbours_fail(self):
+        query = metadata('rok', b'query')
+        neighbours = [query]
+        neighbours += [metadata('rok', bytes([i])) for i in range(9)]
+        index = SimpleNamespace(metadatas=[query])
+        with self.assertRaisesRegex(ValueError, '10 non-self neighbours'):
+            analyse_results.analyse_results(
+                {6: [{'metadatas': neighbours}]}, {6: [index, None]}, 6)
 
 
 if __name__ == '__main__':

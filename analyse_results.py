@@ -28,15 +28,14 @@ def evaluate_index(vector_index, top_k=10):
 
 
 def analyse_results(results, o, layer):
+    '''Score ten non-self neighbours per saved query, in index order.'''
     r = results[layer]
     vs, md = o[layer]
     output = {}
     for index, d in enumerate(r):
-        vmds = d['metadatas']
-        n = len(vmds)
         gt_vmd = vs.metadatas[index]
         gt_label = gt_vmd.label
-        acc = precision_at_k(d, gt_vmd, top_k=n - 1)
+        acc = precision_at_k(d, gt_vmd, top_k=10)
         if gt_label not in output:
             output[gt_label] = []
         output[gt_label].append(acc)
