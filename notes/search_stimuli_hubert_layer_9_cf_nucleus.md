@@ -1,3 +1,23 @@
+HuBERT layer 9 stimulus-level results for the [search stimuli plot](search_stimuli_plot.md).
+See [the connection to Lentz (2011)](search_stimuli_lentz_2011.md) for
+the human experiments and interpretation of the model results.
+See also the [wav2vec layer 6 results](search_stimuli_wav2vec_layer6_cf_nucleus.md).
+Each row evaluates a recording from Tom's experimental stimuli: a real-word
+target in final position, in an aligned or misaligned context. `Target` is
+the word being retrieved; `Stimulus` identifies the contextualised form.
+The score measures retrieval of that target from the CGN lexicon using the
+embedding at the annotated target vowel's centre frame. The
+[plot note](search_stimuli_plot.md) describes how these scores are aggregated.
+The 120 scores match the corresponding `../all_results.json` arrays in order:
+rows alternate aligned and misaligned stimuli (60 per condition).
+
+Queries use the centre frame of the target vowel nucleus via
+[search_stimuli_embeddings.py: load_center_frame_nucleus_speech_vector()](../search_stimuli_embeddings.py#L171).
+[CompareEmbeddings.compute_results()](../search_stimuli_embeddings.py#L60) retrieves neighbours,
+and [compute_accuracy()](../search_stimuli_embeddings.py#L103) calculates `Hits / 10` (precision at 10).
+[plot_result_dict.py: plot_accuracy()](../plot_result_dict.py#L50) plots the aggregate results.
+See the [plot note](search_stimuli_plot.md) for the CGN search-index functions and lexicon selection.
+
 | Target | Stimulus | Hits | Competitors | Accuracy |
 |----------|----------|-----:|-------------|---------:|
 | lans | pamlans | 1 | lamp:4, bas:1, land:1, lang:1, langs:1, las:1 | 0.10 |

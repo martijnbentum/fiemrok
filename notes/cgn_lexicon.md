@@ -1,9 +1,16 @@
 selected 2466 word types from cgn with minimally 100 word token (excluded components a,c,d,h,m, 
 excluded words shorter than .1 second and longer than 1.5 seconds)
 
+Word embeddings used the centre frame of each word's embedding frames,
+as implemented by `load_speech_vectors()` in [validate_lexicon.py](../validate_lexicon.py),
+which loads the matching `lexicon100_2466_cgn` store and explicitly selects centre frames.
+The exact generating run was not recorded, so this is inferred from the code.
+
 search is based on one item in the lexicon (100 items per word type, requested 10 nearest neighbours)
 score is precision at 10
 errors can be caused by faulty search token, faulty neighbour (e.g. bad forced alignment)
+
+See [cgn_lexicon_plot.md](cgn_lexicon_plot.md) for the related plot evaluating all 100 tokens per word type.
 
 overview per precision score .1 .2 .3 .4 .5 .6 .7 .8 .9
 | target | score | items |

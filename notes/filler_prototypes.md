@@ -9,6 +9,34 @@ New word token vectors are generated and matched with the 10 nearest neighbours 
 For each word 10 word token vectors are generated and matched below the accuracy and distribution of
 matched prototype words.
 
+The implementation is in [word_model_outputs.py](../word_model_outputs.py):
+`aggregate_embedding_array()` mean-pools the frames of each word token,
+`make_prototypes()` calls `speech_vector_search.build_subset_prototypes()` to build
+10 prototypes from groups of 10 token vectors, and `test_prototypes()` mean-pools
+10 query tokens per word and retrieves 10 neighbours for each query.
+The table's `acc` is therefore average precision at 10: the proportion of the
+100 retrieved prototype labels that match the query word, rather than top-1 classification accuracy.
+
+Evaluation limitation: `test_prototypes()` samples queries from the same word-token
+collection without explicitly excluding tokens used to build the prototypes.
+Query tokens may therefore contribute to the prototypes they are evaluated against,
+potentially inflating the scores. These results do not establish performance on held-out tokens.
+
+For studying word segmentation in speech models, mean pooling over an annotated
+word interval supplies the word boundaries in advance and removes the temporal
+variation within that interval. Good retrieval can show that word identity is
+recoverable when boundaries are supplied, but does not establish that the model
+itself identifies word boundaries or represents a whole word at a particular frame.
+Using centre frames would preserve a representation at one time point, although
+selecting that point from annotated word boundaries would still supply boundary information.
+
+The prototype step remains interesting as a way to combine multiple spoken
+occurrences into reference representations of a word. It can be separated from
+mean pooling: prototypes could instead be built from centre-frame vectors, then
+compared with successive frames in continuous speech to examine where word identity
+becomes recoverable. Such an evaluation should keep query recordings separate
+from prototype source recordings and test boundary localisation explicitly.
+
 | word  | acc  | predictions |
 |-------|------|-------------|
 | dak   | 0.86 | dak (86), vak (6), plak (4), laag (2), buis (1), map (1) |
