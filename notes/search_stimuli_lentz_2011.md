@@ -13,20 +13,14 @@ Lentz, T. (2011). Speech segmentation (Chapter 3, pp. 95–149). In
 *Phonotactic Illegality and Probability in Speech Perception: Evidence from
 second language listeners*. Utrecht University dissertation, LOT 290.
 
-- [Chapter PDF](/Users/martijn.bentum/Documents/papers/word_segmentation/Lentz_2011.pdf)
-- [Chapter text](/Users/martijn.bentum/Documents/papers/word_segmentation/Lentz_2011.md)
-  and [summary](/Users/martijn.bentum/Documents/papers/word_segmentation/Lentz_2011_summary.md)
 - [Search-stimuli plot and workflow](search_stimuli_plot.md)
 - [HuBERT layer 9 results](search_stimuli_hubert_layer_9_cf_nucleus.md)
 - [wav2vec 2.0 layer 6 results](search_stimuli_wav2vec_layer6_cf_nucleus.md)
 
-The chapter links require the local paper collection. This is a dissertation
-chapter, rather than a standalone journal paper.
-
 ## What connects the stimuli and experiments
 
 In Experiment 3, listeners spot words embedded in bisyllabic nonsense
-strings. For the final-position target `rok`, the aligned `fiemrok`
+words. For the final-position target `rok`, the aligned `fiemrok`
 encourages a boundary between /m/ and /r/: /mr/ cannot start a Dutch word.
 In misaligned `fiedrok`, the legal onset /dr/ supports a competing boundary
 before /d/. Splitting /dr/ also leaves a voiced obstruent in the preceding
@@ -35,10 +29,8 @@ one phonotactic cue. Experiment 4a separates cluster wellformedness from
 the legality of the residue left by a segmentation.
 
 The local model analysis uses the 60 real-word targets in final position,
-each in aligned and misaligned contexts. The matching target/context
-examples in the dissertation's Appendix A connect these materials to
-Experiment 3; the exact identity of the local audio has not been verified.
-The chapter describes MBROLA-synthesised audio with controlled durations.
+each in aligned and misaligned contexts.
+The stimuli were generated with MBROLA-synthesis with controlled durations.
 
 The human task uses eye movements to displayed letters to track possible
 word onsets, including alternatives that do not yield words. Experiment 3

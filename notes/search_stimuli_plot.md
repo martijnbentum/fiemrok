@@ -37,9 +37,9 @@ Embeddings use the centre frame of the target vowel nucleus. Relevant modules an
   - Excluded components c, d, and m (telephone conversations and sermons).
   - Excluded overlapping speech.
   - Excluded Flemish recordings.
-  - Excluded words with frequencies outside the range 100–1500.
+  - Included only word tokens with durations of 100–1500 ms (0.1–1.5 seconds).
   - Included only monosyllabic words.
-  - Included only words with a frequency of at least 100.
+  - Included only word types with at least 100 tokens after filtering.
   - Resulting lexicon contains approximately 800 word types.
 
 - Added each word from the target stimuli using the same restrictions, except for the frequency criterion.

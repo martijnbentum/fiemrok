@@ -2,13 +2,14 @@ HuBERT layer 9 stimulus-level results for the [search stimuli plot](search_stimu
 See [the connection to Lentz (2011)](search_stimuli_lentz_2011.md) for
 the human experiments and interpretation of the model results.
 See also the [wav2vec layer 6 results](search_stimuli_wav2vec_layer6_cf_nucleus.md).
+
 Each row evaluates a recording from Tom's experimental stimuli: a real-word
 target in final position, in an aligned or misaligned context. `Target` is
 the word being retrieved; `Stimulus` identifies the contextualised form.
 The score measures retrieval of that target from the CGN lexicon using the
 embedding at the annotated target vowel's centre frame. The
 [plot note](search_stimuli_plot.md) describes how these scores are aggregated.
-The 120 scores match the corresponding `../all_results.json` arrays in order:
+The 120 scores can be found in `../all_results.json` arrays in order:
 rows alternate aligned and misaligned stimuli (60 per condition).
 
 Queries use the centre frame of the target vowel nucleus via
