@@ -1,6 +1,31 @@
 import numpy
-import matplotlib.pyplot as plt
-from imgcat import imgcat
+
+def precision_at_k(result, query_metadata, top_k=10):
+    '''Score neighbours after excluding the query token by source key.'''
+    if top_k < 1:
+        raise ValueError('top_k must be positive')
+    query_keys = set(query_metadata.source_echoframe_keys)
+    neighbours = [md for md in result['metadatas']
+        if query_keys.isdisjoint(md.source_echoframe_keys)][:top_k]
+    if len(neighbours) < top_k:
+        raise ValueError(f'expected {top_k} non-self neighbours')
+    matches = sum(md.label == query_metadata.label for md in neighbours)
+    return matches / top_k
+
+
+def evaluate_index(vector_index, top_k=10):
+    '''Return word-to-token precision lists without retaining all searches.'''
+    if len(vector_index.metadatas) <= top_k:
+        raise ValueError('index needs more entries than top_k')
+    from progressbar import progressbar
+    output = {}
+    for index in progressbar(range(len(vector_index.metadatas))):
+        metadata = vector_index.metadatas[index]
+        result = vector_index.query_by_index(index, top_k=top_k + 1)
+        score = precision_at_k(result, metadata, top_k=top_k)
+        output.setdefault(metadata.label, []).append(score)
+    return output
+
 
 def analyse_results(results, o, layer):
     r = results[layer]
@@ -11,16 +36,7 @@ def analyse_results(results, o, layer):
         n = len(vmds)
         gt_vmd = vs.metadatas[index]
         gt_label = gt_vmd.label
-        gt_efk = gt_vmd.source_echoframe_keys[0]
-        first_efk = vmds[0].source_echoframe_keys[0]
-        second_efk = vmds[1].source_echoframe_keys[0]
-        if gt_efk != first_efk and gt_efk != second_efk:
-            m = f'{index} {gt_label} {layer}'
-            m += f' {gt_efk} != {first_efk}'
-            m += f' and {gt_efk} != {second_efk}'
-            raise ValueError(m)
-        labels = [x.label for x in vmds[1:]]
-        acc = labels.count(gt_label) / (n-1)
+        acc = precision_at_k(d, gt_vmd, top_k=n - 1)
         if gt_label not in output:
             output[gt_label] = []
         output[gt_label].append(acc)
@@ -46,6 +62,9 @@ def plot_precision(results_per_layer, save_path='_plot.png'):
                         precision scores for one word type
     save_path           path to save the plot
     '''
+    import matplotlib.pyplot as plt
+    from imgcat import imgcat
+
     layers = sorted(results_per_layer.keys())
     means, cis = [], []
     for layer in layers:
