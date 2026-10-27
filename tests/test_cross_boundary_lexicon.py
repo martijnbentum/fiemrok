@@ -9,17 +9,20 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import cross_boundary_lexicon as cbl
 
 
-def make_phrase(words, component='b', start=1000):
+def make_phrase(words, component='b', start=1000, variant='nl'):
     '''Make consecutive phones with distinct word keys and audio metadata.'''
-    audio = SimpleNamespace(filename=f'/cgn/comp-{component}/nl/test.wav')
+    filename = f'/cgn/comp-{component}/{variant}/test.wav'
+    audio = SimpleNamespace(filename=filename)
     phones = []
+    phrase_words = []
     for word_index, labels in enumerate(words):
         word = SimpleNamespace(key=word_index)
+        phrase_words.append(word)
         for label in labels:
             phone_start = start + len(phones) * 100
             phones.append(SimpleNamespace(label=label, start=phone_start,
                 end=phone_start + 100, word=word))
-    return SimpleNamespace(phones=phones, audio=audio)
+    return SimpleNamespace(phones=phones, words=phrase_words, audio=audio)
 
 
 def find_sequence(ps, start, end):
@@ -77,6 +80,16 @@ class ExtractionTests(unittest.TestCase):
 
 
 class SequenceTests(unittest.TestCase):
+    def test_words_exposes_the_two_linked_word_objects_in_order(self):
+        phrase = make_phrase([['a', 'b'], ['c', 'd'], ['e']])
+        ps = cbl.PhraseSequences(phrase)
+        for sequence in ps.sequences:
+            with self.subTest(span=(sequence.start_index, sequence.end_index)):
+                left, right = sequence.words
+                self.assertIs(left, sequence.phones[0].word)
+                self.assertIs(right, sequence.phones[-1].word)
+                self.assertIsNot(left, right)
+
     def test_exposes_parent_phrase_audio_indices_times_and_labels(self):
         phrase = make_phrase([['tʃ', 'aː'], ['n']])
         ps = cbl.PhraseSequences(phrase)
@@ -208,7 +221,7 @@ class FilteringTests(unittest.TestCase):
 
     def test_default_filters_match_historical_component_exclusions(self):
         components = 'abcdefghijklmno'
-        phrases = [make_phrase([], component=c) for c in components]
+        phrases = [make_phrase([['a'], ['n']], component=c) for c in components]
         original = list(phrases)
         for function in (cbl.filter_phrases_by_component,
             cbl.filter_phrases_for_cross_boundary_lexicon):
@@ -222,7 +235,7 @@ class FilteringTests(unittest.TestCase):
         self.assertEqual(phrases, original)
 
     def test_custom_and_empty_component_exclusions(self):
-        phrases = [make_phrase([], component=c) for c in 'abc']
+        phrases = [make_phrase([['a'], ['n']], component=c) for c in 'abc']
         filtered = cbl.filter_phrases_for_cross_boundary_lexicon(
             phrases, remove_components=['b'])
         self.assertEqual([cbl.phrase_to_component(p) for p in filtered],
@@ -230,6 +243,38 @@ class FilteringTests(unittest.TestCase):
         self.assertEqual(cbl.filter_phrases_by_component(
             phrases, remove_components=''), phrases)
         self.assertEqual(cbl.filter_phrases_for_cross_boundary_lexicon([]), [])
+
+    def test_dutch_variant_filter_defaults_to_netherlands_dutch(self):
+        dutch = make_phrase([['a'], ['n']])
+        flemish = make_phrase([['a'], ['n']], variant='vl')
+        phrases = [flemish, dutch]
+        self.assertEqual(cbl.filter_phrases_by_dutch_variant(phrases), [dutch])
+        self.assertEqual(cbl.filter_phrases_by_dutch_variant(
+            phrases, dutch_variant='vl'), [flemish])
+        self.assertEqual(phrases, [flemish, dutch])
+
+    def test_word_count_filter_keeps_phrases_with_at_least_two_words(self):
+        phrases = [make_phrase([]), make_phrase([['a']]),
+            make_phrase([['a'], ['n']]), make_phrase([['a'], ['n'], ['d']])]
+        filtered = cbl.filter_phrases_with_insufficient_words(phrases)
+        self.assertEqual(filtered, phrases[2:])
+        self.assertIs(filtered[0], phrases[2])
+        self.assertEqual(cbl.filter_phrases_with_insufficient_words(
+            phrases, min_words=3), phrases[3:])
+
+    def test_combined_filter_applies_variant_and_word_count_without_overlap(self):
+        kept = make_phrase([['a'], ['n']])
+        kept.overlap = True
+        excluded_component = make_phrase([['a'], ['n']], component='a')
+        flemish = make_phrase([['a'], ['n']], variant='vl')
+        single_word = make_phrase([['a']])
+        phrases = [excluded_component, flemish, single_word, kept]
+        self.assertEqual(cbl.filter_phrases_for_cross_boundary_lexicon(
+            phrases), [kept])
+        self.assertEqual(cbl.filter_phrases_for_cross_boundary_lexicon(
+            phrases, dutch_variant='vl'), [flemish])
+        self.assertEqual(cbl.filter_phrases_for_cross_boundary_lexicon(
+            phrases, min_words=1), [single_word, kept])
 
 
 if __name__ == '__main__':
