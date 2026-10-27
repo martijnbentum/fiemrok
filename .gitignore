@@ -8,6 +8,7 @@ phrases_cgn/
 test_store/
 test_*
 !tests/test_cross_boundary_lexicon.py
+!tests/test_cross_boundary_lexicon_sampling.py
 !tests/test_validate_lexicon.py
 lexicon100_2466_cgn/
 data/*.pkl

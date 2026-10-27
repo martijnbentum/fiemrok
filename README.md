@@ -37,3 +37,8 @@ workspace-dependent setup step.
 
 See [Resume HuBERT mean pooling](data/hubert_mean_pooling.md) for efficient
 shard-grouped frame loading, saved-index reuse, and resumable evaluation.
+
+## Cross-boundary lexicon sampling
+
+See [Adaptive sampling](data/cross_boundary_sampling.md) for planning quotas,
+retrying with consecutive seeds, relaxing constraints, and resuming failures.
