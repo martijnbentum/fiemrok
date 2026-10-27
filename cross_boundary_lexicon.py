@@ -3,7 +3,7 @@ from itertools import groupby, pairwise
 from pathlib import Path
 import random
 
-from progressbar import progressbar
+from progressbar import ProgressBar, progressbar
 
 
 class CrossBoundaryLexicon:
@@ -11,7 +11,9 @@ class CrossBoundaryLexicon:
 
     def __init__(self, phrases):
         ps = PhraseSequences
-        self.phrase_sequences = [ps(phrase, parent=self) for phrase in phrases]
+        print('building cross-boundary phrase sequences')
+        self.phrase_sequences = [ps(phrase, parent=self)
+            for phrase in progressbar(phrases)]
 
     def __repr__(self):
         n_sequences = sum(len(ps.sequences) for ps in self.phrase_sequences)
@@ -87,7 +89,8 @@ class CrossBoundaryLexicon:
             tokens_per_type, rng, reserved_spans, minimums_only=False))
 
         # Commit phrase selections only after both sampling phases succeed.
-        for sequence in sampled_tokens:
+        print('committing sampled tokens')
+        for sequence in progressbar(sampled_tokens):
             sequence.parent.select(sequence)
         return sampled_tokens
 
@@ -173,21 +176,28 @@ def sample_types_from_bins(bins, tokens_by_type, tokens_per_type, rng,
         target_total_types = sum(length_bin.target_count for length_bin in bins)
     n_selected_types = sum(length_bin.n_selected_types for length_bin in bins)
     sampled_tokens = []
-    while n_selected_types < target_total_types:
-        made_progress = False
-        for length_bin in bins:
-            if n_selected_types == target_total_types: break
-            if length_bin.full: continue
-            if minimums_only and not length_bin.below_minimum: continue
-            chosen_tokens = sample_next_type_from_bin(length_bin,
-                tokens_by_type, tokens_per_type, rng, reserved_spans)
-            if not chosen_tokens: continue
-            sampled_tokens.extend(chosen_tokens)
-            n_selected_types += 1
-            made_progress = True
-        if not made_progress:
-            message = format_sampling_failure(bins, tokens_per_type)
-            raise ValueError(message)
+    initial_selected_types = n_selected_types
+    remaining_types = target_total_types - n_selected_types
+    if not remaining_types: return sampled_tokens
+    phase = 'bin minimums' if minimums_only else 'remaining total'
+    print(f'sampling {remaining_types} types for {phase}')
+    with ProgressBar(max_value=remaining_types) as bar:
+        while n_selected_types < target_total_types:
+            made_progress = False
+            for length_bin in bins:
+                if n_selected_types == target_total_types: break
+                if length_bin.full: continue
+                if minimums_only and not length_bin.below_minimum: continue
+                chosen_tokens = sample_next_type_from_bin(length_bin,
+                    tokens_by_type, tokens_per_type, rng, reserved_spans)
+                if not chosen_tokens: continue
+                sampled_tokens.extend(chosen_tokens)
+                n_selected_types += 1
+                made_progress = True
+                bar.update(n_selected_types - initial_selected_types)
+            if not made_progress:
+                message = format_sampling_failure(bins, tokens_per_type)
+                raise ValueError(message)
     return sampled_tokens
 
 
@@ -375,9 +385,15 @@ def filter_phrases_with_insufficient_words(phrases, min_words=2):
 def filter_phrases_for_cross_boundary_lexicon(phrases, remove_components='acdhm',
     dutch_variant='nl', min_words=2):
     '''Apply phrase filters and return a filtered list of phrases.'''
-    phrases = filter_phrases_by_component(phrases, remove_components)
-    phrases = filter_phrases_by_dutch_variant(phrases, dutch_variant)
-    return filter_phrases_with_insufficient_words(phrases, min_words)
+    print('filtering phrases by component')
+    phrases = filter_phrases_by_component(progressbar(phrases),
+        remove_components)
+    print('filtering phrases by Dutch variant')
+    phrases = filter_phrases_by_dutch_variant(progressbar(phrases),
+        dutch_variant)
+    print('filtering phrases by word count')
+    return filter_phrases_with_insufficient_words(progressbar(phrases),
+        min_words)
 
 
 def inspect_lexicon_phonemes():
