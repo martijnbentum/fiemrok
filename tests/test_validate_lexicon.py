@@ -2,9 +2,11 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from types import SimpleNamespace
 from unittest import mock
 
+import echoframe
 import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -50,21 +52,27 @@ class StoreLoadingTests(unittest.TestCase):
 class PoolingTests(unittest.TestCase):
     def test_mean_and_center_use_different_frames(self):
         payload = np.array([[0., 0.], [9., 3.], [0., 0.]])
-        token = SimpleNamespace(load_payload=lambda: payload)
-        mean = validate_lexicon.load_speech_vectors([token], pooling='mean')
-        center = validate_lexicon.load_speech_vectors([token])
+        token = SimpleNamespace(echoframe_key=b'token')
+        embedding_store = mock.Mock()
+        embedding_store.load_many_frames.side_effect = (
+            lambda keys, frame, keep_missing:
+                [validate_lexicon.svs.util_math.pool_frames(payload, frame)])
+        mean = validate_lexicon.load_speech_vectors(embedding_store,
+            [token], pooling='mean')
+        center = validate_lexicon.load_speech_vectors(embedding_store, [token])
         np.testing.assert_array_equal(mean, [[3., 1.]])
         np.testing.assert_array_equal(center, [[9., 3.]])
 
     def test_invalid_pooling_is_rejected_before_loading(self):
         with self.assertRaises(ValueError):
-            validate_lexicon.load_speech_vectors([], pooling='median')
+            validate_lexicon.load_speech_vectors(object(), [], pooling='median')
 
     def test_mean_index_has_separate_name_and_honours_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
             vector_metadata = SimpleNamespace(
                 path=pathlib.Path(directory) / 'w2v_6_mean.json')
             token = SimpleNamespace(echoframe_key=b'a')
+            embedding_store = object()
             with (mock.patch.object(validate_lexicon, 'load_metadata_layer',
                 return_value=[token]), mock.patch.object(
                 validate_lexicon, 'make_vector_metadata',
@@ -73,12 +81,13 @@ class PoolingTests(unittest.TestCase):
                 mock.patch.object(validate_lexicon,
                 'make_vector_search_index') as make_index):
                 validate_lexicon.make_vector_search_index_for_layer(
-                    object(), 6, 'w2v_6', pooling='mean',
+                    embedding_store, 6, 'w2v_6', pooling='mean',
                     directory=directory, overwrite=True)
                 make_metadata.assert_called_once_with([token],
                     name='w2v_6_mean',
                     directory=directory)
-                load_vectors.assert_called_once_with([token], pooling='mean')
+                load_vectors.assert_called_once_with(embedding_store,
+                    [token], pooling='mean')
                 make_index.return_value.save.assert_called_once_with(
                     overwrite=True)
 
@@ -104,6 +113,181 @@ class PoolingTests(unittest.TestCase):
                 self.assertIs(index, saved)
                 self.assertEqual(tokens, [second, first])
                 load_vectors.assert_not_called()
+
+
+class BatchLoadingTests(unittest.TestCase):
+    def test_one_batch_preserves_key_order_and_duplicates(self):
+        store = mock.Mock()
+        store.load_many_frames.return_value = [np.array([4, 5]),
+            np.array([1, 2]), np.array([4, 5])]
+        tokens = [SimpleNamespace(echoframe_key=key)
+            for key in (b'b', b'a', b'b')]
+        vectors = validate_lexicon.load_speech_vectors(store, tokens,
+            pooling='mean')
+        store.load_many_frames.assert_called_once_with([b'b', b'a', b'b'],
+            frame='mean', keep_missing=True)
+        np.testing.assert_array_equal(vectors, [[4, 5], [1, 2], [4, 5]])
+        self.assertEqual(vectors.dtype, np.dtype(float))
+
+    def test_missing_or_misaligned_results_fail(self):
+        tokens = [SimpleNamespace(echoframe_key=b'a'),
+            SimpleNamespace(echoframe_key=b'b')]
+        for result in ([np.ones(2), None], [np.ones(2)],
+            [np.ones(2)] * 3):
+            with self.subTest(result=result):
+                store = mock.Mock()
+                store.load_many_frames.return_value = result
+                with self.assertRaisesRegex(ValueError, 'missing vectors'):
+                    validate_lexicon.load_speech_vectors(store, tokens)
+
+    def test_empty_requests_do_not_access_store(self):
+        store = mock.Mock()
+        vectors = validate_lexicon.load_speech_vectors(store, [])
+        self.assertEqual(vectors.shape, (0,))
+        self.assertEqual(vectors.dtype, np.dtype(float))
+        store.load_many_frames.assert_not_called()
+
+    def test_real_shards_are_opened_once_and_use_echoframe_pooling(self):
+        payloads = [np.array([[1e8, 2], [1, 4], [-1e8, 6]], dtype='float32'),
+            np.array([[2, 1], [4, 3]], dtype='float32')]
+        with tempfile.TemporaryDirectory() as directory:
+            store = echoframe.Store(directory, max_shard_items=1)
+            try:
+                store.register_model('hubert')
+                tokens = []
+                for i, payload in enumerate(payloads):
+                    key = store.make_echoframe_key('hidden_state',
+                        model_name='hubert', layer=6,
+                        phraser_key=i.to_bytes(22, 'big'), collar=0)
+                    token = echoframe.EchoframeMetadata(key,
+                        model_name='hubert', phraser_source_id='cgn')
+                    tokens.append(store.save(key, token, payload))
+                self.assertNotEqual(tokens[0].shard_id, tokens[1].shard_id)
+                original_file = store.storage.h5.File
+                opened = []
+
+                def counting_file(filename, mode):
+                    self.assertEqual(mode, 'r')
+                    opened.append(str(filename))
+                    return original_file(filename, mode)
+
+                for pooling in ('mean', 'center'):
+                    with self.subTest(pooling=pooling):
+                        opened.clear()
+                        h5 = SimpleNamespace(File=counting_file)
+                        with mock.patch.object(store.storage, 'h5', h5):
+                            vectors = validate_lexicon.load_speech_vectors(
+                                store, [tokens[1], tokens[0], tokens[1]],
+                                pooling=pooling)
+                        self.assertEqual(sorted(Counter(opened).values()),
+                            [1, 1])
+                        if pooling == 'mean':
+                            expected = [p.mean(axis=0) for p in payloads]
+                        else:
+                            expected = [p[len(p) // 2] for p in payloads]
+                        np.testing.assert_array_equal(vectors,
+                            [expected[1], expected[0], expected[1]])
+                        self.assertEqual(vectors.dtype, np.dtype(float))
+            finally:
+                store.close()
+
+
+class IndexReuseTests(unittest.TestCase):
+    def test_fast_reuse_does_not_load_echoframe_metadata_or_labels(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for suffix in ('.json', '.npy'):
+                (pathlib.Path(directory) / f'hubert1_6_mean{suffix}').touch()
+            with (mock.patch.object(validate_lexicon.svs.VectorIndex, 'load')
+                as load_index, mock.patch.object(validate_lexicon,
+                'load_metadata_layer', side_effect=AssertionError(
+                    'metadata should not be read')), mock.patch.object(
+                validate_lexicon, 'make_vector_metadata',
+                side_effect=AssertionError('labels should not be resolved'))):
+                index, tokens = (
+                    validate_lexicon.make_vector_search_index_for_layer(
+                    object(), 6, 'hubert1_6', pooling='mean',
+                    directory=directory, return_metadata=False))
+                self.assertIs(index, load_index.return_value)
+                self.assertIsNone(tokens)
+                load_index.assert_called_once_with(directory, 'hubert1_6_mean')
+
+    def test_partial_index_fails_before_metadata_loading(self):
+        for suffix in ('.json', '.npy'):
+            with self.subTest(suffix=suffix):
+                with tempfile.TemporaryDirectory() as directory:
+                    filename = f'hubert1_6_mean{suffix}'
+                    (pathlib.Path(directory) / filename).touch()
+                    with mock.patch.object(validate_lexicon,
+                        'load_metadata_layer', side_effect=AssertionError(
+                            'metadata should not be read')):
+                        with self.assertRaisesRegex(ValueError,
+                            'incomplete index'):
+                            validate_lexicon.make_vector_search_index_for_layer(
+                                object(), 6, 'hubert1_6', pooling='mean',
+                                directory=directory, return_metadata=False)
+
+    def test_new_index_can_omit_metadata_and_skip_saving(self):
+        tokens = [SimpleNamespace(echoframe_key=b'a', label='word')]
+        store = mock.Mock()
+        store.load_many_frames.return_value = [np.array([1., 2.])]
+        with tempfile.TemporaryDirectory() as directory:
+            with (mock.patch.object(validate_lexicon, 'load_metadata_layer',
+                return_value=tokens), mock.patch.object(validate_lexicon,
+                'make_vector_search_index') as make_index):
+                index, returned_tokens = (
+                    validate_lexicon.make_vector_search_index_for_layer(
+                    store, 6, 'hubert1_6', pooling='mean', directory=directory,
+                    save=False, return_metadata=False))
+                self.assertIs(index, make_index.return_value)
+                self.assertIsNone(returned_tokens)
+                index.save.assert_not_called()
+                np.testing.assert_array_equal(
+                    make_index.call_args.args[0], [[1., 2.]])
+                vector_metadata = make_index.call_args.args[1]
+                self.assertEqual(vector_metadata.name, 'hubert1_6_mean')
+                self.assertEqual(vector_metadata.directory, directory)
+                self.assertEqual(vector_metadata[0].source_echoframe_keys,
+                    [b'a'])
+
+    def test_missing_layer_is_reported_without_loading_vectors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(validate_lexicon, 'load_metadata_layer',
+                return_value=[]):
+                store = mock.Mock()
+                with self.assertRaisesRegex(ValueError, 'no embeddings'):
+                    validate_lexicon.make_vector_search_index_for_layer(
+                        store, 9, 'hubert1_9', directory=directory)
+                store.load_many_frames.assert_not_called()
+
+    def test_saved_index_round_trip_keeps_vector_and_metadata_alignment(self):
+        tokens = [SimpleNamespace(echoframe_key=b'a', label='first'),
+            SimpleNamespace(echoframe_key=b'b', label='second')]
+        store = mock.Mock()
+        store.load_many_frames.return_value = [np.array([3., 4.]),
+            np.array([4., 3.])]
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.object(validate_lexicon, 'load_metadata_layer',
+                return_value=tokens):
+                built, returned = (
+                    validate_lexicon.make_vector_search_index_for_layer(
+                    store, 6, 'hubert1_6', pooling='mean', directory=directory,
+                    return_metadata=False))
+                self.assertIsNone(returned)
+            store.load_many_frames.assert_called_once_with([b'a', b'b'],
+                frame='mean', keep_missing=True)
+            store.load_many_frames.reset_mock()
+            with (mock.patch.object(validate_lexicon, 'load_metadata_layer',
+                return_value=list(reversed(tokens))), mock.patch.object(
+                validate_lexicon, 'make_vector_metadata',
+                side_effect=AssertionError('saved labels should be reused'))):
+                loaded, returned = (
+                    validate_lexicon.make_vector_search_index_for_layer(
+                    store, 6, 'hubert1_6', pooling='mean', directory=directory))
+            np.testing.assert_allclose(loaded.vectors, built.vectors)
+            self.assertEqual([md.label for md in loaded.metadatas],
+                ['first', 'second'])
+            self.assertEqual(returned, tokens)
+            store.load_many_frames.assert_not_called()
 
 
 class PrecisionTests(unittest.TestCase):

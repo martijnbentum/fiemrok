@@ -32,3 +32,8 @@ spreadsheet and build or load `audio_info.json` from the surrounding workspace.
 For isolated tests or callers that already have trial rows in memory, pass
 `header=...`, `data=...`, and optionally `audio_info_dict=...` to avoid that
 workspace-dependent setup step.
+
+## CGN lexicon evaluation
+
+See [Resume HuBERT mean pooling](data/hubert_mean_pooling.md) for efficient
+shard-grouped frame loading, saved-index reuse, and resumable evaluation.

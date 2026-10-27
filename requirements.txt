@@ -7,6 +7,7 @@ ipython
 # Additional pip-installable repositories requested for this environment.
 git+https://github.com/martijnbentum/to_vector.git
 git+https://github.com/martijnbentum/phraser.git
+# Use Echoframe 0.1.191+ for efficient shard-grouped batch reads.
 git+https://github.com/martijnbentum/echoframe.git
 git+https://github.com/martijnbentum/frame.git
 git+https://github.com/martijnbentum/speech-vector-search.git
