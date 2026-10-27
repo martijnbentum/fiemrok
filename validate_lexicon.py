@@ -5,14 +5,20 @@ import numpy as np
 import speech_vector_search as svs
 from progressbar import progressbar
 
-def load_store_w2v(root = 'lexicon100_2466_cgn'):
+import stores
+
+def load_store_w2v(root='lexicon100_2466_cgn'):
     print(f'loading store from {root}')
-    s= store.Store(root)
+    s = store.Store(root)
+    if stores.cgn is not None:
+        s.attach_phraser_store(stores.CGN_SOURCE_ID, stores.cgn)
     return s
 
-def load_store_hubert1(root = 'lexicon100_2466_cgn_hubert'):
+def load_store_hubert1(root='lexicon100_2466_cgn_hubert'):
     print(f'loading store from {root}')
-    s= store.Store(root)
+    s = store.Store(root)
+    if stores.cgn is not None:
+        s.attach_phraser_store(stores.CGN_SOURCE_ID, stores.cgn)
     return s
 
 def load_metadata(store):

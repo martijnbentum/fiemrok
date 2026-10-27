@@ -17,6 +17,36 @@ def metadata(label, key):
     return SimpleNamespace(label=label, source_echoframe_keys=[key])
 
 
+class StoreLoadingTests(unittest.TestCase):
+    def test_loaders_attach_current_shared_cgn_store(self):
+        for loader in (validate_lexicon.load_store_w2v,
+            validate_lexicon.load_store_hubert1):
+            with self.subTest(loader=loader.__name__):
+                with (mock.patch.object(validate_lexicon.store, 'Store')
+                    as constructor, mock.patch.object(validate_lexicon.stores,
+                    'cgn', None)):
+                    shared = object()
+                    validate_lexicon.stores.cgn = shared
+                    loaded = loader(root='test-embeddings')
+                    constructor.assert_called_once_with('test-embeddings')
+                    self.assertIs(loaded, constructor.return_value)
+                    loaded.attach_phraser_store.assert_called_once_with(
+                        validate_lexicon.stores.CGN_SOURCE_ID, shared)
+
+    def test_loaders_leave_phraser_unattached_when_cache_is_empty(self):
+        for loader in (validate_lexicon.load_store_w2v,
+            validate_lexicon.load_store_hubert1):
+            with self.subTest(loader=loader.__name__):
+                with (mock.patch.object(validate_lexicon.store, 'Store')
+                    as constructor, mock.patch.object(validate_lexicon.stores,
+                    'cgn', None), mock.patch.object(validate_lexicon.stores,
+                    'load_phraser_cgn_store') as load_phraser):
+                    loaded = loader()
+                    self.assertIs(loaded, constructor.return_value)
+                    loaded.attach_phraser_store.assert_not_called()
+                    load_phraser.assert_not_called()
+
+
 class PoolingTests(unittest.TestCase):
     def test_mean_and_center_use_different_frames(self):
         payload = np.array([[0., 0.], [9., 3.], [0., 0.]])
