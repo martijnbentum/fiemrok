@@ -4,11 +4,21 @@ from itertools import groupby, pairwise
 class PhraseSequences:
     '''Hold a phrase's candidates and select spans without shared phones.'''
 
-    def __init__(self, phrase):
+    def __init__(self, phrase, parent=None):
         self.phrase = phrase
+        self.parent = parent
         self.make_cross_word_boundary_phone_sequences()
         self.selected_sequences = []
         self._occupied = bytearray(len(phrase.phones))
+
+    def __repr__(self):
+        m = f'ps(sequences={len(self.sequences)}, '
+        m += f'selected={len(self.selected_sequences)})'
+        return m
+
+    def __eq__(self, other):
+        if not isinstance(other, PhraseSequences): return NotImplemented
+        return self.phrase is other.phrase
 
     def make_cross_word_boundary_phone_sequences(self):
         '''Set sequences crossing one word boundary in this phrase.'''
@@ -66,6 +76,9 @@ class CrossBoundarySequence:
         self.start = self.phones[0].start
         self.end = self.phones[-1].end
         self.n_phones = len(self.phones)
+
+    def __repr__(self):
+        return f'cbs({self.phoneme_sequence!r}, {self.end - self.start}ms)'
 
     @property
     def phrase(self):
