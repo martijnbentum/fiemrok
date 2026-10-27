@@ -8,44 +8,42 @@ as implemented by `load_speech_vectors()` in [validate_lexicon.py](../validate_l
 The exact generating run was not recorded, so the centre-frame method is inferred from the code.
 The per-token and per-word precision calculations are in [analyse_results.py](../analyse_results.py).
 
-For a mean-pooling comparison, pass `pooling='mean'` to
-`validate_lexicon.make_vsi_for_layers()` or
-`make_vector_search_index_for_layer()`. This averages each token's stored
-word frames and saves separate indexes such as `svs_data/w2v_6_mean.npy`
-and `svs_data/w2v_6_mean.json`. The default `pooling='center'` retains the
-original index names. Both query and reference vectors use the chosen method.
-Frame loading now uses Echoframe's shard-grouped batch reader. See
-[Resume HuBERT mean pooling](../data/hubert_mean_pooling.md) for environment setup,
-saved-index reuse without metadata loading, and a resumable evaluation block.
-`analyse_results.evaluate_index()` returns per-token precision grouped by
-word type, suitable for `per_word()`, `overall_result()`, and
-`plot_precision()`. It requests 11 neighbours and excludes self-matches by
-source key before scoring ten neighbours. The existing `analyse_results()`
-function also excludes self-matches by key and scores exactly ten remaining
-neighbours. Saved results with ten neighbours already excluding self can
-be scored directly; results with fewer than ten non-self neighbours raise
-an error.
+## Mean-pooling results
 
-Checks on 26 October 2026 found that `svs_data/results_w2v_results.pkl`
-and `svs_data/hubert_results.pkl` contain 246,600 queries per layer
-(layers 3, 6, 9, and 12). Each query has ten saved neighbours. A source-key
-check for Wav2Vec 2.0 layer 6 found zero self-matches across all 246,600
-queries. These saved results already exclude self; centre pooling retrieval
-does not need rerunning because of the self-match concern. The original
-centre pooling scores remain the baseline for this comparison.
+Full mean-pooling results reported on 27 October 2026. Both query and
+reference vectors use the mean of each token's stored word frames. Scores
+are precision at 10 after excluding the query by source key.
 
-The separate `analyse_results()` function was corrected on 26 October to
-score ten non-self neighbours instead of assuming one neighbour must be
-discarded. That code correction does not establish an error in the original
-plotted centre pooling scores. Mean pooling uses `evaluate_index()`, which
-already scored ten non-self neighbours correctly.
+| Model | Layer | Mean P@10 | Token-score standard deviation |
+|---|---:|---:|---:|
+| Wav2Vec 2.0 | 3 | 0.1940 | 0.2255 |
+| Wav2Vec 2.0 | 6 | 0.6394 | 0.3359 |
+| Wav2Vec 2.0 | 9 | 0.2721 | 0.2681 |
+| Wav2Vec 2.0 | 12 | 0.0457 | 0.0942 |
+| HuBERT | 3 | 0.1864 | 0.2261 |
+| HuBERT | 6 | 0.5427 | 0.3381 |
+| HuBERT | 9 | 0.8109 | 0.2977 |
+| HuBERT | 12 | 0.6223 | 0.3412 |
 
-Both saved-result analysis and new retrieval assume the correct
-query-to-metadata correspondence. This comparison uses the available store
-entries; reproducing the original token set requires checking source keys
-against the original saved index.
+![Mean-pooled CGN lexicon precision by model and layer](assets/cgn_lexicon_mean_pooling.png)
 
-Wav2Vec 2.0 mean pooling results reported on 27 October 2026:
+Bars show the reported means. Error bars use the existing plotting helper's
+formula, `1.96 * std / sqrt(n)`, assuming the complete lexicon of 246,600
+tokens per layer. These approximate intervals use rounded summary values;
+they are not reconstructed from raw scores and are not clustered by word
+type or recording. They are very narrow at this sample size. The standard
+deviations in the table describe token-score variability, not uncertainty
+in the mean. With 100 tokens per type, the token-weighted mean equals the
+mean of word-type averages.
+
+HuBERT peaks at layer 9 (0.8109); Wav2Vec 2.0 peaks at layer 6 (0.6394).
+The difference between their best layers is 17.15 percentage points.
+
+Regenerate the PNG and [SVG](assets/cgn_lexicon_mean_pooling.svg) with
+`python scripts/plot_cgn_lexicon_mean_pooling.py` from the repository root.
+The script uses these reported summaries and does not rerun retrieval.
+
+### Approximate comparison with the original centre-frame plot
 
 | Layer | Centre pooling (approx.) | Mean pooling | Gain (percentage points) |
 |---|---:|---:|---:|
@@ -55,8 +53,12 @@ Wav2Vec 2.0 mean pooling results reported on 27 October 2026:
 
 Centre pooling values are approximate readings from the plot below, so the
 gains are approximate too. Mean pooling improves all three reported layers;
-layer 6 remains strongest and has the largest absolute gain. Layer 12 mean
-pooling has not yet been reported.
+layer 6 remains strongest for Wav2Vec 2.0 and has the largest absolute gain
+among these three layers. Exact centre-frame values for all layers and both
+models have not been recovered here; the original plot remains the baseline.
+
+
+## Original centre-frame plot
 
 search is based on each item in the lexicon (100 items per word type, requested 10 nearest neighbours) \
 per word score is average precision at 10 (average over 100 items) \
