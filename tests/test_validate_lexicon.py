@@ -94,8 +94,23 @@ class PrecisionTests(unittest.TestCase):
             metadata('dak', b'c')]
         index = SimpleNamespace(metadatas=tokens,
             query_by_index=lambda i, top_k: {'metadatas': tokens})
-        output = analyse_results.evaluate_index(index, top_k=2)
+        output = analyse_results.evaluate_index(index, top_k=2, batch_size=1)
         self.assertEqual(output, {'rok': [.5, .5], 'dak': [0.]})
+
+    def test_batched_evaluation_matches_individual_queries(self):
+        svs = validate_lexicon.svs
+        rng = np.random.default_rng(42)
+        vectors = rng.normal(size=(37, 16))
+        tokens = [svs.metadata.VectorMetadata(str(i % 3), 'word',
+            [i.to_bytes(2, 'big')], 0) for i in range(len(vectors))]
+        metadatas = svs.metadata.VectorMetadatas(tokens, 'batch_test', '.')
+        index = svs.VectorIndex(vectors, metadatas)
+        individual = analyse_results.evaluate_index(index, batch_size=1)
+        batched = analyse_results.evaluate_index(index, batch_size=8)
+        oversized = analyse_results.evaluate_index(index, batch_size=100)
+        self.assertEqual(batched, individual)
+        self.assertEqual(oversized, individual)
+        self.assertEqual(sum(map(len, batched.values())), 37)
 
     def test_legacy_analysis_removes_self_by_key(self):
         query = metadata('rok', b'query')

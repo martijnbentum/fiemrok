@@ -1,4 +1,5 @@
 import numpy
+from progressbar import progressbar
 
 def precision_at_k(result, query_metadata, top_k=10):
     '''Score neighbours after excluding the query token by source key.'''
@@ -13,17 +14,26 @@ def precision_at_k(result, query_metadata, top_k=10):
     return matches / top_k
 
 
-def evaluate_index(vector_index, top_k=10):
-    '''Return word-to-token precision lists without retaining all searches.'''
+def evaluate_index(vector_index, top_k=10, batch_size=256):
+    '''Return per-word token scores, searching bounded batches of vectors.
+    batch_size: number of queries per search; use 1 for individual queries
+    '''
     if len(vector_index.metadatas) <= top_k:
         raise ValueError('index needs more entries than top_k')
-    from progressbar import progressbar
+    n_tokens = len(vector_index.metadatas)
+    print(f'evaluating {n_tokens} queries in batches of {batch_size}')
     output = {}
-    for index in progressbar(range(len(vector_index.metadatas))):
-        metadata = vector_index.metadatas[index]
-        result = vector_index.query_by_index(index, top_k=top_k + 1)
-        score = precision_at_k(result, metadata, top_k=top_k)
-        output.setdefault(metadata.label, []).append(score)
+    for start in progressbar(range(0, n_tokens, batch_size)):
+        stop = min(start + batch_size, n_tokens)
+        if batch_size == 1:
+            results = [vector_index.query_by_index(start, top_k=top_k + 1)]
+        else:
+            results = vector_index.queries(vector_index.vectors[start:stop],
+                top_k=top_k + 1)
+        for offset, result in enumerate(results):
+            metadata = vector_index.metadatas[start + offset]
+            score = precision_at_k(result, metadata, top_k=top_k)
+            output.setdefault(metadata.label, []).append(score)
     return output
 
 
