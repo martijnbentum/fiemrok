@@ -1,4 +1,5 @@
 import pathlib
+import random
 import sys
 import unittest
 from collections import Counter
@@ -20,8 +21,9 @@ def make_phrase(words, component='b', start=1000, variant='nl'):
         phrase_words.append(word)
         for label in labels:
             phone_start = start + len(phones) * 100
-            phones.append(SimpleNamespace(label=label, start=phone_start,
-                end=phone_start + 100, word=word))
+            phone = SimpleNamespace(label=label, start=phone_start,
+                end=phone_start + 100, word=word)
+            phones.append(phone)
     return SimpleNamespace(phones=phones, words=phrase_words, audio=audio)
 
 
@@ -31,12 +33,28 @@ def find_sequence(ps, start, end):
         if (sequence.start_index, sequence.end_index) == (start, end))
 
 
+def make_sampling_lexicon(type_counts, tokens_per_type=2):
+    '''Build independent occurrences, keeping one full candidate per phrase.'''
+    phrases = []
+    lengths = []
+    for n_phones, n_types in sorted(type_counts.items()):
+        for type_index in range(n_types):
+            labels = [f'p{n_phones}_{type_index}_{i}' for i in range(n_phones)]
+            for token_index in range(tokens_per_type):
+                phrases.append(make_phrase([['edge'] + labels[:-1],
+                    [labels[-1], 'edge']], start=token_index * 1000))
+                lengths.append(n_phones)
+    lexicon = cbl.CrossBoundaryLexicon(phrases)
+    for ps, n_phones in zip(lexicon.phrase_sequences, lengths):
+        ps.sequences = [s for s in ps.sequences if s.n_phones == n_phones]
+    return lexicon
+
+
 class ExtractionTests(unittest.TestCase):
     def test_extracts_all_and_only_single_boundary_spans(self):
         phrase = make_phrase([['a', 'b'], ['c', 'd'], ['e', 'f']])
         ps = cbl.PhraseSequences(phrase)
-        expected = [(0, 3), (0, 4), (1, 3), (1, 4),
-            (2, 5), (2, 6), (3, 5), (3, 6)]
+        expected = [(1, 3), (3, 5)]
         actual = [(s.start_index, s.end_index) for s in ps.sequences]
         self.assertEqual(actual, expected)
         for sequence in ps.sequences:
@@ -46,18 +64,22 @@ class ExtractionTests(unittest.TestCase):
                 changes = sum(a.word.key != b.word.key
                     for a, b in zip(phones, phones[1:]))
                 self.assertEqual(changes, 1)
+                left = [p for p in phrase.phones if p.word is phones[0].word]
+                right = [p for p in phrase.phones if p.word is phones[-1].word]
+                self.assertIsNot(phones[0], left[0])
+                self.assertIsNot(phones[-1], right[-1])
                 self.assertIs(sequence.parent, ps)
 
     def test_orders_phones_by_time_without_reordering_phrase(self):
-        phrase = make_phrase([['a', 'b'], ['c']])
+        phrase = make_phrase([['a', 'b'], ['c', 'd']])
         phrase.phones.reverse()
         original = list(phrase.phones)
         ps = cbl.PhraseSequences(phrase)
         self.assertEqual([s.phoneme_sequence for s in ps.sequences],
-            ['a b c', 'b c'])
+            ['b c'])
         self.assertEqual(phrase.phones, original)
         self.assertEqual([(s.start_index, s.end_index) for s in ps.sequences],
-            [(0, 3), (1, 3)])
+            [(1, 3)])
 
     def test_empty_and_single_word_phrases_have_no_candidates(self):
         for words in ([], [['a']], [['a', 'b', 'c']]):
@@ -65,14 +87,21 @@ class ExtractionTests(unittest.TestCase):
                 self.assertEqual(cbl.PhraseSequences(
                     make_phrase(words)).sequences, [])
 
+    def test_one_phone_words_cannot_supply_partial_word_spans(self):
+        for words in ([['a'], ['n']], [['a'], ['n', 'd']],
+            [['a', 'b'], ['n']]):
+            with self.subTest(words=words):
+                self.assertEqual(cbl.PhraseSequences(
+                    make_phrase(words)).sequences, [])
+
     def test_equal_word_labels_still_have_distinct_word_boundaries(self):
-        phrase = make_phrase([['a'], ['a'], ['a']])
+        phrase = make_phrase([['a', 'a'], ['a', 'a'], ['a', 'a']])
         ps = cbl.PhraseSequences(phrase)
         self.assertEqual([(s.start_index, s.end_index) for s in ps.sequences],
-            [(0, 2), (1, 3)])
+            [(1, 3), (3, 5)])
 
     def test_rebuilding_sets_sequences_and_returns_none(self):
-        ps = cbl.PhraseSequences(make_phrase([['a'], ['n']]))
+        ps = cbl.PhraseSequences(make_phrase([['x', 'a'], ['n', 'x']]))
         result = ps.make_cross_word_boundary_phone_sequences()
         self.assertIsNone(result)
         self.assertEqual(len(ps.sequences), 1)
@@ -91,22 +120,24 @@ class SequenceTests(unittest.TestCase):
                 self.assertIsNot(left, right)
 
     def test_exposes_parent_phrase_audio_indices_times_and_labels(self):
-        phrase = make_phrase([['tʃ', 'aː'], ['n']])
+        phrase = make_phrase([['tʃ', 'aː'], ['n', 'd']])
         ps = cbl.PhraseSequences(phrase)
-        sequence = find_sequence(ps, 0, 3)
+        sequence = find_sequence(ps, 1, 3)
         self.assertIs(sequence.parent, ps)
         self.assertIs(sequence.phrase, phrase)
         self.assertIs(sequence.audio, phrase.audio)
-        self.assertEqual(sequence.phoneme_sequence, 'tʃ aː n')
-        self.assertEqual(sequence.n_phones, 3)
-        self.assertEqual((sequence.start, sequence.end), (1000, 1300))
-        self.assertEqual((sequence.start_index, sequence.end_index), (0, 3))
-        self.assertEqual(repr(sequence), "cbs('tʃ aː n', 300ms)")
+        self.assertEqual(sequence.phoneme_sequence, 'aː n')
+        self.assertEqual(sequence.n_phones, 2)
+        self.assertEqual((sequence.start, sequence.end), (1100, 1300))
+        self.assertEqual((sequence.start_index, sequence.end_index), (1, 3))
+        self.assertEqual(repr(sequence), "cbs('aː n', 200ms)")
 
     def test_equality_compares_phone_strings_across_occurrences(self):
-        first = cbl.PhraseSequences(make_phrase([['a'], ['n']], start=0))
-        second = cbl.PhraseSequences(make_phrase([['a'], ['n']], start=5000))
-        different = cbl.PhraseSequences(make_phrase([['a'], ['m']]))
+        first = cbl.PhraseSequences(make_phrase([['x', 'a'], ['n', 'x']],
+            start=0))
+        second = cbl.PhraseSequences(make_phrase([['x', 'a'], ['n', 'x']],
+            start=5000))
+        different = cbl.PhraseSequences(make_phrase([['x', 'a'], ['m', 'x']]))
         self.assertEqual(first.sequences[0], second.sequences[0])
         self.assertNotEqual(first.sequences[0], different.sequences[0])
         self.assertIs(first.sequences[0].__eq__('a n'), NotImplemented)
@@ -120,12 +151,13 @@ class SequenceTests(unittest.TestCase):
 class SelectionTests(unittest.TestCase):
     def setUp(self):
         self.ps = cbl.PhraseSequences(
-            make_phrase([['a', 'b'], ['c', 'd'], ['e', 'f']]))
+            make_phrase([['a', 'b', 'c'], ['d', 'e', 'f'],
+                ['g', 'h', 'i']]))
 
     def test_selection_blocks_overlap_but_allows_touching_intervals(self):
-        first = find_sequence(self.ps, 0, 3)
-        overlapping = find_sequence(self.ps, 1, 4)
-        adjacent = find_sequence(self.ps, 3, 5)
+        first = find_sequence(self.ps, 1, 4)
+        overlapping = find_sequence(self.ps, 2, 5)
+        adjacent = find_sequence(self.ps, 4, 7)
         self.assertIs(self.ps.select(first), first)
         self.assertFalse(self.ps.can_select(first))
         self.assertFalse(self.ps.can_select(overlapping))
@@ -134,7 +166,7 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue(self.ps.can_select(adjacent))
         self.ps.select(adjacent)
         self.assertEqual([(s.start_index, s.end_index)
-            for s in self.ps.selected_sequences], [(0, 3), (3, 5)])
+            for s in self.ps.selected_sequences], [(1, 4), (4, 7)])
 
     def test_reselecting_same_occurrence_is_rejected(self):
         sequence = self.ps.sequences[0]
@@ -152,18 +184,20 @@ class SelectionTests(unittest.TestCase):
             self.ps.select(sequence)
 
     def test_non_overlapping_equal_strings_are_both_selectable(self):
-        ps = cbl.PhraseSequences(make_phrase([['a'], ['n'], ['a'], ['n']]))
-        first = find_sequence(ps, 0, 2)
-        second = find_sequence(ps, 2, 4)
+        ps = cbl.PhraseSequences(make_phrase([['x', 'a'], ['n', 'x'],
+            ['x', 'a'], ['n', 'x']]))
+        first = find_sequence(ps, 1, 3)
+        second = find_sequence(ps, 5, 7)
         self.assertEqual(first, second)
         ps.select(first)
         ps.select(second)
         self.assertEqual(len(ps.selected_sequences), 2)
 
     def test_available_sequences_and_reset_follow_selection(self):
-        self.ps.select(find_sequence(self.ps, 0, 3))
+        self.ps.select(find_sequence(self.ps, 1, 4))
         self.assertEqual([(s.start_index, s.end_index)
-            for s in self.ps.available_sequences()], [(3, 5), (3, 6)])
+            for s in self.ps.available_sequences()],
+            [(4, 7), (4, 8), (5, 7), (5, 8)])
         self.assertEqual(repr(self.ps), 'ps(sequences=8, selected=1)')
         self.ps.reset_selection()
         self.assertEqual(self.ps.selected_sequences, [])
@@ -173,7 +207,8 @@ class SelectionTests(unittest.TestCase):
     def test_phrase_container_equality_uses_phrase_object_identity(self):
         same = cbl.PhraseSequences(self.ps.phrase)
         equivalent = cbl.PhraseSequences(
-            make_phrase([['a', 'b'], ['c', 'd'], ['e', 'f']]))
+            make_phrase([['a', 'b', 'c'], ['d', 'e', 'f'],
+                ['g', 'h', 'i']]))
         self.assertIsNone(self.ps.parent)
         self.assertEqual(self.ps.phrase, equivalent.phrase)
         self.assertEqual(self.ps, same)
@@ -183,10 +218,11 @@ class SelectionTests(unittest.TestCase):
 
 class LexiconTests(unittest.TestCase):
     def test_aggregated_counts_track_selection_and_reset(self):
-        phrases = [make_phrase([['a'], ['n'], ['a'], ['n']]),
-            make_phrase([['a'], ['n']])]
+        phrases = [make_phrase([['x', 'a'], ['n', 'x'],
+            ['x', 'a'], ['n', 'x']]),
+            make_phrase([['x', 'a'], ['n', 'x']])]
         lexicon = cbl.CrossBoundaryLexicon(phrases)
-        expected = Counter({'a n': 3, 'n a': 1})
+        expected = Counter({'a n': 3, 'x x': 1})
         self.assertEqual(lexicon.sequence_counts, expected)
         self.assertEqual(lexicon.available_sequence_counts(), expected)
         self.assertEqual(lexicon.selected_sequence_counts, Counter())
@@ -198,7 +234,7 @@ class LexiconTests(unittest.TestCase):
             ps.select(ps.sequences[0])
         self.assertEqual(lexicon.selected_sequence_counts, Counter({'a n': 2}))
         self.assertEqual(lexicon.available_sequence_counts(),
-            Counter({'a n': 1}))
+            Counter({'a n': 1, 'x x': 1}))
         self.assertEqual(lexicon.sequence_counts, expected)
         lexicon.reset_selection()
         self.assertEqual(lexicon.selected_sequence_counts, Counter())
@@ -212,6 +248,189 @@ class LexiconTests(unittest.TestCase):
         self.assertEqual(lexicon.available_sequence_counts(), Counter())
         lexicon.reset_selection()
         self.assertEqual(repr(lexicon), 'cbl(phrases=0, sequences=0)')
+
+
+class LengthBinTests(unittest.TestCase):
+    def test_bounds_allow_ten_percent_or_two_types_and_never_go_negative(self):
+        for target, expected in ((0, (0, 2)), (1, (0, 3)), (10, (8, 12)),
+            (25, (23, 27)), (100, (90, 110))):
+            with self.subTest(target=target):
+                length_bin = cbl.LengthBin(4, target)
+                self.assertEqual((length_bin.lower_bound,
+                    length_bin.upper_bound), expected)
+
+    def test_bin_state_tracks_selected_types(self):
+        length_bin = cbl.LengthBin(3, 5)
+        self.assertTrue(length_bin.below_minimum)
+        self.assertFalse(length_bin.full)
+        length_bin.selected_types.extend(['a', 'b', 'c'])
+        self.assertEqual(length_bin.count, 3)
+        self.assertFalse(length_bin.below_minimum)
+        length_bin.selected_types.extend(['d', 'e', 'f', 'g'])
+        self.assertEqual(length_bin.count, 7)
+        self.assertTrue(length_bin.full)
+
+    def test_one_phone_quota_is_added_to_two_phone_bin(self):
+        targets = {1: 5, 2: 2, 3: 1, 4: 0}
+        bins = cbl.make_length_bins(targets)
+        self.assertEqual({b.n_phones: b.target_count for b in bins},
+            {2: 7, 3: 1})
+        self.assertEqual(sum(b.target_count for b in bins),
+            sum(targets.values()))
+        self.assertEqual(targets, {1: 5, 2: 2, 3: 1, 4: 0})
+
+    def test_merging_is_independent_of_mapping_order(self):
+        for targets in ({1: 1, 2: 1, 3: 1}, {3: 1, 1: 1, 2: 1}):
+            with self.subTest(targets=targets):
+                bins = cbl.make_length_bins(targets)
+                self.assertEqual([(b.n_phones, b.target_count) for b in bins],
+                    [(2, 2), (3, 1)])
+
+    def test_empty_distribution_is_allowed(self):
+        self.assertEqual(cbl.make_length_bins({}), [])
+        self.assertEqual(cbl.make_length_bins({1: 0, 2: 0}), [])
+
+    def test_one_phone_quota_creates_two_phone_bin(self):
+        for targets in ({1: 3}, {1: 3, 2: 0}, {1: 3, 3: 2}):
+            with self.subTest(targets=targets):
+                bins = cbl.make_length_bins(targets)
+                counts = {b.n_phones: b.target_count for b in bins}
+                self.assertEqual(counts[2], 3)
+                self.assertEqual(sum(counts.values()), sum(targets.values()))
+
+    def test_invalid_counts_are_rejected(self):
+        for targets in ({0: 1}, {-1: 1}, {2.5: 1}, {2: -1}, {2: 1.5}):
+            with self.subTest(targets=targets):
+                with self.assertRaises(ValueError):
+                    cbl.make_length_bins(targets)
+
+
+class SamplingTests(unittest.TestCase):
+    def assert_unselected(self, lexicon):
+        for ps in lexicon.phrase_sequences:
+            self.assertEqual(ps.selected_sequences, [])
+            self.assertFalse(any(ps._occupied))
+
+    def test_cycles_bins_and_returns_exact_token_counts_without_overlap(self):
+        lexicon = make_sampling_lexicon({2: 8, 3: 8})
+        sampled = lexicon.sample_lexicon({2: 5, 3: 5}, tokens_per_type=2)
+        counts = Counter(s.phoneme_sequence for s in sampled)
+        self.assertEqual(len(counts), 10)
+        self.assertEqual(set(counts.values()), {2})
+        self.assertEqual([s.n_phones for s in sampled[::2]], [2, 3] * 5)
+        occupied = set()
+        for sequence in sampled:
+            for index in range(sequence.start_index, sequence.end_index):
+                position = (id(sequence.parent), index)
+                self.assertNotIn(position, occupied)
+                occupied.add(position)
+            self.assertTrue(any(sequence is selected
+                for selected in sequence.parent.selected_sequences))
+        self.assertEqual(lexicon.selected_sequence_counts, counts)
+
+    def test_fills_all_minimums_before_using_spare_capacity(self):
+        lexicon = make_sampling_lexicon({2: 5, 3: 12})
+        sampled = lexicon.sample_lexicon({2: 2, 3: 10}, tokens_per_type=2)
+        type_lengths = [s.n_phones for s in sampled[::2]]
+        self.assertEqual(type_lengths[:8], [3] * 8)
+        self.assertEqual(len(type_lengths), 12)
+        self.assertEqual(Counter(type_lengths), {2: 2, 3: 10})
+
+    def test_exhausted_bin_can_shift_counts_within_bounds(self):
+        lexicon = make_sampling_lexicon({2: 3, 3: 7})
+        sampled = lexicon.sample_lexicon({2: 5, 3: 5}, tokens_per_type=2)
+        self.assertEqual(Counter(s.n_phones for s in sampled[::2]),
+            {2: 3, 3: 7})
+        self.assertEqual(len(sampled), 20)
+
+    def test_unreachable_minimum_does_not_commit_any_selection(self):
+        lexicon = make_sampling_lexicon({2: 2, 3: 20})
+        with self.assertRaisesRegex(ValueError, 'selection unchanged'):
+            lexicon.sample_lexicon({2: 5, 3: 5}, tokens_per_type=2)
+        self.assert_unselected(lexicon)
+
+    def test_unreachable_total_rolls_back_successful_minimum_phase(self):
+        lexicon = make_sampling_lexicon({2: 3, 3: 3})
+        with self.assertRaisesRegex(ValueError, 'selection unchanged'):
+            lexicon.sample_lexicon({2: 5, 3: 5}, tokens_per_type=2)
+        self.assert_unselected(lexicon)
+
+    def test_does_not_exceed_upper_bound_even_when_other_bin_is_empty(self):
+        lexicon = make_sampling_lexicon({2: 10})
+        with self.assertRaisesRegex(ValueError, r'2: 3 \[0, 3\]'):
+            lexicon.sample_lexicon({2: 1, 3: 2, 4: 2}, tokens_per_type=2)
+        self.assert_unselected(lexicon)
+
+    def test_overlapping_types_cannot_both_use_the_same_phone_spans(self):
+        phrases = [make_phrase([['edge', 'a', 'b'], ['c', 'edge']])
+            for _ in range(2)]
+        lexicon = cbl.CrossBoundaryLexicon(phrases)
+        self.assertEqual(sorted(lexicon.sequence_counts.values()), [2, 2])
+        with self.assertRaisesRegex(ValueError, 'selection unchanged'):
+            lexicon.sample_lexicon({2: 1, 3: 1}, tokens_per_type=2)
+        self.assert_unselected(lexicon)
+
+    def test_merged_total_excludes_one_phone_candidates(self):
+        lexicon = make_sampling_lexicon({2: 5, 3: 5})
+        lexicon.phrase_sequences[0].sequences.extend([
+            SimpleNamespace(n_phones=1, phoneme_sequence='one')
+            for _ in range(4)])
+        sampled = lexicon.sample_lexicon({1: 2, 2: 2, 3: 2}, tokens_per_type=2)
+        self.assertEqual(len(set(s.phoneme_sequence for s in sampled)), 6)
+        self.assertTrue(all(s.n_phones >= 2 for s in sampled))
+
+    def test_candidate_collection_filters_rare_types(self):
+        lexicon = make_sampling_lexicon({2: 3}, tokens_per_type=2)
+        lexicon.phrase_sequences.pop()
+        candidates = lexicon.collect_candidate_tokens(tokens_per_type=2)
+        self.assertEqual(len(candidates), 2)
+        self.assertTrue(all(len(tokens) == 2 for tokens in candidates.values()))
+
+    def test_seed_reproduces_selection_and_reset_allows_resampling(self):
+        lexicon = make_sampling_lexicon({2: 8, 3: 8})
+        parent_positions = {id(ps): i
+            for i, ps in enumerate(lexicon.phrase_sequences)}
+        signatures = []
+        for _ in range(2):
+            sampled = lexicon.sample_lexicon({2: 3, 3: 3},
+                tokens_per_type=2, random_seed=42)
+            signatures.append([(s.phoneme_sequence,
+                parent_positions[id(s.parent)], s.start_index, s.end_index)
+                for s in sampled])
+            lexicon.reset_selection()
+        self.assertEqual(signatures[0], signatures[1])
+
+    def test_rejects_existing_selections_without_changing_them(self):
+        lexicon = make_sampling_lexicon({2: 2})
+        ps = lexicon.phrase_sequences[0]
+        selected = ps.select(ps.sequences[0])
+        original_mask = bytes(ps._occupied)
+        with self.assertRaisesRegex(ValueError, 'reset selections'):
+            lexicon.sample_lexicon({2: 1}, tokens_per_type=2)
+        self.assertIs(ps.selected_sequences[0], selected)
+        self.assertEqual(bytes(ps._occupied), original_mask)
+
+    def test_empty_targets_and_invalid_token_counts(self):
+        lexicon = cbl.CrossBoundaryLexicon([])
+        self.assertEqual(lexicon.sample_lexicon({}, tokens_per_type=2), [])
+        for n_tokens in (0, -1, 1.5):
+            with self.subTest(n_tokens=n_tokens):
+                with self.assertRaisesRegex(ValueError, 'positive integer'):
+                    lexicon.sample_lexicon({}, tokens_per_type=n_tokens)
+
+    def test_failed_type_does_not_leak_temporary_reservations(self):
+        lexicon = make_sampling_lexicon({2: 1}, tokens_per_type=1)
+        sequence = lexicon.phrase_sequences[0].sequences[0]
+        occupied = {id(sequence.parent):
+            bytearray(len(sequence.parent._occupied))}
+        occupied[id(sequence.parent)][0] = 1
+        original = {key: bytes(mask) for key, mask in occupied.items()}
+        chosen = cbl.sample_non_overlapping_tokens([sequence, sequence],
+            2, random.Random(0), occupied)
+        self.assertEqual(chosen, [])
+        self.assertEqual({key: bytes(mask) for key, mask in occupied.items()},
+            original)
+        self.assert_unselected(lexicon)
 
 
 class FilteringTests(unittest.TestCase):

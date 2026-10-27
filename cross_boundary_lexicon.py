@@ -49,90 +49,185 @@ class CrossBoundaryLexicon:
         for ps in self.phrase_sequences:
             ps.reset_selection()
 
-    def sample_lexicon(self, phone_count_counts, tokens_per_type=100,
+    def sample_lexicon(self, sequence_types_by_phone_count, tokens_per_type=100,
         random_seed=0):
-        '''Return and select a full lexicon, approximately matching lengths.
-        phone_count_counts: reference phone count to number of word types
-        tokens_per_type:    exact number of non-overlapping tokens per type
-        random_seed:        seed for type, token, and target-length sampling
-        Existing selections must be empty. Selection is unchanged on failure.
+        '''Return and select tokens within each length bin's count bounds.
+        sequence_types_by_phone_count: phone count to target number of types
+        tokens_per_type:               non-overlapping tokens per type, exact
+        random_seed:                   seed for type and token sampling
+        Add one-phone targets to the two-phone bin.
+        Allow deviations of 10% or at least two types, with a minimum of zero.
+        Fill bin minimums first, then reach the exact total within maximums.
+        Existing selections must be empty. Failure leaves selection unchanged.
         '''
         if not isinstance(tokens_per_type, int) or tokens_per_type < 1:
             raise ValueError('tokens_per_type must be a positive integer')
         if any(ps.selected_sequences for ps in self.phrase_sequences):
             raise ValueError('reset selections before sampling a lexicon')
+        bins = make_length_bins(sequence_types_by_phone_count)
+        if not bins: return []
+
         rng = random.Random(random_seed)
-        counts = self.sequence_counts
-        candidates = {}
-        print('grouping candidate tokens by phoneme string')
-        for ps in progressbar(self.phrase_sequences):
-            for sequence in ps.sequences:
-                label = sequence.phoneme_sequence
-                if counts[label] < tokens_per_type: continue
-                candidates.setdefault(label, []).append(sequence)
+        candidates = self.collect_candidate_tokens(tokens_per_type)
+        types_by_length = group_sequence_types_by_length(candidates, rng)
+        for length_bin in bins:
+            length_bin.candidate_types = types_by_length.get(
+                length_bin.n_phones, [])
 
-        targets = []
-        for n_phones, n_types in sorted(phone_count_counts.items()):
-            targets.extend([n_phones] * n_types)
-        if len(candidates) < len(targets):
-            message = f'only {len(candidates)} candidate types for '
-            message += f'{len(targets)} requested types'
-            raise ValueError(message)
-        rng.shuffle(targets)
-        types_by_length = {}
-        for label in sorted(candidates):
-            n_phones = candidates[label][0].n_phones
-            types_by_length.setdefault(n_phones, []).append(label)
-        for labels in types_by_length.values():
-            rng.shuffle(labels)
-
-        occupied = {}
-        for ps in self.phrase_sequences:
-            occupied[id(ps)] = bytearray(len(ps._occupied))
-        sampled = []
-        print(f'sampling {len(targets)} types, {tokens_per_type} tokens each')
-        for target in progressbar(targets):
-            lengths = sorted(types_by_length, key=lambda n: (abs(n - target), n))
-            chosen = []
-            for n_phones in lengths:
-                labels = types_by_length[n_phones]
-                while labels:
-                    label = labels.pop()
-                    chosen = self._sample_type_tokens(candidates[label],
-                        tokens_per_type, rng, occupied)
-                    if chosen: break
-                if chosen: break
-            if not chosen:
-                n_types = len(sampled) // tokens_per_type
-                message = f'could select only {n_types} of {len(targets)} types '
-                message += f'with {tokens_per_type} non-overlapping tokens each; '
-                message += 'selection unchanged; try another seed or more phrases'
-                raise ValueError(message)
-            sampled.extend(chosen)
+        occupied = {id(ps): bytearray(len(ps._occupied))
+            for ps in self.phrase_sequences}
+        n_types = sum(length_bin.target_count for length_bin in bins)
+        print(f'sampling {n_types} types, {tokens_per_type} tokens each')
+        sampled = sample_types_from_bins(bins, candidates, tokens_per_type,
+            rng, occupied, minimums_only=True)
+        sampled.extend(sample_types_from_bins(bins, candidates,
+            tokens_per_type, rng, occupied))
 
         for sequence in sampled:
             sequence.parent.select(sequence)
         return sampled
 
-    def _sample_type_tokens(self, candidates, n_tokens, rng, occupied):
-        '''Reserve a complete type in temporary masks, or return no tokens.'''
-        candidates = list(candidates)
-        rng.shuffle(candidates)
-        trial = {}
-        chosen = []
-        for sequence in candidates:
-            parent_id = id(sequence.parent)
-            if parent_id not in trial:
-                trial[parent_id] = bytearray(occupied[parent_id])
-            mask = trial[parent_id]
-            start, end = sequence.start_index, sequence.end_index
-            if any(mask[start:end]): continue
-            mask[start:end] = b'\x01' * sequence.n_phones
-            chosen.append(sequence)
-            if len(chosen) == n_tokens:
-                occupied.update(trial)
-                return chosen
-        return []
+    def collect_candidate_tokens(self, tokens_per_type):
+        '''Group tokens by phoneme string, keeping sufficiently frequent types.
+        Exclude one-phone sequences, which cannot cross a word boundary.
+        Frequency is a preliminary filter; tokens may still overlap.
+        '''
+        candidates = {}
+        print('grouping candidate tokens by phoneme string')
+        for ps in progressbar(self.phrase_sequences):
+            for sequence in ps.sequences:
+                if sequence.n_phones < 2: continue
+                label = sequence.phoneme_sequence
+                candidates.setdefault(label, []).append(sequence)
+        return {label: tokens for label, tokens in candidates.items()
+            if len(tokens) >= tokens_per_type}
+
+
+class LengthBin:
+    '''Track candidate and selected sequence types for one phone count.
+    Allow 10% of the target count, rounded down, or at least two types.
+    Bounds are inclusive; the lower bound cannot be negative.
+    Token overlap is handled by the sampling functions, outside this class.
+    '''
+
+    def __init__(self, n_phones, target_count):
+        self.n_phones = n_phones
+        self.target_count = target_count
+        tolerance = max(2, target_count // 10)
+        self.lower_bound = max(0, target_count - tolerance)
+        self.upper_bound = target_count + tolerance
+        self.candidate_types = []
+        self.selected_types = []
+
+    @property
+    def count(self):
+        return len(self.selected_types)
+
+    @property
+    def below_minimum(self):
+        return self.count < self.lower_bound
+
+    @property
+    def full(self):
+        return self.count >= self.upper_bound
+
+
+def make_length_bins(sequence_types_by_phone_count):
+    '''Build length bins, adding one-phone targets to the two-phone bin.'''
+    targets = Counter()
+    for n_phones, n_types in sequence_types_by_phone_count.items():
+        if not isinstance(n_phones, int) or n_phones < 1:
+            raise ValueError('phone counts must be positive integers')
+        if not isinstance(n_types, int) or n_types < 0:
+            raise ValueError('type counts must be non-negative integers')
+        if n_types:
+            targets[max(2, n_phones)] += n_types
+    return [LengthBin(n, count) for n, count in sorted(targets.items())]
+
+
+def group_sequence_types_by_length(candidates, rng):
+    '''Group type labels by number of phones and shuffle within each bin.'''
+    types_by_length = {}
+    for label in sorted(candidates):
+        n_phones = candidates[label][0].n_phones
+        types_by_length.setdefault(n_phones, []).append(label)
+    for labels in types_by_length.values():
+        rng.shuffle(labels)
+    return types_by_length
+
+
+def sample_types_from_bins(bins, candidates, tokens_per_type, rng, occupied,
+    minimums_only=False):
+    '''Cycle bins, sampling at most one type per bin in each round.
+    First meet all lower bounds; otherwise fill to the total target count.
+    Modify bins and temporary occupancy only; return newly sampled tokens.
+    Exhausted bins are skipped. Raise if a round cannot make progress.
+    '''
+    if minimums_only:
+        goal = sum(length_bin.lower_bound for length_bin in bins)
+    else:
+        goal = sum(length_bin.target_count for length_bin in bins)
+    n_selected = sum(length_bin.count for length_bin in bins)
+    sampled = []
+    while n_selected < goal:
+        made_progress = False
+        for length_bin in bins:
+            if n_selected == goal: break
+            if length_bin.full: continue
+            if minimums_only and not length_bin.below_minimum: continue
+            chosen = sample_tokens_for_bin(length_bin, candidates,
+                tokens_per_type, rng, occupied)
+            if not chosen: continue
+            sampled.extend(chosen)
+            n_selected += 1
+            made_progress = True
+        if not made_progress:
+            counts = ', '.join(f'{b.n_phones}: {b.count} '
+                f'[{b.lower_bound}, {b.upper_bound}]' for b in bins)
+            message = f'cannot meet type quotas with {tokens_per_type} '
+            message += 'non-overlapping tokens per type; '
+            message += f'bin counts [minimum, maximum]: {counts}; '
+            message += 'selection unchanged; try another seed or more phrases'
+            raise ValueError(message)
+    return sampled
+
+
+def sample_tokens_for_bin(length_bin, candidates, n_tokens, rng, occupied):
+    '''Try unused types until one supplies n_tokens non-overlapping tokens.
+    Record a successful type in the bin and reserve its temporary spans.
+    Discard unsuccessful types; return [] if the bin runs out of candidates.
+    '''
+    while length_bin.candidate_types:
+        label = length_bin.candidate_types.pop()
+        chosen = sample_non_overlapping_tokens(candidates[label], n_tokens,
+            rng, occupied)
+        if chosen:
+            length_bin.selected_types.append(label)
+            return chosen
+    return []
+
+
+def sample_non_overlapping_tokens(candidates, n_tokens, rng, occupied):
+    '''Return n_tokens occurrences and reserve their temporary phone spans.
+    Return [] without changing occupied if too few can be selected.
+    '''
+    candidates = list(candidates)
+    rng.shuffle(candidates)
+    trial = {}
+    chosen = []
+    for sequence in candidates:
+        parent_id = id(sequence.parent)
+        if parent_id not in trial:
+            trial[parent_id] = bytearray(occupied[parent_id])
+        mask = trial[parent_id]
+        start, end = sequence.start_index, sequence.end_index
+        if any(mask[start:end]): continue
+        mask[start:end] = b'\x01' * sequence.n_phones
+        chosen.append(sequence)
+        if len(chosen) == n_tokens:
+            occupied.update(trial)
+            return chosen
+    return []
 
 
 class PhraseSequences:
@@ -277,13 +372,15 @@ def inspect_lexicon_phonemes():
     Load layer 6 from lexicon100_2466_cgn. Each word type contributes its
     most frequent token pronunciation; ties use lexical phone-label order.
     Print token/type counts, token counts per type, and one-phone types.
-    Return (phone_count_counts, phone_counts).
+    Return (n_types_by_phone_count, phone_counts).
     '''
+    from stores import _attach_cgn
     from validate_lexicon import load_metadata_layer, load_store_w2v
 
     pronunciations = {}
     embedding_store = load_store_w2v()
     try:
+        _attach_cgn(embedding_store)
         metadatas = load_metadata_layer(embedding_store, 6)
         if not metadatas: raise ValueError('no lexicon metadata for layer 6')
         print('counting pronunciations in CGN lexicon layer 6')
@@ -298,16 +395,16 @@ def inspect_lexicon_phonemes():
     finally:
         embedding_store.close()
 
-    phone_count_counts = Counter()
+    n_types_by_phone_count = Counter()
     phone_counts = Counter()
     tokens_per_type = Counter()
     for label, counts in pronunciations.items():
         tokens_per_type[sum(counts.values())] += 1
         pronunciation = min(counts, key=lambda p: (-counts[p], p))
-        phone_count_counts[len(pronunciation)] += 1
+        n_types_by_phone_count[len(pronunciation)] += 1
         phone_counts.update(pronunciation)
         if len(pronunciation) == 1:
             print(f'one-phone type: {label!r} -> {pronunciation[0]!r}')
     print(f'{len(metadatas)} tokens, {len(pronunciations)} word types')
     print(f'tokens per type -> number of types: {dict(tokens_per_type)}')
-    return phone_count_counts, phone_counts
+    return n_types_by_phone_count, phone_counts
