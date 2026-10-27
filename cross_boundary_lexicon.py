@@ -1,41 +1,40 @@
 from itertools import groupby, pairwise
 
 
-def phrase_to_cross_word_boundary_phone_sequence(phrase):
-    '''Return CrossBoundarySequence instances crossing one word boundary.'''
-    phones = sorted(phrase.phones, key=lambda phone: phone.start)
-    groups = groupby(phones, key=lambda phone: phone.word.key)
-    word_phones = [tuple(group) for _, group in groups]
-    sequences = []
-    word_start = 0
-
-    for left, right in pairwise(word_phones):
-        for start in range(len(left)):
-            for stop in range(1, len(right) + 1):
-                sequence = CrossBoundarySequence(phrase,
-                    left[start:] + right[:stop], word_start + start)
-                sequences.append(sequence)
-        word_start += len(left)
-
-    return sequences
-
-
 class PhraseSequences:
     '''Hold a phrase's candidates and select spans without shared phones.'''
 
     def __init__(self, phrase):
         self.phrase = phrase
-        self.sequences = phrase_to_cross_word_boundary_phone_sequence(phrase)
+        self.make_cross_word_boundary_phone_sequences()
         self.selected_sequences = []
         self._occupied = bytearray(len(phrase.phones))
 
+    def make_cross_word_boundary_phone_sequences(self):
+        '''Set sequences crossing one word boundary in this phrase.'''
+        phones = sorted(self.phrase.phones, key=lambda phone: phone.start)
+        groups = groupby(phones, key=lambda phone: phone.word.key)
+        word_phones = [tuple(group) for _, group in groups]
+        self.sequences = []
+        word_start = 0
+        cbs = CrossBoundarySequence
+
+        for left, right in pairwise(word_phones):
+            for start in range(len(left)):
+                for stop in range(1, len(right) + 1):
+                    phones = left[start:] + right[:stop]
+                    start_index = word_start + start
+                    sequence = cbs(phones, start_index, self)
+                    self.sequences.append(sequence)
+            word_start += len(left)
+
     def can_select(self, sequence):
-        if sequence.phrase is not self.phrase: return False
+        if sequence.parent is not self: return False
         return not any(self._occupied[sequence.start_index:sequence.end_index])
 
     def select(self, sequence):
         if not self.can_select(sequence):
-            message = 'sequence overlaps selection or is from another phrase'
+            message = 'sequence overlaps selection or is from another container'
             raise ValueError(message)
         occupied = b'\x01' * sequence.n_phones
         self._occupied[sequence.start_index:sequence.end_index] = occupied
@@ -57,8 +56,8 @@ class CrossBoundarySequence:
     start, end:  audio timestamps in milliseconds
     '''
 
-    def __init__(self, phrase, phones, start_index):
-        self.phrase = phrase
+    def __init__(self, phones, start_index, parent):
+        self.parent = parent
         self.phones = tuple(phones)
         if not self.phones: raise ValueError('phones must not be empty')
         self.start_index = start_index
@@ -67,6 +66,10 @@ class CrossBoundarySequence:
         self.start = self.phones[0].start
         self.end = self.phones[-1].end
         self.n_phones = len(self.phones)
+
+    @property
+    def phrase(self):
+        return self.parent.phrase
 
     @property
     def audio(self):
