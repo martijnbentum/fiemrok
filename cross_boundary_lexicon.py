@@ -1,4 +1,40 @@
+from collections import Counter
 from itertools import groupby, pairwise
+from pathlib import Path
+
+
+class CrossBoundaryLexicon:
+    '''Hold phrase sequences and aggregate counts by phoneme string.'''
+
+    def __init__(self, phrases):
+        ps = PhraseSequences
+        self.phrase_sequences = [ps(phrase, parent=self) for phrase in phrases]
+
+    def __repr__(self):
+        n_sequences = sum(len(ps.sequences) for ps in self.phrase_sequences)
+        m = f'cbl(phrases={len(self.phrase_sequences)}, '
+        m += f'sequences={n_sequences})'
+        return m
+
+    @property
+    def sequence_counts(self):
+        return Counter(sequence.phoneme_sequence
+            for ps in self.phrase_sequences for sequence in ps.sequences)
+
+    @property
+    def selected_sequence_counts(self):
+        return Counter(sequence.phoneme_sequence
+            for ps in self.phrase_sequences
+            for sequence in ps.selected_sequences)
+
+    def available_sequence_counts(self):
+        return Counter(sequence.phoneme_sequence
+            for ps in self.phrase_sequences
+            for sequence in ps.available_sequences())
+
+    def reset_selection(self):
+        for ps in self.phrase_sequences:
+            ps.reset_selection()
 
 
 class PhraseSequences:
@@ -91,3 +127,19 @@ class CrossBoundarySequence:
     def __eq__(self, other):
         if not isinstance(other, CrossBoundarySequence): return NotImplemented
         return self.phoneme_sequence == other.phoneme_sequence
+
+
+def phrase_to_component(phrase):
+    '''Return the CGN component encoded in the phrase's audio path.'''
+    return Path(phrase.audio.filename).parent.parent.name.split('-')[-1]
+
+
+def filter_phrases_by_component(phrases, remove_components='acdhm'):
+    '''Return phrases outside the excluded CGN components.'''
+    return [phrase for phrase in phrases
+        if phrase_to_component(phrase) not in remove_components]
+
+
+def filter_phrases_for_cross_boundary_lexicon(phrases, remove_components='acdhm'):
+    '''Apply phrase filters and return a filtered list of phrases.'''
+    return filter_phrases_by_component(phrases, remove_components)
