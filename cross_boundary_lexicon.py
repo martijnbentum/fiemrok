@@ -58,6 +58,7 @@ class CrossBoundaryLexicon:
         Add one-phone targets to the two-phone bin.
         Allow deviations of 10% or at least two types, with a minimum of zero.
         Fill bin minimums first, then reach the exact total within maximums.
+        Sampling is greedy; failure does not rule out a valid selection.
         Existing selections must be empty. Failure leaves selection unchanged.
         '''
         if not isinstance(tokens_per_type, int) or tokens_per_type < 1:
@@ -68,38 +69,41 @@ class CrossBoundaryLexicon:
         if not bins: return []
 
         rng = random.Random(random_seed)
-        candidates = self.collect_candidate_tokens(tokens_per_type)
-        types_by_length = group_sequence_types_by_length(candidates, rng)
+        tokens_by_type = self.collect_candidate_tokens(tokens_per_type)
+        types_by_length = group_sequence_types_by_length(tokens_by_type, rng)
         for length_bin in bins:
-            length_bin.candidate_types = types_by_length.get(
+            length_bin.remaining_types = types_by_length.get(
                 length_bin.n_phones, [])
 
-        occupied = {id(ps): bytearray(len(ps._occupied))
+        reserved_spans = {id(ps): bytearray(len(ps._occupied))
             for ps in self.phrase_sequences}
         n_types = sum(length_bin.target_count for length_bin in bins)
         print(f'sampling {n_types} types, {tokens_per_type} tokens each')
-        sampled = sample_types_from_bins(bins, candidates, tokens_per_type,
-            rng, occupied, minimums_only=True)
-        sampled.extend(sample_types_from_bins(bins, candidates,
-            tokens_per_type, rng, occupied))
+        # Meet each bin's minimum.
+        sampled_tokens = sample_types_from_bins(bins, tokens_by_type,
+            tokens_per_type, rng, reserved_spans, minimums_only=True)
+        # Fill the remaining total within bin maximums.
+        sampled_tokens.extend(sample_types_from_bins(bins, tokens_by_type,
+            tokens_per_type, rng, reserved_spans, minimums_only=False))
 
-        for sequence in sampled:
+        # Commit phrase selections only after both sampling phases succeed.
+        for sequence in sampled_tokens:
             sequence.parent.select(sequence)
-        return sampled
+        return sampled_tokens
 
     def collect_candidate_tokens(self, tokens_per_type):
         '''Group tokens by phoneme string, keeping sufficiently frequent types.
         Exclude one-phone sequences, which cannot cross a word boundary.
         Frequency is a preliminary filter; tokens may still overlap.
         '''
-        candidates = {}
+        tokens_by_type = {}
         print('grouping candidate tokens by phoneme string')
         for ps in progressbar(self.phrase_sequences):
             for sequence in ps.sequences:
                 if sequence.n_phones < 2: continue
                 label = sequence.phoneme_sequence
-                candidates.setdefault(label, []).append(sequence)
-        return {label: tokens for label, tokens in candidates.items()
+                tokens_by_type.setdefault(label, []).append(sequence)
+        return {label: tokens for label, tokens in tokens_by_type.items()
             if len(tokens) >= tokens_per_type}
 
 
@@ -116,20 +120,20 @@ class LengthBin:
         tolerance = max(2, target_count // 10)
         self.lower_bound = max(0, target_count - tolerance)
         self.upper_bound = target_count + tolerance
-        self.candidate_types = []
+        self.remaining_types = []
         self.selected_types = []
 
     @property
-    def count(self):
+    def n_selected_types(self):
         return len(self.selected_types)
 
     @property
     def below_minimum(self):
-        return self.count < self.lower_bound
+        return self.n_selected_types < self.lower_bound
 
     @property
     def full(self):
-        return self.count >= self.upper_bound
+        return self.n_selected_types >= self.upper_bound
 
 
 def make_length_bins(sequence_types_by_phone_count):
@@ -145,88 +149,97 @@ def make_length_bins(sequence_types_by_phone_count):
     return [LengthBin(n, count) for n, count in sorted(targets.items())]
 
 
-def group_sequence_types_by_length(candidates, rng):
+def group_sequence_types_by_length(tokens_by_type, rng):
     '''Group type labels by number of phones and shuffle within each bin.'''
     types_by_length = {}
-    for label in sorted(candidates):
-        n_phones = candidates[label][0].n_phones
+    for label in sorted(tokens_by_type):
+        n_phones = tokens_by_type[label][0].n_phones
         types_by_length.setdefault(n_phones, []).append(label)
     for labels in types_by_length.values():
         rng.shuffle(labels)
     return types_by_length
 
 
-def sample_types_from_bins(bins, candidates, tokens_per_type, rng, occupied,
-    minimums_only=False):
+def sample_types_from_bins(bins, tokens_by_type, tokens_per_type, rng,
+    reserved_spans, minimums_only=False):
     '''Cycle bins, sampling at most one type per bin in each round.
     First meet all lower bounds; otherwise fill to the total target count.
     Modify bins and temporary occupancy only; return newly sampled tokens.
     Exhausted bins are skipped. Raise if a round cannot make progress.
     '''
     if minimums_only:
-        goal = sum(length_bin.lower_bound for length_bin in bins)
+        target_total_types = sum(length_bin.lower_bound for length_bin in bins)
     else:
-        goal = sum(length_bin.target_count for length_bin in bins)
-    n_selected = sum(length_bin.count for length_bin in bins)
-    sampled = []
-    while n_selected < goal:
+        target_total_types = sum(length_bin.target_count for length_bin in bins)
+    n_selected_types = sum(length_bin.n_selected_types for length_bin in bins)
+    sampled_tokens = []
+    while n_selected_types < target_total_types:
         made_progress = False
         for length_bin in bins:
-            if n_selected == goal: break
+            if n_selected_types == target_total_types: break
             if length_bin.full: continue
             if minimums_only and not length_bin.below_minimum: continue
-            chosen = sample_tokens_for_bin(length_bin, candidates,
-                tokens_per_type, rng, occupied)
-            if not chosen: continue
-            sampled.extend(chosen)
-            n_selected += 1
+            chosen_tokens = sample_next_type_from_bin(length_bin,
+                tokens_by_type, tokens_per_type, rng, reserved_spans)
+            if not chosen_tokens: continue
+            sampled_tokens.extend(chosen_tokens)
+            n_selected_types += 1
             made_progress = True
         if not made_progress:
-            counts = ', '.join(f'{b.n_phones}: {b.count} '
-                f'[{b.lower_bound}, {b.upper_bound}]' for b in bins)
-            message = f'cannot meet type quotas with {tokens_per_type} '
-            message += 'non-overlapping tokens per type; '
-            message += f'bin counts [minimum, maximum]: {counts}; '
-            message += 'selection unchanged; try another seed or more phrases'
+            message = format_sampling_failure(bins, tokens_per_type)
             raise ValueError(message)
-    return sampled
+    return sampled_tokens
 
 
-def sample_tokens_for_bin(length_bin, candidates, n_tokens, rng, occupied):
+def format_sampling_failure(bins, tokens_per_type):
+    '''Describe the failed sampling attempt and each bin's current count.'''
+    counts = ', '.join(f'{b.n_phones}: {b.n_selected_types} '
+        f'[{b.lower_bound}, {b.upper_bound}]' for b in bins)
+    message = f'cannot meet type quotas with {tokens_per_type} '
+    message += 'non-overlapping tokens per type; '
+    message += f'bin counts [minimum, maximum]: {counts}; '
+    message += 'selection unchanged; try another seed or more phrases'
+    return message
+
+
+def sample_next_type_from_bin(length_bin, tokens_by_type, n_tokens, rng,
+    reserved_spans):
     '''Try unused types until one supplies n_tokens non-overlapping tokens.
     Record a successful type in the bin and reserve its temporary spans.
-    Discard unsuccessful types; return [] if the bin runs out of candidates.
+    Discard unsuccessful types; return [] if the bin runs out of types.
     '''
-    while length_bin.candidate_types:
-        label = length_bin.candidate_types.pop()
-        chosen = sample_non_overlapping_tokens(candidates[label], n_tokens,
-            rng, occupied)
-        if chosen:
+    while length_bin.remaining_types:
+        label = length_bin.remaining_types.pop()
+        chosen_tokens = sample_non_overlapping_tokens(tokens_by_type[label],
+            n_tokens, rng, reserved_spans)
+        if chosen_tokens:
             length_bin.selected_types.append(label)
-            return chosen
+            return chosen_tokens
     return []
 
 
-def sample_non_overlapping_tokens(candidates, n_tokens, rng, occupied):
+def sample_non_overlapping_tokens(candidates, n_tokens, rng, reserved_spans):
     '''Return n_tokens occurrences and reserve their temporary phone spans.
-    Return [] without changing occupied if too few can be selected.
+    Try shuffled tokens greedily, without backtracking.
+    Return [] without changing reserved_spans if this attempt falls short.
+    Trial spans become shared reservations only when the full type succeeds.
     '''
     candidates = list(candidates)
     rng.shuffle(candidates)
-    trial = {}
-    chosen = []
+    trial_spans = {}
+    chosen_tokens = []
     for sequence in candidates:
         parent_id = id(sequence.parent)
-        if parent_id not in trial:
-            trial[parent_id] = bytearray(occupied[parent_id])
-        mask = trial[parent_id]
+        if parent_id not in trial_spans:
+            trial_spans[parent_id] = bytearray(reserved_spans[parent_id])
+        mask = trial_spans[parent_id]
         start, end = sequence.start_index, sequence.end_index
         if any(mask[start:end]): continue
         mask[start:end] = b'\x01' * sequence.n_phones
-        chosen.append(sequence)
-        if len(chosen) == n_tokens:
-            occupied.update(trial)
-            return chosen
+        chosen_tokens.append(sequence)
+        if len(chosen_tokens) == n_tokens:
+            reserved_spans.update(trial_spans)
+            return chosen_tokens
     return []
 
 

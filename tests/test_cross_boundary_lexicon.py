@@ -264,10 +264,10 @@ class LengthBinTests(unittest.TestCase):
         self.assertTrue(length_bin.below_minimum)
         self.assertFalse(length_bin.full)
         length_bin.selected_types.extend(['a', 'b', 'c'])
-        self.assertEqual(length_bin.count, 3)
+        self.assertEqual(length_bin.n_selected_types, 3)
         self.assertFalse(length_bin.below_minimum)
         length_bin.selected_types.extend(['d', 'e', 'f', 'g'])
-        self.assertEqual(length_bin.count, 7)
+        self.assertEqual(length_bin.n_selected_types, 7)
         self.assertTrue(length_bin.full)
 
     def test_one_phone_quota_is_added_to_two_phone_bin(self):
