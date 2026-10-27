@@ -1,7 +1,6 @@
 from collections import Counter
 from itertools import groupby, pairwise
 from pathlib import Path
-import pickle
 import random
 
 from progressbar import progressbar
@@ -275,30 +274,40 @@ def filter_phrases_for_cross_boundary_lexicon(phrases, remove_components='acdhm'
 
 def inspect_lexicon_phonemes():
     '''Return length and phone counters from one pronunciation per word type.
-    Load data/selected_word_keys.pkl and the CGN phraser store. Each word
-    type contributes its most frequent token pronunciation; ties use lexical
-    phone-label order. Return (phone_count_counts, phone_counts).
+    Load layer 6 from lexicon100_2466_cgn. Each word type contributes its
+    most frequent token pronunciation; ties use lexical phone-label order.
+    Print token/type counts, token counts per type, and one-phone types.
+    Return (phone_count_counts, phone_counts).
     '''
-    from stores import load_phraser_cgn_store
+    from validate_lexicon import load_metadata_layer, load_store_w2v
 
-    path = Path(__file__).parent / 'data' / 'selected_word_keys.pkl'
-    with path.open('rb') as source:
-        keys = pickle.load(source)
-    cgn = load_phraser_cgn_store()
     pronunciations = {}
-    print('counting pronunciations in the selected CGN lexicon')
-    for word in progressbar(cgn.load_many(keys)):
-        phones = sorted(word.phones, key=lambda phone: phone.start)
-        pronunciation = tuple(phone.label for phone in phones)
-        if not pronunciation:
-            raise ValueError(f'no phones found for word {word.label}')
-        counts = pronunciations.setdefault(word.label, Counter())
-        counts[pronunciation] += 1
+    embedding_store = load_store_w2v()
+    try:
+        metadatas = load_metadata_layer(embedding_store, 6)
+        if not metadatas: raise ValueError('no lexicon metadata for layer 6')
+        print('counting pronunciations in CGN lexicon layer 6')
+        for metadata in progressbar(metadatas):
+            word = metadata.phraser_object
+            phones = sorted(word.phones, key=lambda phone: phone.start)
+            pronunciation = tuple(phone.label for phone in phones)
+            if not pronunciation:
+                raise ValueError(f'no phones found for word {word.label}')
+            counts = pronunciations.setdefault(word.label, Counter())
+            counts[pronunciation] += 1
+    finally:
+        embedding_store.close()
 
     phone_count_counts = Counter()
     phone_counts = Counter()
-    for counts in pronunciations.values():
+    tokens_per_type = Counter()
+    for label, counts in pronunciations.items():
+        tokens_per_type[sum(counts.values())] += 1
         pronunciation = min(counts, key=lambda p: (-counts[p], p))
         phone_count_counts[len(pronunciation)] += 1
         phone_counts.update(pronunciation)
+        if len(pronunciation) == 1:
+            print(f'one-phone type: {label!r} -> {pronunciation[0]!r}')
+    print(f'{len(metadatas)} tokens, {len(pronunciations)} word types')
+    print(f'tokens per type -> number of types: {dict(tokens_per_type)}')
     return phone_count_counts, phone_counts
