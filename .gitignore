@@ -10,6 +10,7 @@ test_*
 !tests/test_cross_boundary_lexicon.py
 !tests/test_cross_boundary_lexicon_sampling.py
 !tests/test_cross_boundary_markers.py
+!tests/test_cross_boundary_embeddings.py
 !tests/test_validate_lexicon.py
 lexicon100_2466_cgn/
 data/*.pkl
@@ -19,6 +20,8 @@ data/pnmi_results
 echoframe/
 ci_phrases_cgn/
 lexicon100_2466_cgn_hubert/
+cross_boundary100_2200_cgn/
+cross_boundary100_2200_cgn_hubert/
 lexicon100_2466_hubert/
 svs_data/
 lexicon100_syllables_cgn/

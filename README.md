@@ -42,3 +42,6 @@ shard-grouped frame loading, saved-index reuse, and resumable evaluation.
 
 See [Adaptive sampling](data/cross_boundary_sampling.md) for planning quotas,
 retrying with consecutive seeds, relaxing constraints, and resuming failures.
+See [Marker storage](data/cross_boundary_sampled_tokens_markers.md) for saving
+and loading the sample, and [Marker embeddings](data/cross_boundary_embeddings.md)
+for full-frame wav2vec2 and HuBERT computation.

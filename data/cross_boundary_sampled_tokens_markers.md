@@ -57,9 +57,9 @@ the same model/layer/collar cache identity, and metadata would resolve to the
 whole phrase. Register the containing phraser store with EchoFrame so that
 `metadata.phraser_object` can load the marker later.
 
-Verify marker embedding computation and save/reload linkage before adopting
-this pipeline. The generic segment interface appears suitable, but this
-integration has not yet been tested end to end.
+See [Marker embeddings](cross_boundary_embeddings.md) for computation and a
+small real-model check. Integration tests verify marker-linked full-frame
+storage and save/reload using synthetic model outputs.
 
 ## Phone reconstruction and repeat exports
 
