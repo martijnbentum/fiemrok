@@ -23,26 +23,29 @@ phraser store that contains the source phrases.
 
 ```python
 markers = lexicon.make_markers(cgn, save=True,
-    keys_path='data/cross_boundary_marker_keys.pkl')
+    keys_path='svs_data/cross_boundary_marker_keys.pkl')
 
 # Refresh snapshot query roots before querying cgn.markers.
 cgn.refresh_query_roots()
 ```
 
 With `save=True`, ordered marker keys are pickled after the database save
-succeeds. The default key path is `data/cross_boundary_marker_keys.pkl`;
+succeeds. The default key path is `svs_data/cross_boundary_marker_keys.pkl`;
 choose a different path to keep another sample index, or pass `keys_path=None`
 to skip it. Parent directories are created as needed. With `save=False`,
 markers are returned for preview and no key file is written.
 
 ```python
-import pickle
+import cross_boundary_lexicon as cbl
 
-with open('data/cross_boundary_marker_keys.pkl', 'rb') as f:
-    marker_keys = pickle.load(f)
-markers = cgn.load_many(marker_keys)
+markers = cbl.load_markers(cgn)
+# Or select another saved sample index:
+# markers = cbl.load_markers(cgn, keys_path='svs_data/another_sample.pkl')
 ```
 
+`load_markers` is a module function; it needs no lexicon or sampling result.
+It bulk-loads the markers from the supplied store in key-file order.
+`make_markers` remains an instance method because it uses the retained sample.
 Markers share the database with other objects, distinguished by object-type
 rank. No manifest is created.
 

@@ -72,10 +72,9 @@ class MarkerTests(unittest.TestCase):
         self.assertEqual(keys, [marker.key for marker in markers])
         self.store.close()
         self.store = phraser.Store(path=self.path)
-        self.assertEqual([marker.key for marker in self.store.load_many(keys)],
-            keys)
-        for marker, token in zip(markers, self.tokens):
-            loaded = self.store.load(marker.key)
+        restored = cbl.load_markers(self.store, keys_path=keys_path)
+        self.assertEqual([marker.key for marker in restored], keys)
+        for loaded, token in zip(restored, self.tokens):
             self.assertEqual(loaded.label, token.phoneme_sequence)
             self.assertEqual((loaded.start, loaded.end), (token.start, token.end))
             self.assertEqual(loaded.phrase.key, token.phrase.key)
@@ -100,6 +99,19 @@ class MarkerTests(unittest.TestCase):
     def test_key_file_can_be_disabled(self):
         markers = self.lexicon.make_markers(self.store, save=True, keys_path=None)
         self.assertTrue(all(self.store.DB.key_exists(m.key) for m in markers))
+
+    def test_default_key_directory_is_svs_data(self):
+        # Use a temporary working directory for both default-path operations.
+        import os
+
+        previous = os.getcwd()
+        self.addCleanup(os.chdir, previous)
+        os.chdir(self.path)
+        markers = self.lexicon.make_markers(self.store, save=True)
+        keys_path = pathlib.Path('svs_data/cross_boundary_marker_keys.pkl')
+        self.assertTrue(keys_path.exists())
+        restored = cbl.load_markers(self.store)
+        self.assertEqual([m.key for m in restored], [m.key for m in markers])
 
 
 if __name__ == '__main__':
