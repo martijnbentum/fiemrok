@@ -107,7 +107,10 @@ below each minimum, and overshoots above each target. Overshoot is allowed
 within the quota tolerance; it does not mean the maximum was exceeded.
 New best successes and the final retained sample report eligible and actual
 length counts, quota overshoot, weighted distribution error, total variation
-distance, and mean-phone-count shift. Distortion always refers to the original ideal.
+distance, and mean-phone-count shift. A second mean reports bins 2–10 only,
+renormalizing the ideal and sampled counts within that range. Both means are
+diagnostics and do not affect sample ranking. Distortion always refers to the
+original ideal.
 `result.seed` and `result.selected_attempt` identify the retained attempt;
 `result.attempts` is the total search effort. The original plan is unchanged.
 

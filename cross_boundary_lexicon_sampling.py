@@ -469,6 +469,18 @@ def describe_distortion(ideal, actual):
     text = f'Types: {actual_total}/{original_total}; '
     text += f'distribution shifted: {variation:.2%}; '
     text += f'mean phones: {before:.3f} -> {after:.3f} ({after - before:+.3f}).'
+    limited_ideal = {n: count for n, count in ideal.items() if 2 <= n <= 10}
+    limited_actual = {n: count for n, count in actual.items() if 2 <= n <= 10}
+    ideal_total = sum(limited_ideal.values())
+    sampled_total = sum(limited_actual.values())
+    if ideal_total and sampled_total:
+        before = sum(n * count for n, count in limited_ideal.items()) / ideal_total
+        after = sum(n * count for n, count in limited_actual.items()) \
+            / sampled_total
+        text += f'\nMean phones (bins 2–10): {before:.3f} -> {after:.3f} '
+        text += f'({after - before:+.3f}).'
+    else:
+        text += '\nMean phones (bins 2–10): undefined (empty distribution).'
     return text
 
 

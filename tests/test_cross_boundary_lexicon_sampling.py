@@ -117,6 +117,16 @@ class PlanningTests(unittest.TestCase):
         self.assertEqual(sampling.distribution_loss(ideal,
             {2: 10, 3: 15, 4: 25}), 0)
 
+    def test_mean_through_ten_renormalizes_and_excludes_longer_bins(self):
+        text = sampling.describe_distortion({2: 2, 10: 2, 11: 1},
+            {2: 2, 10: 2, 11: 20})
+        self.assertIn('mean phones: 7.000 -> 10.167', text)
+        self.assertIn('Mean phones (bins 2–10): 6.000 -> 6.000 (+0.000)', text)
+
+    def test_mean_through_ten_handles_empty_restricted_distribution(self):
+        text = sampling.describe_distortion({2: 1, 11: 1}, {11: 1})
+        self.assertIn('Mean phones (bins 2–10): undefined', text)
+
     def test_logged_shortages_do_not_all_move_to_four_phones(self):
         ideal = dict(zip(range(2, 17),
             [90, 328, 499, 486, 387, 289, 192, 98, 45, 26, 12, 8, 3, 1, 2]))
