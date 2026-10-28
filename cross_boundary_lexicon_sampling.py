@@ -20,6 +20,7 @@ class LengthBin:
         self.upper_bound = target_count + deviation
         self.remaining_types = []
         self.selected_types = []
+        self.n_eligible_types = 0
 
     @property
     def n_selected_types(self):
@@ -111,11 +112,14 @@ class SamplingResult:
         lines = [f'Best sample: random_seed={self.seed}, selected on attempt '
             f'{self.selected_attempt}; searched {self.attempts} attempts.',
             f'Weighted distribution error: {self.distortion_score:.6f}.',
-            ' Phones  Ideal  Quota  Actual  Change']
+            'Overshoot is above quota; allowed within the bin tolerance.',
+            ' Phones  Eligible  Ideal  Quota  Actual  Overshoot  Change']
         for n, ideal in self.plan.ideal_targets.items():
             actual = self.actual_counts.get(n, 0)
-            lines.append(f'{n:7d} {ideal:6d} {self.plan.targets[n]:6d} '
-                f'{actual:7d} {actual - ideal:+7d}')
+            overshoot = max(0, actual - self.plan.targets[n])
+            lines.append(f'{n:7d} {self.plan.eligible[n]:9d} {ideal:6d} '
+                f'{self.plan.targets[n]:6d} {actual:7d} {overshoot:10d} '
+                f'{actual - ideal:+7d}')
         lines.append(describe_distortion(self.plan.ideal_targets,
             self.actual_counts))
         return '\n'.join(lines)
@@ -132,6 +136,52 @@ class SamplingFailure(ValueError):
             b.n_phones for b in bins if not b.remaining_types}
         self.plan = plan
         self.next_random_seed = next_random_seed
+
+
+class CapacityEstimates:
+    '''Remember greedy exhaustion without treating it as proven capacity.'''
+
+    def __init__(self, eligible):
+        self.eligible = dict(eligible)
+        self.limits = dict(eligible)
+        self.observed = dict.fromkeys(eligible, 0)
+
+    def observe(self, failures, successes=()):
+        '''Retain earlier limits and the best counts seen under competition.'''
+        for counts in [f.counts for f in failures] + list(successes):
+            for n in self.observed:
+                self.observed[n] = max(self.observed[n], counts.get(n, 0))
+        exhausted = set.intersection(*(f.exhausted for f in failures)) \
+            if failures else set()
+        for n in self.limits:
+            if n in exhausted:
+                self.limits[n] = min(self.eligible[n], self.observed[n])
+            else:
+                self.limits[n] = min(self.eligible[n],
+                    max(self.limits[n], self.observed[n]))
+
+    def plan_for_total(self, plan, total, probe_index=None):
+        '''Balance quotas using remembered limits, optionally probing one bin.
+        Probes lift one constrained estimate by 10% (at least one type).
+        If estimates cannot supply the floor, fill only the missing slots
+        beyond them; do not discard the estimates for other bins.
+        '''
+        capacity = dict(self.limits)
+        constrained = sorted(n for n in capacity
+            if capacity[n] < self.eligible[n] and plan.ideal_targets[n] > 0)
+        if probe_index is not None and constrained:
+            n = constrained[probe_index % len(constrained)]
+            capacity[n] = min(self.eligible[n], capacity[n]
+                + max(1, ceil(capacity[n] / 10)))
+            print(f'Probing {n}-phone capacity: {self.limits[n]} -> '
+                f'{capacity[n]}; other estimates retained.')
+        targets = allocate_targets(plan.ideal_targets, capacity, total)
+        if sum(targets.values()) < total:
+            print('Learned estimates cannot supply the requested total; '
+                'filling the shortfall beyond those estimates.')
+            targets = allocate_targets(plan.ideal_targets, self.eligible, total,
+                minimums=targets)
+        return plan.with_targets(targets)
 
 
 
@@ -201,8 +251,9 @@ def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
     max_attempts=100, min_types=2200):
     '''Return a successful provisional result; never change phrase selection.
     Search the full attempt budget, retaining the lowest distribution error.
-    Each round reduces the total by 5%, stopping at min_types, and adapts
-    quotas using exhausted bins. Larger successes break equal-error ties.
+    Learn exhaustion across rounds while exploring totals down to min_types.
+    At the floor, reuse the best successful plan in two of every three rounds;
+    the third round probes remembered capacities. Larger successes break ties.
     A final failure retains the current plan for explicit continuation.
     '''
     if not isinstance(plan, SamplingPlan):
@@ -222,11 +273,19 @@ def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
     attempts = 0
     current = plan
     best = None
+    estimates = CapacityEstimates(plan.eligible)
+    search_total = plan.proposed_total
+    rounds = 0
+    probes = 0
     while attempts < max_attempts:
         print(f'\nQuota round: min_types={min_types}; '
             f'{max_attempts - attempts} attempts left')
         print(current)
+        learned = {n: count for n, count in estimates.limits.items()
+            if count < estimates.eligible[n]}
+        if learned: print(f'Learned capacity estimates: {learned}')
         failures = []
+        successes = []
         for _ in range(min(tries_per_round, max_attempts - attempts)):
             seed = random_seed + attempts
             attempts += 1
@@ -240,6 +299,7 @@ def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
             labels = {token.phoneme_sequence: token.n_phones
                 for token in tokens}
             counts = dict(Counter(labels.values()))
+            successes.append(counts)
             result = SamplingResult(tokens, seed, attempts, current, counts,
                 selected_attempt=attempts)
             key = (result.distortion_score, -sum(counts.values()))
@@ -250,10 +310,25 @@ def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
                 print(result)
             else:
                 print(f'Success with seed={seed}; retaining seed={best.seed}.')
+        estimates.observe(failures, successes)
         if attempts == max_attempts: break
-        revised = relax_plan(current, failures, min_types)
+        rounds += 1
+        if search_total > min_types:
+            search_total = max(min_types, search_total - ceil(search_total / 20))
+            revised = estimates.plan_for_total(plan, search_total)
+        elif rounds % 3 == 0:
+            print('Exploration round: testing a modest capacity increase.')
+            revised = estimates.plan_for_total(plan, search_total,
+                probe_index=probes)
+            probes += 1
+        elif best is not None:
+            print(f'Reusing best successful quotas (seed={best.seed}) '
+                'with new seeds.')
+            revised = best.plan
+        else:
+            revised = estimates.plan_for_total(plan, search_total)
         if revised.targets == current.targets:
-            print('Quotas unchanged at min_types; continuing with new seeds.')
+            print('Quotas unchanged; continuing with new seeds.')
         else:
             print('Relaxing quotas against the original ideal distribution; '
                 'observed exhaustion is not proof of capacity.')
@@ -282,6 +357,7 @@ def sample_attempt(lexicon, plan, tokens_by_type, seed):
     grouped = group_sequence_types_by_length(tokens_by_type, rng)
     for b in bins:
         b.remaining_types = grouped.get(b.n_phones, [])
+        b.n_eligible_types = len(b.remaining_types)
     # Protect nonzero minimums first; equal scarcity favors longer sequences.
     bins.sort(key=lambda b: (b.lower_bound == 0,
         len(b.remaining_types) / max(1, b.target_count), -b.n_phones))
@@ -295,25 +371,16 @@ def sample_attempt(lexicon, plan, tokens_by_type, seed):
     return tokens
 
 
-def relax_plan(plan, failures, min_types):
+def relax_plan(plan, failures, min_types, estimates=None):
     '''Rebalance from the original ideal while exploring a smaller total.
-    Exhaustion only limits this round's capacity estimate. Later rounds can
-    revisit bins; greedy failure is not a permanent capacity constraint.
+    Pass CapacityEstimates to retain observations across calls. Greedy failure
+    is not proof of capacity; explicit probes can revisit constrained bins.
     '''
-    capacity = dict(plan.eligible)
-    if failures:
-        exhausted = set.intersection(*(f.exhausted for f in failures))
-        for n in exhausted:
-            observed = max(f.counts.get(n, 0) for f in failures)
-            capacity[n] = min(capacity[n], observed)
+    if estimates is None: estimates = CapacityEstimates(plan.eligible)
+    estimates.observe(failures)
     total = max(min_types, plan.proposed_total
         - ceil(plan.proposed_total / 20))
-    # Preserve the requested total if the temporary estimates cannot supply it.
-    # Treat exhaustion as a preference, rather than silently violating the floor.
-    if sum(capacity.values()) < total:
-        capacity = plan.eligible
-    targets = allocate_targets(plan.ideal_targets, capacity, total)
-    return plan.with_targets(targets)
+    return estimates.plan_for_total(plan, total)
 
 
 def marginal_distribution_cost(n, count, ideal, total):
@@ -339,19 +406,24 @@ def distribution_loss(ideal, actual):
         for n in set(ideal) | set(actual))
 
 
-def allocate_targets(preferred, capacity, total):
+def allocate_targets(preferred, capacity, total, minimums=None):
     '''Minimize relative distribution error at an exact capacity-limited total.
     Allocate by increasing marginal cost of the separable convex objective.
-    Equal costs favor longer bins. The original ideal must be preferred.
+    Equal costs favor longer bins. Optional minimums reserve existing counts.
+    The original ideal must be preferred.
     '''
-    targets = dict.fromkeys(preferred, 0)
+    targets = {n: (minimums or {}).get(n, 0) for n in preferred}
     total = min(total, sum(capacity.get(n, 0) for n in targets))
+    if sum(targets.values()) > total or any(
+        count < 0 or count > capacity.get(n, 0)
+        for n, count in targets.items()):
+        raise ValueError('minimum counts exceed capacity or requested total')
     queue = []
     for n in targets:
-        if capacity.get(n, 0):
-            heappush(queue, (marginal_distribution_cost(n, 0, preferred,
+        if targets[n] < capacity.get(n, 0):
+            heappush(queue, (marginal_distribution_cost(n, targets[n], preferred,
                 total), -n))
-    for _ in range(total):
+    for _ in range(total - sum(targets.values())):
         _, negative_n = heappop(queue)
         n = -negative_n
         targets[n] += 1
@@ -466,12 +538,15 @@ def format_sampling_failure(bins, tokens_per_type):
     lines = [heading,
         f'Types selected in this attempt: {selected} / {target} total.',
         'Counts below are types, not tokens. Shortfall is below the minimum.',
-        '', ' Phones  Selected  Target  Minimum  Maximum  Shortfall']
+        'Overshoot is above target; allowed within the bin tolerance.',
+        '', ' Phones  Eligible  Selected  Target  Minimum  Maximum  Shortfall  Overshoot']
     for b in sorted(bins, key=lambda b: b.n_phones):
         shortfall = max(0, b.lower_bound - b.n_selected_types)
-        lines.append(f'{b.n_phones:7d} {b.n_selected_types:9d} '
+        overshoot = max(0, b.n_selected_types - b.target_count)
+        lines.append(f'{b.n_phones:7d} {b.n_eligible_types:9d} '
+            f'{b.n_selected_types:9d} '
             f'{b.target_count:7d} {b.lower_bound:8d} {b.upper_bound:8d} '
-            f'{shortfall:10d}')
+            f'{shortfall:10d} {overshoot:10d}')
     lines.extend(['',
         'selection unchanged; provisional tokens were not committed.',
         'This greedy attempt failed; a valid selection may still exist.',

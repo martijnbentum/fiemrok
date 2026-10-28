@@ -71,14 +71,28 @@ favor a long bin over a short bin even when both satisfy their minimums.
 Every attempt starts with fresh bins and reservations; no failed attempt
 changes phrase selections.
 
-Three consecutive seeds use identical quotas by default. After each round,
-the requested total falls by 5% (rounded up), never below `min_types`, even
-if the round succeeded. Quotas are recalculated against the original ideal.
-Bins exhausted in every failed attempt in that round use the best observed
-count as a temporary capacity estimate. If those estimates cannot supply
-the next requested total, frequency capacities are used instead. Estimates
-are reconsidered each round: failure under competition is not a proof of
-capacity. At the floor, rounds keep exploring seeds and revised quotas.
+Three consecutive seeds use identical quotas by default. During initial
+exploration, the requested total falls by 5% (rounded up) after each round,
+never below `min_types`, even if the round succeeded. Quotas are recalculated
+against the original ideal.
+
+Capacity observations persist across rounds within a search. Bins exhausted
+in every failed attempt in a round use the best count observed across all
+attempts, including successes, as a learned capacity estimate. Learning a
+limit for five phones preserves previously learned limits for six, seven,
+and eight phones. Later observed counts can raise those estimates. These
+are heuristic estimates under competition, not proven capacity limits.
+If estimates cannot supply the requested total, only the missing slots are
+allocated beyond them; other learned limits are not reset.
+
+After total exploration reaches `min_types`, two of every three subsequent
+rounds reuse the best successful plan with new seeds. The third round tests
+quotas calculated from the learned estimates, increasing one constrained
+bin's estimate by 10% (rounded up, at least one type), capped by frequency
+eligibility. Probes rotate through constrained positive-ideal bins; a failed
+probe does not erase earlier limits. With no success yet, ordinary rounds
+continue to use the learned estimates. The best plan can contain more than
+`min_types`; reusing it does not restart the total reduction sequence.
 
 The sampler uses the full `max_attempts` search budget, including attempts
 after the first success. It retains the success with the lowest weighted
@@ -87,10 +101,13 @@ earlier success. Only the retained result is committed after the search.
 Consequently a run can return an earlier success even if later attempts
 fail. `max_attempts=1` remains available for a single attempt.
 
-Every round prints quotas and limits; failures show provisional counts and
-minimum shortfalls. New best successes and the final retained sample report
-actual length counts, weighted distribution error, total variation distance,
-and mean-phone-count shift. Distortion always refers to the original ideal.
+Every round prints quotas, learned estimates, and limits. Failure tables
+include frequency-eligible counts, provisional selected counts, shortfalls
+below each minimum, and overshoots above each target. Overshoot is allowed
+within the quota tolerance; it does not mean the maximum was exceeded.
+New best successes and the final retained sample report eligible and actual
+length counts, quota overshoot, weighted distribution error, total variation
+distance, and mean-phone-count shift. Distortion always refers to the original ideal.
 `result.seed` and `result.selected_attempt` identify the retained attempt;
 `result.attempts` is the total search effort. The original plan is unchanged.
 

@@ -137,6 +137,62 @@ class PlanningTests(unittest.TestCase):
         self.assertEqual(revised.ideal_targets, ideal)
 
 
+class CapacityEstimateTests(unittest.TestCase):
+    def setUp(self):
+        self.plan = sampling.SamplingPlan({2: 10, 5: 10, 6: 8},
+            {2: 40, 5: 10, 6: 8})
+        self.estimates = sampling.CapacityEstimates(self.plan.eligible)
+
+    def failure(self, counts, exhausted):
+        bins = sampling.make_length_bins(self.plan.targets)
+        for b in bins:
+            b.selected_types = list(range(counts.get(b.n_phones, 0)))
+            b.remaining_types = [] if b.n_phones in exhausted else ['spare']
+        return sampling.SamplingFailure('controlled exhaustion', bins=bins)
+
+    def test_alternating_exhaustion_preserves_both_estimates(self):
+        first = self.failure({2: 10, 5: 4, 6: 3}, {6})
+        current = sampling.relax_plan(self.plan, [first], 28, self.estimates)
+        self.assertEqual(current.targets[6], 3)
+        second = self.failure({2: 10, 5: 4, 6: 2}, {5})
+        revised = sampling.relax_plan(current, [second], 28, self.estimates)
+        self.assertEqual(self.estimates.limits, {2: 40, 5: 4, 6: 3})
+        self.assertEqual(revised.targets, {2: 21, 5: 4, 6: 3})
+        # A round with no exhaustion must not restore frequency ceilings.
+        self.estimates.observe([])
+        again = self.estimates.plan_for_total(self.plan, 28)
+        self.assertEqual(again.targets, revised.targets)
+        self.assertEqual(self.plan.eligible, {2: 40, 5: 10, 6: 8})
+
+    def test_probes_raise_only_one_bin_and_do_not_erase_estimates(self):
+        self.estimates.observe([self.failure({5: 4, 6: 3}, {5, 6})])
+        first = self.estimates.plan_for_total(self.plan, 28, probe_index=0)
+        second = self.estimates.plan_for_total(self.plan, 28, probe_index=1)
+        self.assertEqual((first.targets[5], first.targets[6]), (5, 3))
+        self.assertEqual((second.targets[5], second.targets[6]), (4, 4))
+        self.assertEqual(self.estimates.limits, {2: 40, 5: 4, 6: 3})
+        self.assertTrue(all(sum(p.targets.values()) == 28 for p in (first, second)))
+
+    def test_successful_counts_can_raise_learned_limits(self):
+        self.estimates.observe([self.failure({5: 4, 6: 3}, {5, 6})])
+        self.estimates.observe([], successes=[{2: 20, 5: 5, 6: 4}])
+        self.assertEqual(self.estimates.limits, {2: 40, 5: 5, 6: 4})
+        self.estimates.observe([self.failure({5: 2, 6: 2}, {5, 6})])
+        self.assertEqual(self.estimates.limits, {2: 40, 5: 5, 6: 4})
+
+    def test_floor_shortfall_does_not_clear_learned_limits(self):
+        plan = sampling.SamplingPlan({2: 5, 5: 10, 6: 8},
+            {2: 5, 5: 10, 6: 8})
+        estimates = sampling.CapacityEstimates(plan.eligible)
+        estimates.observe([self.failure({2: 5, 5: 4, 6: 3}, {5, 6})])
+        revised = estimates.plan_for_total(plan, 15)
+        self.assertEqual(revised.proposed_total, 15)
+        self.assertEqual(revised.targets[2], 5)
+        self.assertEqual(sum(max(0, revised.targets[n] - estimates.limits[n])
+            for n in revised.targets), 3)
+        self.assertEqual(estimates.limits, {2: 5, 5: 4, 6: 3})
+
+
 class SamplingTests(unittest.TestCase):
     def assert_unselected(self, lexicon):
         self.assertEqual(lexicon.selected_sequence_counts, {})
@@ -397,6 +453,72 @@ class SamplingTests(unittest.TestCase):
         self.assertEqual(counts, {2: 2, 3: 10})
         self.assert_unselected(lexicon)
 
+    def test_most_rounds_reuse_successful_quotas_with_new_seeds(self):
+        lexicon = make_sampling_lexicon({2: 10, 3: 10})
+        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, tokens_per_type=2)
+        original = sampling.sample_attempt
+        calls = []
+
+        def attempt(lexicon, current, candidates, seed):
+            calls.append((seed, dict(current.targets)))
+            return original(lexicon, current, candidates, seed)
+
+        with mock.patch.object(sampling, 'sample_attempt', side_effect=attempt):
+            lexicon.sample_lexicon(plan, tries_per_round=1, max_attempts=10,
+                min_types=8)
+        # After exploring smaller totals, two rounds out of three return to
+        # the best plan (10 types); exploration continues at the 8-type floor.
+        self.assertEqual([sum(counts.values()) for _, counts in calls],
+            [10, 9, 8, 8, 10, 10, 8, 10, 10, 8])
+        self.assertEqual([seed for seed, _ in calls], list(range(10)))
+        self.assertEqual(lexicon.sampling_result.seed, 0)
+        self.assertEqual(lexicon.sampling_result.attempts, 10)
+
+    def test_search_retains_capacity_from_separate_failed_rounds(self):
+        lexicon = make_sampling_lexicon({2: 40, 5: 10, 6: 8})
+        plan = cbl.plan_sampling(lexicon, {2: 10, 5: 10, 6: 8},
+            tokens_per_type=2, tolerance=0)
+        calls = []
+        original = sampling.sample_attempt
+
+        def attempt(lexicon, current, candidates, seed):
+            calls.append(dict(current.targets))
+            if seed < 2:
+                bins = sampling.make_length_bins(current.targets)
+                for b in bins:
+                    observed = {2: 10, 5: 4, 6: 3}[b.n_phones]
+                    b.selected_types = list(range(observed))
+                    exhausted = 6 if seed == 0 else 5
+                    b.remaining_types = [] if b.n_phones == exhausted else ['spare']
+                raise sampling.SamplingFailure('alternating exhaustion', bins=bins)
+            return original(lexicon, current, candidates, seed)
+
+        with mock.patch.object(sampling, 'sample_attempt', side_effect=attempt):
+            lexicon.sample_lexicon(plan, tries_per_round=1, max_attempts=3,
+                min_types=28)
+        self.assertEqual(calls[2], {2: 21, 5: 4, 6: 3})
+        self.assertEqual(lexicon.sampling_result.seed, 2)
+        self.assertEqual(len(lexicon.selected_sequence_counts), 28)
+
+    def test_failure_table_distinguishes_shortfall_and_overshoot(self):
+        bins = [sampling.LengthBin(5, 10), sampling.LengthBin(6, 30)]
+        for b, count, eligible in zip(bins, [12, 15], [100, 40]):
+            b.selected_types = list(range(count))
+            b.n_eligible_types = eligible
+        message = sampling.format_sampling_failure(bins, 100)
+        self.assertRegex(message,
+            r'(?m)^\s*5\s+100\s+12\s+10\s+0\s+20\s+0\s+2$')
+        self.assertRegex(message,
+            r'(?m)^\s*6\s+40\s+15\s+30\s+20\s+40\s+5\s+0$')
+
+    def test_final_result_reports_frequency_eligibility_and_overshoot(self):
+        plan = sampling.SamplingPlan({2: 5, 3: 5}, {2: 20, 3: 30})
+        result = sampling.SamplingResult([], 0, 1, plan, {2: 6, 3: 4}, 1)
+        self.assertRegex(str(result),
+            r'(?m)^\s*2\s+20\s+5\s+5\s+6\s+1\s+\+1$')
+        self.assertRegex(str(result),
+            r'(?m)^\s*3\s+30\s+5\s+5\s+4\s+0\s+-1$')
+
     def test_reference_inspection_remains_available_through_cbl(self):
         self.assertIs(cbl.inspect_lexicon_phonemes,
             sampling.inspect_lexicon_phonemes)
@@ -411,7 +533,7 @@ class SamplingTests(unittest.TestCase):
         bins = [sampling.LengthBin(6, 26), sampling.LengthBin(7, 8)]
         bins[0].selected_types = list(range(12))
         message = sampling.format_sampling_failure(bins, 100)
-        self.assertRegex(message, r'(?m)^\s*6\s+12\s+26\s+16\s+36\s+4$')
+        self.assertRegex(message, r'(?m)^\s*6\s+0\s+12\s+26\s+16\s+36\s+4\s+0$')
         self.assertIn('selection unchanged', message)
 
 
