@@ -16,9 +16,25 @@ There is no need to introduce a separate `Span` type.
 - Bind and save the markers in the same phraser store as the source phrases.
 - Do not reparent or copy the original words, syllables, or phones.
 
-`phraser.make_markers(data, store, save=True)` supports bulk creation and
-saving. Markers share the phraser database with other objects, distinguished
-by their object-type rank. They are available through `store.markers`.
+`lexicon.make_markers(store, save=False)` converts the retained sampling
+result using `phraser.make_markers`. It returns markers in sampled-token order
+and raises `ValueError` if there is no successful sample. Pass the same
+phraser store that contains the source phrases.
+
+```python
+# Preview without writing.
+markers = lexicon.make_markers(cgn)
+
+# Save the previewed markers after checking them.
+cgn.save_many(markers)
+
+# Refresh snapshot query roots before querying cgn.markers.
+cgn.refresh_query_roots()
+```
+
+Alternatively, `lexicon.make_markers(cgn, save=True)` creates and bulk-saves
+in one call. Markers share the database with other objects, distinguished
+by object-type rank. No manifest is created.
 
 ## EchoFrame integration
 
@@ -32,23 +48,15 @@ Verify marker embedding computation and save/reload linkage before adopting
 this pipeline. The generic segment interface appears suitable, but this
 integration has not yet been tested end to end.
 
-## Sample identity and provenance
+## Phone reconstruction and repeat exports
 
-Keep a sample manifest with the seed, quotas, tokens per type, filtering
-settings, source phrase keys, and marker keys. Phones are assumed ordered
-and non-overlapping. Reconstruct them using the marker interval from the
-first phone's start to the last phone's end and `marker.overlap_phone`.
-Separate exact phone references are not required under this assumption.
+The marker interval runs from the first phone's start to the last phone's
+end. `marker.overlap_phone` reconstructs the phones through the source phrase.
+An integration test checks exact phone keys before and after saving and
+reopening a temporary database. Verify this on a small batch of real CGN
+annotations before exporting the full sample, particularly where phones have
+gaps, overlap, or unusual boundary timestamps.
 
-Deferred check: when implementing marker persistence, remind the user to
-verify that `marker.overlap_phone` reproduces the sampled phones. This check
-is intentionally deferred; no validation or persistence is implemented yet.
-
-Define reuse of an existing marker for the same source phrase and phone span
-before implementing repeat exports. Do not assume repeated construction is
-idempotent: new segment objects receive new identifiers.
-
-A sample collection identifier or manifest should distinguish sampling runs.
-Phoneme labels identify types, not runs; deleting markers by label alone
-could remove tokens belonging to other samples. Collection support is a
-proposed addition, not an existing Marker field.
+Repeated calls create new identifiers and do not deduplicate existing
+markers. Keep the returned markers or their keys for later reuse. Deleting
+by phoneme label alone can affect other samples with the same type.

@@ -91,6 +91,20 @@ class CrossBoundaryLexicon:
         self.successful_seed = result.seed
         return result.tokens
 
+    def make_markers(self, store, save=False):
+        '''Return markers for the retained sample, optionally saving in bulk.
+        Use the phraser store containing the source phrases. Repeated calls
+        create new marker identifiers; no manifest or deduplication is added.
+        '''
+        if self.sampling_result is None:
+            raise ValueError('sample the lexicon before making markers')
+        from phraser import make_markers
+
+        data = [dict(label=token.phoneme_sequence, start=token.start,
+            end=token.end, audio=token.audio, phrase=token.phrase)
+            for token in self.sampling_result.tokens]
+        return make_markers(data, store=store, save=save)
+
     def collect_candidate_tokens(self, tokens_per_type):
         '''Group tokens by phoneme string, keeping sufficiently frequent types.
         Exclude one-phone sequences, which cannot cross a word boundary.

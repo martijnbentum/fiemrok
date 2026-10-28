@@ -199,6 +199,11 @@ class SelectionTests(unittest.TestCase):
 
 
 class LexiconTests(unittest.TestCase):
+    def test_markers_require_a_successful_sample(self):
+        lexicon = cbl.CrossBoundaryLexicon([])
+        with self.assertRaisesRegex(ValueError, 'sample the lexicon'):
+            lexicon.make_markers(None)
+
     def make_duration_lexicon(self, durations, **kwargs):
         phrases = []
         for duration in durations:
