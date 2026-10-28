@@ -22,6 +22,8 @@ ci_phrases_cgn/
 lexicon100_2466_cgn_hubert/
 cross_boundary100_2200_cgn/
 cross_boundary100_2200_cgn_hubert/
+cross_boundary_lexicon100_2200_cgn/
+cross_boundary_lexicon100_2200_cgn_hubert/
 lexicon100_2466_hubert/
 svs_data/
 lexicon100_syllables_cgn/

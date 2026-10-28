@@ -6,8 +6,8 @@ It uses the same checkpoints and settings as the existing word stores:
 
 | Model argument | Registered checkpoint | Reference store | Default destination |
 | --- | --- | --- | --- |
-| `wav2vec2` | `wav2vec2_nl1_checkpoint-200000` | `lexicon100_2466_cgn` | `cross_boundary100_2200_cgn` |
-| `hubert` | `huibert_nl1_checkpoint-200000` | `lexicon100_2466_cgn_hubert` | `cross_boundary100_2200_cgn_hubert` |
+| `wav2vec2` | `wav2vec2_nl1_checkpoint-200000` | `lexicon100_2466_cgn` | `cross_boundary_lexicon100_2200_cgn` |
+| `hubert` | `huibert_nl1_checkpoint-200000` | `lexicon100_2466_cgn_hubert` | `cross_boundary_lexicon100_2200_cgn_hubert` |
 
 Default store paths are relative to the module directory. The key-file path
 is relative to the working directory, as in `cbl.load_markers`.

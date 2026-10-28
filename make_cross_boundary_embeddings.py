@@ -12,9 +12,9 @@ import stores
 ROOT = Path(__file__).resolve().parent
 MODEL_SETTINGS = {
     'wav2vec2': ('wav2vec2_nl1_checkpoint-200000',
-        'lexicon100_2466_cgn', 'cross_boundary100_2200_cgn'),
+        'lexicon100_2466_cgn', 'cross_boundary_lexicon100_2200_cgn'),
     'hubert': ('huibert_nl1_checkpoint-200000',
-        'lexicon100_2466_cgn_hubert', 'cross_boundary100_2200_cgn_hubert'),
+        'lexicon100_2466_cgn_hubert', 'cross_boundary_lexicon100_2200_cgn_hubert'),
 }
 
 
