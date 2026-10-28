@@ -1,7 +1,7 @@
 # Cross-boundary embedding refactor plan
 
 Agreed design: keep setup, store opening, and computation explicit and small.
-Keep public functions toward the top of their modules.
+Keep computation near the top and the two setup functions at the bottom.
 
 ## Paths and store loading
 
@@ -14,7 +14,9 @@ Keep public functions toward the top of their modules.
 
 ## Setup
 
-- `create_stores()` opens the wav2vec and HuBERT stores and returns both.
+- `create_wv2_and_hubert()` opens the wav2vec and HuBERT stores and returns both.
+- Share registration through `create_store(path, model_name, architecture)`;
+  keep these two setup functions at the bottom, with computation first.
 - Register version 1/checkpoint 200000 from `model_paths.py`, one model per
   store; skip registration if already present so setup is rerunnable.
 - Remove the word-store configuration dependency and module settings dict.

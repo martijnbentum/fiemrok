@@ -67,8 +67,8 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
         self.wav2vec_store, self.hubert_store = self.create_stores()
 
     def test_setup_registers_one_checkpoint_per_store_from_model_paths(self):
-        self.wav2vec_path.assert_called_once_with()
-        self.hubert_path.assert_called_once_with()
+        self.wav2vec_path.assert_called_once_with(200_000, 1)
+        self.hubert_path.assert_called_once_with(200_000, 1)
         for store, name, architecture in (
             (self.wav2vec_store, 'wav2vec2_nl1_checkpoint-200000', 'wav2vec2'),
             (self.hubert_store, 'huibert_nl1_checkpoint-200000', 'hubert')):
@@ -162,7 +162,7 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
         self.assertEqual(self.wav2vec_store.metadatas, [])
 
     def create_stores(self):
-        stores_pair = cross_embeddings.create_stores()
+        stores_pair = cross_embeddings.create_wv2_and_hubert()
         for store in stores_pair:
             self.addCleanup(store.close)
         return stores_pair

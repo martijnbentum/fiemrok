@@ -8,29 +8,6 @@ import model_paths
 import stores
 
 
-def create_stores():
-    '''Open both cross-boundary stores and register their 200000 checkpoints.
-    Existing registrations are retained. The caller owns both open stores.
-    '''
-    wav2vec_store = stores.load_echoframe_cross_boundary_store(
-        locations.cross_boundary_wav2vec_store)
-    hubert_store = stores.load_echoframe_cross_boundary_store(
-        locations.cross_boundary_hubert_store)
-    wav2vec_model = 'wav2vec2_nl1_checkpoint-200000'
-    hubert_model = 'huibert_nl1_checkpoint-200000'
-    if wav2vec_store.load_model_metadata(wav2vec_model) is None:
-        checkpoint = model_paths.get_pretrained_wav2vec2_model_path()
-        wav2vec_store.register_model(wav2vec_model,
-            local_path=checkpoint.as_posix(), language='Dutch', size='base',
-            architecture='wav2vec2')
-    if hubert_store.load_model_metadata(hubert_model) is None:
-        checkpoint = model_paths.get_pretrained_hubert_model_path()
-        hubert_store.register_model(hubert_model,
-            local_path=checkpoint.as_posix(), language='Dutch', size='base',
-            architecture='hubert')
-    return wav2vec_store, hubert_store
-
-
 def compute_embeddings(embedding_store, layers=(3, 6, 9, 12), collar=500,
     gpu=False, batch_size=32, verbose=True):
     '''Compute missing full-frame matrices for the saved marker sample.
@@ -43,3 +20,24 @@ def compute_embeddings(embedding_store, layers=(3, 6, 9, 12), collar=500,
     compute_embeddings_batch(markers, layers=layers, model_name=model_name,
         store=embedding_store, collar=collar, gpu=gpu, batch_size=batch_size,
         tags=['cgn', 'cross_boundary'], verbose=verbose)
+
+
+def create_store(path, model_name, architecture):
+    '''Open a store and register its version 1/checkpoint 200000 model if absent.'''
+    embedding_store = stores.load_echoframe_cross_boundary_store(path)
+    if embedding_store.load_model_metadata(model_name) is None:
+        checkpoint = model_paths.get_pretrained_model(architecture,
+            checkpoint=200_000, version=1)
+        embedding_store.register_model(model_name,
+            local_path=checkpoint.as_posix(), language='Dutch', size='base',
+            architecture=architecture)
+    return embedding_store
+
+
+def create_wv2_and_hubert():
+    '''Return the configured wav2vec and HuBERT stores; the caller closes them.'''
+    wav2vec_store = create_store(locations.cross_boundary_wav2vec_store,
+        'wav2vec2_nl1_checkpoint-200000', 'wav2vec2')
+    hubert_store = create_store(locations.cross_boundary_hubert_store,
+        'huibert_nl1_checkpoint-200000', 'hubert')
+    return wav2vec_store, hubert_store

@@ -1,20 +1,22 @@
 # Cross-boundary marker embeddings
 
-`make_cross_boundary_embeddings.py` has two public functions:
+`make_cross_boundary_embeddings.py` puts computation first and setup at the
+bottom of the file:
 
-- `create_stores()` opens the two cross-boundary stores and registers one
-  model in each, using `model_paths.py`. Existing registrations are skipped,
-  so setup can be repeated. It returns `(wav2vec_store, hubert_store)`.
 - `compute_embeddings(embedding_store, ...)` gets CGN from that open store,
   loads the saved markers, reads the store's sole model registration, and
   calls EchoFrame's batch embedding function.
+- `create_store(path, model_name, architecture)` opens one store and registers
+  its checkpoint through `model_paths.py` if the model is absent.
+- `create_wv2_and_hubert()` calls `create_store` for each model and returns
+  `(wav2vec_store, hubert_store)`. Setup can be repeated.
 
 ## Setup and compute
 
 ```python
 import make_cross_boundary_embeddings as cb
 
-wav2vec_store, hubert_store = cb.create_stores()
+wav2vec_store, hubert_store = cb.create_wv2_and_hubert()
 
 cb.compute_embeddings(wav2vec_store, gpu=True)
 wav2vec_store.remove_cached_model()
@@ -52,7 +54,7 @@ hubert_store = stores.load_echoframe_cross_boundary_store(
 ```
 
 The loader attaches the shared CGN store. It does not register models;
-`create_stores()` handles setup. The caller owns each open store and closes
+`create_wv2_and_hubert()` handles setup. The caller owns each open store and closes
 it when finished. `compute_embeddings` does not open or close stores.
 
 ## Frames and resume
