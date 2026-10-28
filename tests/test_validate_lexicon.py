@@ -50,6 +50,59 @@ class StoreLoadingTests(unittest.TestCase):
 
 
 class PoolingTests(unittest.TestCase):
+    def test_layer_runner_defaults_keep_word_stores_names_and_units(self):
+        tokens = [SimpleNamespace(label='word', echoframe_key=b'word')]
+        for model, loader in (('w2v', 'load_store_w2v'),
+            ('hubert1', 'load_store_hubert1')):
+            with self.subTest(model=model), tempfile.TemporaryDirectory() as directory:
+                embedding_store = mock.Mock()
+                embedding_store.load_many_frames.return_value = [np.array([1., 2.])]
+                with (mock.patch.object(validate_lexicon, loader,
+                    return_value=embedding_store) as load_store,
+                    mock.patch.object(validate_lexicon, 'load_metadata_layer',
+                    return_value=tokens)):
+                    result = validate_lexicon.make_vsi_for_layers([6],
+                        model=model, directory=directory)
+                load_store.assert_called_once_with()
+                index, returned = result[6]
+                self.assertEqual(index.metadatas.name, f'{model}_6')
+                self.assertEqual(index.metadatas.unit_type, 'word')
+                self.assertEqual(returned, tokens)
+
+    def test_marker_indexes_use_supplied_store_and_separate_pooling_names(self):
+        tokens = [SimpleNamespace(label='ŋ r', echoframe_key=b'first'),
+            SimpleNamespace(label='f d ə', echoframe_key=b'second')]
+        embedding_store = mock.Mock()
+        embedding_store.load_many_frames.return_value = [np.array([1., 2.]),
+            np.array([2., 1.])]
+        with tempfile.TemporaryDirectory() as directory:
+            with (mock.patch.object(validate_lexicon, 'load_store_w2v',
+                side_effect=AssertionError('must not open word store')),
+                mock.patch.object(validate_lexicon, 'load_store_hubert1',
+                side_effect=AssertionError('must not open word store')),
+                mock.patch.object(validate_lexicon, 'load_metadata_layer',
+                return_value=tokens)):
+                for pooling, suffix in (('center', ''), ('mean', '_mean')):
+                    result = validate_lexicon.make_vsi_for_layers([6],
+                        model='hubert1', pooling=pooling, directory=directory,
+                        embedding_store=embedding_store,
+                        name_prefix='cross_boundary_', unit_type='marker')
+                    index, returned = result[6]
+                    name = f'cross_boundary_hubert1_6{suffix}'
+                    self.assertEqual(index.metadatas.name, name)
+                    self.assertEqual(index.metadatas.unit_type, 'marker')
+                    self.assertEqual(returned, tokens)
+                    loaded = validate_lexicon.svs.VectorIndex.load(directory, name)
+                    self.assertEqual(loaded.metadatas.unit_type, 'marker')
+                    self.assertEqual([md.label for md in loaded.metadatas],
+                        ['ŋ r', 'f d ə'])
+                    self.assertEqual([md.source_echoframe_keys
+                        for md in loaded.metadatas], [[b'first'], [b'second']])
+                    self.assertEqual(analyse_results.evaluate_index(loaded,
+                        top_k=1), {'ŋ r': [0.], 'f d ə': [0.]})
+        self.assertEqual([call.kwargs['frame'] for call in
+            embedding_store.load_many_frames.call_args_list], ['center', 'mean'])
+
     def test_mean_and_center_use_different_frames(self):
         payload = np.array([[0., 0.], [9., 3.], [0., 0.]])
         token = SimpleNamespace(echoframe_key=b'token')
@@ -85,7 +138,7 @@ class PoolingTests(unittest.TestCase):
                     directory=directory, overwrite=True)
                 make_metadata.assert_called_once_with([token],
                     name='w2v_6_mean',
-                    directory=directory)
+                    directory=directory, unit_type='word')
                 load_vectors.assert_called_once_with(embedding_store,
                     [token], pooling='mean')
                 make_index.return_value.save.assert_called_once_with(

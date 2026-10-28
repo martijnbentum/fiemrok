@@ -45,3 +45,5 @@ retrying with consecutive seeds, relaxing constraints, and resuming failures.
 See [Marker storage](data/cross_boundary_sampled_tokens_markers.md) for saving
 and loading the sample, and [Marker embeddings](data/cross_boundary_embeddings.md)
 for full-frame wav2vec2 and HuBERT computation.
+See [Cross-boundary neighbours](data/cross_boundary_neighbours.md) to run both
+models with mean and center pooling and save results after each layer.

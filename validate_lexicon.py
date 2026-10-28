@@ -50,10 +50,11 @@ def load_speech_vectors(store, metadatas, pooling='center'):
     print(f'loaded {len(vectors)} vectors')
     return np.asarray(vectors, dtype=float)
     
-def make_vector_metadata(metadatas, name, directory = 'svs_data'):
+def make_vector_metadata(metadatas, name, directory = 'svs_data',
+    unit_type='word'):
     print(f'making vector metadata for {len(metadatas)} entries')
     cls = svs.metadata.VectorMetadata
-    vmds = [cls(x.label, 'word', [x.echoframe_key], 0) for x in metadatas]
+    vmds = [cls(x.label, unit_type, [x.echoframe_key], 0) for x in metadatas]
     svs_metadata = svs.metadata.VectorMetadatas(vmds, name, directory)
     return svs_metadata
 
@@ -64,10 +65,11 @@ def make_vector_search_index(vectors, vector_metadata):
 
 def make_vector_search_index_for_layer(store, layer, name, save=True,
     overwrite=False, pooling='center', directory='svs_data',
-    return_metadata=True):
+    return_metadata=True, unit_type='word'):
     '''Return (index, metadata); mean pooling uses a separate index name.
     return_metadata: False returns None for metadata and skips its loading
                      when an existing complete index can be reused
+    unit_type:       category for newly built vector metadata; defaults to word
     '''
     if pooling not in ('center', 'mean'):
         raise ValueError(f'unknown pooling method {pooling}')
@@ -93,7 +95,7 @@ def make_vector_search_index_for_layer(store, layer, name, save=True,
         raise ValueError(f'no embeddings found for layer {layer}')
     vectors = load_speech_vectors(store, metadata, pooling=pooling)
     vector_metadata = make_vector_metadata(metadata, name=name,
-        directory=directory)
+        directory=directory, unit_type=unit_type)
     vector_index = make_vector_search_index(vectors, vector_metadata)
     if save:
         print('saving vector search index')
@@ -101,16 +103,23 @@ def make_vector_search_index_for_layer(store, layer, name, save=True,
     return vector_index, metadata if return_metadata else None
 
 def make_vsi_for_layers(layers, model='w2v', save=True,
-    overwrite=False, pooling='center', directory='svs_data'):
-    if model == 'w2v':store = load_store_w2v()
-    elif model == 'hubert1':store = load_store_hubert1()
-    else:raise ValueError(f'unknown model {model}')
+    overwrite=False, pooling='center', directory='svs_data',
+    embedding_store=None, name_prefix='', unit_type='word'):
+    '''Build layer indexes, using the original word stores/names by default.
+    Supply embedding_store and name_prefix to index another dataset.
+    The caller owns a supplied store; this function does not close it.
+    '''
+    if embedding_store is None:
+        if model == 'w2v':embedding_store = load_store_w2v()
+        elif model == 'hubert1':embedding_store = load_store_hubert1()
+        else:raise ValueError(f'unknown model {model}')
     print(f'making vector search indices for layer {layers} and model {model}')
     vsis = {}
     for layer in progressbar(layers):
-        name = f'{model}_{layer}'
-        vsi, emd = make_vector_search_index_for_layer(store, layer, name, save,
-            overwrite, pooling=pooling, directory=directory)
+        name = f'{name_prefix}{model}_{layer}'
+        vsi, emd = make_vector_search_index_for_layer(embedding_store, layer,
+            name, save, overwrite, pooling=pooling, directory=directory,
+            unit_type=unit_type)
         vsis[layer] = [vsi, emd]
     return vsis
    

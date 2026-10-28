@@ -96,3 +96,6 @@ A complete 220,000-marker sample at four layers has 880,000 entries per model.
 Integration tests use real phraser and EchoFrame stores with synthetic model
 outputs to verify exact frame rows, marker linkage after reopening, setup
 from model paths, repeated setup, and skipped inference on completed requests.
+
+After computation, see [Cross-boundary neighbours](cross_boundary_neighbours.md)
+for mean/center pooling, saved search indexes, and resumable evaluation.
