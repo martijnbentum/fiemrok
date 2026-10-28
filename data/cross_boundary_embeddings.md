@@ -3,6 +3,9 @@
 `make_cross_boundary_embeddings.py` puts computation first and setup at the
 bottom of the file:
 
+- `compute_embeddings_for_hubert(**kwargs)` and
+  `compute_embeddings_for_wv2(**kwargs)` open the corresponding configured
+  store, forward options to `compute_embeddings`, and return the open store.
 - `compute_embeddings(embedding_store, ...)` gets CGN from that open store,
   loads the saved markers, reads the store's sole model registration, and
   calls EchoFrame's batch embedding function.
@@ -30,6 +33,21 @@ hubert_store.close()
 The registrations use version 1/checkpoint 200000:
 `wav2vec2_nl1_checkpoint-200000` and `huibert_nl1_checkpoint-200000`.
 The checkpoint paths come directly from `model_paths.py`.
+
+After setup, compute a model directly with a wrapper:
+
+```python
+hubert_store = cb.compute_embeddings_for_hubert(gpu=True, batch_size=32)
+hubert_store.remove_cached_model()
+hubert_store.close()
+
+wav2vec_store = cb.compute_embeddings_for_wv2(gpu=True)
+wav2vec_store.remove_cached_model()
+wav2vec_store.close()
+```
+
+The wrappers accept the same options as `compute_embeddings`, including
+`layers`, `collar`, `gpu`, `batch_size`, and `verbose`.
 
 `locations.py` defines all three repo-relative paths:
 

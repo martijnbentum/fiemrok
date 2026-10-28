@@ -97,18 +97,24 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
         self.assertEqual(store.model_registry.model_metadatas, [])
 
     def test_full_frame_matrices_link_to_markers_and_repeat_skips_inference(self):
-        for store, name in (
-            (self.wav2vec_store, 'wav2vec2_nl1_checkpoint-200000'),
-            (self.hubert_store, 'huibert_nl1_checkpoint-200000')):
+        for compute, name in (
+            (cross_embeddings.compute_embeddings_for_wv2,
+                'wav2vec2_nl1_checkpoint-200000'),
+            (cross_embeddings.compute_embeddings_for_hubert,
+                'huibert_nl1_checkpoint-200000')):
             with self.subTest(model=name):
                 outputs = self.outputs()
-                with (mock.patch.object(store, 'load_model', return_value=object())
-                    as load_model, mock.patch.object(batch_segment_features.to_vector,
+                with (mock.patch.object(echoframe.Store, 'load_model',
+                    return_value=object()) as load_model,
+                    mock.patch.object(batch_segment_features.to_vector,
                     'iter_filename_batch_to_vector', return_value=iter(outputs))
                     as inference):
-                    cross_embeddings.compute_embeddings(store, verbose=False)
-                load_model.assert_called_once_with(name, gpu=False)
+                    store = compute(verbose=False, gpu=True, batch_size=2)
+                    self.addCleanup(store.close)
+                load_model.assert_called_once_with(name, gpu=True)
                 inference.assert_called_once()
+                self.assertEqual(inference.call_args.kwargs['batch_size'], 2)
+                self.assertTrue(inference.call_args.kwargs['gpu'])
                 np.testing.assert_allclose(inference.call_args.kwargs['starts'],
                     [0.6, 1.1])
                 np.testing.assert_allclose(inference.call_args.kwargs['ends'],
@@ -128,13 +134,14 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
                         self.assertEqual(embedding.metadata.phraser_source_id, 'cgn')
                         self.assertEqual(set(embedding.metadata.tags),
                             {'cgn', 'cross_boundary'})
-                with (mock.patch.object(store, 'load_model',
+                with (mock.patch.object(echoframe.Store, 'load_model',
                     side_effect=AssertionError('model should not load')),
                     mock.patch.object(batch_segment_features.to_vector,
                     'iter_filename_batch_to_vector',
                     side_effect=AssertionError('inference should not run'))):
-                    cross_embeddings.compute_embeddings(store, verbose=False)
-                self.assertEqual(len(store.metadatas), 8)
+                    resumed = compute(verbose=False)
+                    self.addCleanup(resumed.close)
+                self.assertEqual(len(resumed.metadatas), 8)
 
     def test_collar_and_missing_layers_are_independent_storage_requests(self):
         store = self.wav2vec_store

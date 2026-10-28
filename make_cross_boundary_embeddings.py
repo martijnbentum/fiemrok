@@ -8,6 +8,22 @@ import model_paths
 import stores
 
 
+def compute_embeddings_for_hubert(**kwargs):
+    '''Compute HuBERT embeddings; return the open store for the caller to close.'''
+    embedding_store = stores.load_echoframe_cross_boundary_store(
+        locations.cross_boundary_hubert_store)
+    compute_embeddings(embedding_store, **kwargs)
+    return embedding_store
+
+
+def compute_embeddings_for_wv2(**kwargs):
+    '''Compute wav2vec embeddings; return the open store for the caller to close.'''
+    embedding_store = stores.load_echoframe_cross_boundary_store(
+        locations.cross_boundary_wav2vec_store)
+    compute_embeddings(embedding_store, **kwargs)
+    return embedding_store
+
+
 def compute_embeddings(embedding_store, layers=(3, 6, 9, 12), collar=500,
     gpu=False, batch_size=32, verbose=True):
     '''Compute missing full-frame matrices for the saved marker sample.
