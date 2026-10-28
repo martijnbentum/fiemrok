@@ -1,5 +1,7 @@
 from collections import Counter
 from itertools import groupby, pairwise
+from math import isfinite
+from numbers import Real
 from pathlib import Path
 
 from progressbar import progressbar
@@ -12,7 +14,16 @@ from cross_boundary_lexicon_sampling import inspect_lexicon_phonemes
 class CrossBoundaryLexicon:
     '''Hold phrase sequences and aggregate counts by phoneme string.'''
 
-    def __init__(self, phrases):
+    def __init__(self, phrases, min_duration_ms=100, max_duration_ms=1500):
+        for name, value in (('min_duration_ms', min_duration_ms),
+            ('max_duration_ms', max_duration_ms)):
+            if (isinstance(value, bool) or not isinstance(value, Real)
+                or not isfinite(value) or value < 0):
+                raise ValueError(f'{name} must be a finite nonnegative number')
+        if min_duration_ms > max_duration_ms:
+            raise ValueError('min_duration_ms must not exceed max_duration_ms')
+        self.min_duration_ms = min_duration_ms
+        self.max_duration_ms = max_duration_ms
         self.successful_seed = None
         self.sampling_result = None
         ps = PhraseSequences
@@ -60,12 +71,13 @@ class CrossBoundaryLexicon:
 
     def sample_lexicon(self, plan, random_seed=0, tries_per_round=3,
         max_attempts=100, min_types=2200):
-        '''Sample a plan with adaptive quotas, committing only a full success.
+        '''Search adaptive quotas, committing only the best successful sample.
         plan:             SamplingPlan containing token count and tolerance
         random_seed:      first seed; incremented once per attempt
         tries_per_round:  attempts before adjusting quotas
-        max_attempts:     total attempt limit across all quota rounds
-        min_types:        lowest acceptable total number of types
+        max_attempts:     search budget, including attempts after success
+        min_types:        floor for totals explored in 5% reduction steps
+        Rank by normalized distribution error, then prefer larger totals.
         Inspect sampling_result for final quotas, counts, and successful seed.
         '''
         if any(ps.selected_sequences for ps in self.phrase_sequences):
@@ -82,6 +94,7 @@ class CrossBoundaryLexicon:
     def collect_candidate_tokens(self, tokens_per_type):
         '''Group tokens by phoneme string, keeping sufficiently frequent types.
         Exclude one-phone sequences, which cannot cross a word boundary.
+        Apply instance duration limits inclusively before counting frequency.
         Frequency is a preliminary filter; tokens may still overlap.
         '''
         tokens_by_type = {}
@@ -89,6 +102,9 @@ class CrossBoundaryLexicon:
         for ps in progressbar(self.phrase_sequences):
             for sequence in ps.sequences:
                 if sequence.n_phones < 2: continue
+                duration = sequence.end - sequence.start
+                if not self.min_duration_ms <= duration <= self.max_duration_ms:
+                    continue
                 label = sequence.phoneme_sequence
                 tokens_by_type.setdefault(label, []).append(sequence)
         return {label: tokens for label, tokens in tokens_by_type.items()

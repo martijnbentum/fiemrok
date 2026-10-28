@@ -199,6 +199,46 @@ class SelectionTests(unittest.TestCase):
 
 
 class LexiconTests(unittest.TestCase):
+    def make_duration_lexicon(self, durations, **kwargs):
+        phrases = []
+        for duration in durations:
+            phrase = make_phrase([['edge', 'a'], ['n', 'edge']])
+            for i, phone in enumerate(phrase.phones):
+                phone.start = i * duration / 2
+                phone.end = (i + 1) * duration / 2
+            phrases.append(phrase)
+        return cbl.CrossBoundaryLexicon(phrases, **kwargs)
+
+    def test_duration_limits_are_inclusive_and_precede_frequency(self):
+        lexicon = self.make_duration_lexicon([99, 100, 1500, 1501])
+        self.assertEqual(lexicon.min_duration_ms, 100)
+        self.assertEqual(lexicon.max_duration_ms, 1500)
+        candidates = lexicon.collect_candidate_tokens(2)
+        self.assertEqual([t.end - t.start for t in candidates['a n']],
+            [100, 1500])
+        self.assertEqual(lexicon.collect_candidate_tokens(3), {})
+        # Raw extraction remains available for inspection.
+        self.assertEqual(lexicon.sequence_counts, {'a n': 4})
+
+    def test_custom_duration_limits_apply_to_planning_and_sampling(self):
+        lexicon = self.make_duration_lexicon([100, 200, 300],
+            min_duration_ms=200, max_duration_ms=200)
+        plan = cbl.plan_sampling(lexicon, {2: 1}, tokens_per_type=1)
+        self.assertEqual(plan.eligible, {2: 1})
+        tokens = lexicon.sample_lexicon(plan, min_types=1, max_attempts=1)
+        self.assertEqual([t.end - t.start for t in tokens], [200])
+        self.assertEqual(lexicon.sequence_counts, {'a n': 3})
+
+    def test_invalid_duration_limits_are_rejected(self):
+        for kwargs in (dict(min_duration_ms=-1), dict(max_duration_ms=-1),
+            dict(min_duration_ms=1501), dict(min_duration_ms=True),
+            dict(max_duration_ms='1500'), dict(min_duration_ms=None),
+            dict(min_duration_ms=float('nan')),
+            dict(max_duration_ms=float('inf'))):
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(ValueError):
+                    cbl.CrossBoundaryLexicon([], **kwargs)
+
     def test_aggregated_counts_track_selection_and_reset(self):
         phrases = [make_phrase([['x', 'a'], ['n', 'x'],
             ['x', 'a'], ['n', 'x']]),

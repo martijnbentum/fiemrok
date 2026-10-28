@@ -1,5 +1,6 @@
 import contextlib
 import io
+import itertools
 import pathlib
 import random
 import sys
@@ -47,9 +48,9 @@ class PlanningTests(unittest.TestCase):
             {2: 5, 12: 0})
         self.assertEqual(bins[1].lower_bound, 0)
 
-    def test_no_capacity_discount_and_deficits_go_to_nearby_lengths(self):
+    def test_deficits_are_balanced_across_available_lengths(self):
         plan = sampling.SamplingPlan({2: 5, 3: 5, 4: 5}, {2: 20, 3: 20, 4: 2})
-        self.assertEqual(plan.targets, {2: 5, 3: 8, 4: 2})
+        self.assertEqual(plan.targets, {2: 6, 3: 7, 4: 2})
         self.assertEqual(plan.proposed_total, 15)
         self.assertEqual(plan.tokens_per_type, 100)
         self.assertIn('distribution shifted:', str(plan))
@@ -91,11 +92,49 @@ class PlanningTests(unittest.TestCase):
             preferred = {n: rng.randrange(30) for n in range(2, 10)}
             capacity = {n: rng.randrange(30) for n in preferred}
             total = rng.randrange(200)
-            result = sampling.allocate_targets(preferred, capacity, total,
-                avoid={3, 5})
+            result = sampling.allocate_targets(preferred, capacity, total)
             self.assertEqual(sum(result.values()),
                 min(total, sum(capacity.values())))
             self.assertTrue(all(0 <= result[n] <= capacity[n] for n in result))
+
+    def test_allocation_minimizes_error_against_exhaustive_search(self):
+        for ideal in ({2: 2, 3: 4, 4: 1}, {2: 0, 3: 3, 4: 1}):
+            capacity = {2: 4, 3: 2, 4: 3}
+            for total in range(1, 10):
+                result = sampling.allocate_targets(ideal, capacity, total)
+                alternatives = [dict(zip(capacity, counts))
+                    for counts in itertools.product(range(5), range(3), range(4))
+                    if sum(counts) == total]
+                optimum = min(sampling.distribution_loss(ideal, counts)
+                    for counts in alternatives)
+                self.assertAlmostEqual(sampling.distribution_loss(ideal,
+                    result), optimum)
+
+    def test_reduced_total_is_proportional_to_original_ideal(self):
+        ideal = {2: 20, 3: 30, 4: 50}
+        self.assertEqual(sampling.allocate_targets(ideal, ideal, 50),
+            {2: 10, 3: 15, 4: 25})
+        self.assertEqual(sampling.distribution_loss(ideal,
+            {2: 10, 3: 15, 4: 25}), 0)
+
+    def test_logged_shortages_do_not_all_move_to_four_phones(self):
+        ideal = dict(zip(range(2, 17),
+            [90, 328, 499, 486, 387, 289, 192, 98, 45, 26, 12, 8, 3, 1, 2]))
+        capacity = dict(zip(range(2, 17),
+            [817, 4447, 3622, 973, 311, 129, 61, 15, 2, 1, 0, 0, 0, 0, 0]))
+        plan = sampling.SamplingPlan(ideal, capacity)
+        bins = sampling.make_length_bins(plan.targets)
+        observed = {5: 508, 6: 150, 7: 58, 8: 34}
+        for b in bins:
+            b.selected_types = list(range(observed.get(b.n_phones, 0)))
+            b.remaining_types = [] if b.n_phones in observed else ['spare']
+        failure = sampling.SamplingFailure('logged exhaustion', bins=bins)
+        revised = sampling.relax_plan(plan, [failure] * 3, min_types=2200)
+        self.assertEqual(revised.proposed_total, 2342)
+        self.assertLess(revised.targets[4], 1280)
+        self.assertGreater(revised.targets[2], ideal[2])
+        self.assertGreater(revised.targets[3], ideal[3])
+        self.assertEqual(revised.ideal_targets, ideal)
 
 
 class SamplingTests(unittest.TestCase):
@@ -183,7 +222,7 @@ class SamplingTests(unittest.TestCase):
                 side_effect=attempt):
                 tokens = lexicon.sample_lexicon(plan, random_seed=10,
                     max_attempts=5, min_types=9)
-        self.assertEqual([seed for seed, _ in calls], [10, 11, 12, 13])
+        self.assertEqual([seed for seed, _ in calls], [10, 11, 12, 13, 14])
         self.assertTrue(all(targets == plan.targets
             for _, targets in calls[:3]))
         self.assertNotEqual(calls[3][1], plan.targets)
@@ -283,26 +322,80 @@ class SamplingTests(unittest.TestCase):
             b.remaining_types = [] if b.n_phones == 12 else ['spare']
         failure = sampling.SamplingFailure('exhausted', bins=bins)
         revised = sampling.relax_plan(plan, [failure] * 3, min_types=70)
-        self.assertEqual(revised.targets, {2: 66, 12: 10})
+        self.assertEqual(revised.targets, {2: 62, 12: 10})
         self.assertEqual(revised.ideal_targets, {2: 50, 12: 26})
         bounds = sampling.make_length_bins(revised.targets, revised.tolerance)
         self.assertEqual(bounds[1].lower_bound, 0)
         self.assertEqual(plan.targets, {2: 50, 12: 26})
 
-    def test_quota_cycles_trigger_total_reduction(self):
-        lexicon = make_sampling_lexicon({2: 6, 3: 6})
+    def test_successes_search_full_budget_and_explore_smaller_totals(self):
+        lexicon = make_sampling_lexicon({2: 10, 3: 10})
         plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, tokens_per_type=2)
-        other = plan.with_targets({2: 4, 3: 6})
-        with mock.patch.object(sampling, 'sample_attempt',
-            side_effect=sampling.SamplingFailure('failure')) as attempt:
-            with mock.patch.object(sampling, 'relax_plan',
-                side_effect=[other, plan]):
-                with self.assertRaises(sampling.SamplingFailure):
-                    lexicon.sample_lexicon(plan, tries_per_round=1,
-                        max_attempts=3, min_types=8)
-        totals = [call.args[1].proposed_total
-            for call in attempt.call_args_list]
-        self.assertEqual(totals, [10, 10, 9])
+        original = sampling.sample_attempt
+        totals = []
+
+        def attempt(lexicon, current, candidates, seed):
+            totals.append(current.proposed_total)
+            return original(lexicon, current, candidates, seed)
+
+        with mock.patch.object(sampling, 'sample_attempt', side_effect=attempt):
+            lexicon.sample_lexicon(plan, tries_per_round=1, max_attempts=4,
+                min_types=8)
+        self.assertEqual(totals, [10, 9, 8, 8])
+        result = lexicon.sampling_result
+        self.assertEqual(result.attempts, 4)
+        # Both 10 and 8 can match perfectly; larger total wins the tie.
+        self.assertEqual(sum(result.actual_counts.values()), 10)
+        self.assertEqual(result.seed, 0)
+        self.assertEqual(result.selected_attempt, 1)
+
+    def test_later_better_success_replaces_first_and_survives_failure(self):
+        lexicon = make_sampling_lexicon({2: 10, 3: 10})
+        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, tokens_per_type=2)
+        candidates = lexicon.collect_candidate_tokens(2)
+        by_length = {n: [ts for ts in candidates.values()
+            if ts[0].n_phones == n] for n in (2, 3)}
+
+        def tokens(counts):
+            return [t for n, count in counts.items()
+                for ts in by_length[n][:count] for t in ts]
+
+        with mock.patch.object(sampling, 'sample_attempt', side_effect=[
+            tokens({2: 7, 3: 3}), tokens({2: 5, 3: 5}),
+            sampling.SamplingFailure('late failure')]):
+            lexicon.sample_lexicon(plan, max_attempts=3, min_types=10)
+        self.assertEqual(lexicon.successful_seed, 1)
+        self.assertEqual(lexicon.sampling_result.actual_counts, {2: 5, 3: 5})
+        self.assertEqual(lexicon.sampling_result.attempts, 3)
+        self.assertEqual(len(lexicon.selected_sequence_counts), 10)
+
+    def test_smaller_better_distribution_can_win(self):
+        lexicon = make_sampling_lexicon({2: 10, 3: 10})
+        plan = cbl.plan_sampling(lexicon, {2: 4, 3: 6}, tokens_per_type=2)
+        original = sampling.sample_attempt
+
+        def attempt(lexicon, current, candidates, seed):
+            if seed == 0:
+                current = current.with_targets({2: 7, 3: 3})
+                # Force an unbalanced, successful initial sample.
+                current.tolerance = 0
+            return original(lexicon, current, candidates, seed)
+
+        with mock.patch.object(sampling, 'sample_attempt', side_effect=attempt):
+            lexicon.sample_lexicon(plan, tries_per_round=1, max_attempts=2,
+                min_types=9)
+        self.assertEqual(lexicon.successful_seed, 1)
+        self.assertEqual(sum(lexicon.sampling_result.actual_counts.values()), 9)
+
+    def test_final_fill_uses_original_ideal_instead_of_current_quota(self):
+        lexicon = make_sampling_lexicon({2: 12, 3: 12})
+        plan = cbl.plan_sampling(lexicon, {2: 2, 3: 10}, tokens_per_type=2)
+        plan = plan.with_targets({2: 8, 3: 4})
+        tokens = sampling.sample_attempt(lexicon, plan,
+            lexicon.collect_candidate_tokens(2), seed=0)
+        counts = Counter(t.n_phones for t in tokens[::2])
+        self.assertEqual(counts, {2: 2, 3: 10})
+        self.assert_unselected(lexicon)
 
     def test_reference_inspection_remains_available_through_cbl(self):
         self.assertIs(cbl.inspect_lexicon_phonemes,

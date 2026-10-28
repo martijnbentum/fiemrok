@@ -2,6 +2,7 @@
 
 from collections import Counter
 from dataclasses import dataclass
+from heapq import heappop, heappush
 from math import ceil
 import random
 
@@ -100,10 +101,16 @@ class SamplingResult:
     attempts: int
     plan: SamplingPlan
     actual_counts: dict
+    selected_attempt: int = 0
+
+    @property
+    def distortion_score(self):
+        return distribution_loss(self.plan.ideal_targets, self.actual_counts)
 
     def __str__(self):
-        lines = [f'Sampling succeeded with random_seed={self.seed} '
-            f'after {self.attempts} attempts.',
+        lines = [f'Best sample: random_seed={self.seed}, selected on attempt '
+            f'{self.selected_attempt}; searched {self.attempts} attempts.',
+            f'Weighted distribution error: {self.distortion_score:.6f}.',
             ' Phones  Ideal  Quota  Actual  Change']
         for n, ideal in self.plan.ideal_targets.items():
             actual = self.actual_counts.get(n, 0)
@@ -178,7 +185,7 @@ def plan_sampling(lexicon, sequence_types_by_phone_count, tokens_per_type=100,
     sequence_types_by_phone_count: ideal length distribution
     tokens_per_type:               exact number of occurrences per type
     tolerance:                     absolute floor for quota deviations
-    Cap unsupported lengths and move deficits to nearest eligible lengths.
+    Balance relative deviations from the ideal under frequency limits.
     Keep the ideal total if frequency capacity allows; otherwise report less.
     Existing selections do not affect the frequency diagnostic.
     '''
@@ -193,8 +200,9 @@ def plan_sampling(lexicon, sequence_types_by_phone_count, tokens_per_type=100,
 def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
     max_attempts=100, min_types=2200):
     '''Return a successful provisional result; never change phrase selection.
-    Run consecutive seeds with fixed quotas, then adapt from exhausted bins.
-    If redistribution stalls, reduce the total by 5%, stopping at min_types.
+    Search the full attempt budget, retaining the lowest distribution error.
+    Each round reduces the total by 5%, stopping at min_types, and adapts
+    quotas using exhausted bins. Larger successes break equal-error ties.
     A final failure retains the current plan for explicit continuation.
     '''
     if not isinstance(plan, SamplingPlan):
@@ -213,12 +221,11 @@ def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
         raise ValueError('candidate pool changed; create a new sampling plan')
     attempts = 0
     current = plan
-    seen_quotas = set()
+    best = None
     while attempts < max_attempts:
         print(f'\nQuota round: min_types={min_types}; '
             f'{max_attempts - attempts} attempts left')
         print(current)
-        seen_quotas.add(tuple(sorted(current.targets.items())))
         failures = []
         for _ in range(min(tries_per_round, max_attempts - attempts)):
             seed = random_seed + attempts
@@ -233,26 +240,31 @@ def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
             labels = {token.phoneme_sequence: token.n_phones
                 for token in tokens}
             counts = dict(Counter(labels.values()))
-            result = SamplingResult(tokens, seed, attempts, current, counts)
-            print(result)
-            return result
+            result = SamplingResult(tokens, seed, attempts, current, counts,
+                selected_attempt=attempts)
+            key = (result.distortion_score, -sum(counts.values()))
+            if best is None or key < (best.distortion_score,
+                -sum(best.actual_counts.values())):
+                best = result
+                print('New best successful sample:')
+                print(result)
+            else:
+                print(f'Success with seed={seed}; retaining seed={best.seed}.')
         if attempts == max_attempts: break
         revised = relax_plan(current, failures, min_types)
-        quota_key = tuple(sorted(revised.targets.items()))
-        if quota_key in seen_quotas and current.proposed_total > min_types:
-            total = max(min_types, current.proposed_total
-                - ceil(current.proposed_total / 20))
-            targets = allocate_targets(revised.targets, current.eligible, total)
-            revised = current.with_targets(targets)
         if revised.targets == current.targets:
-            print('No further quota relaxation within min_types; '
-                'continuing with new seeds.')
+            print('Quotas unchanged at min_types; continuing with new seeds.')
         else:
-            print('Relaxing quotas using observed exhaustion (not proof of '
-                'capacity).')
+            print('Relaxing quotas against the original ideal distribution; '
+                'observed exhaustion is not proof of capacity.')
             print(f'Total types: {current.proposed_total} -> '
                 f'{revised.proposed_total}')
         current = revised
+    if best is not None:
+        best.attempts = attempts
+        print('Search complete; retaining the best successful sample.')
+        print(best)
+        return best
     message = f'{failures[-1]}\nFailed {attempts} attempts; '
     message += 'selection unchanged.\n'
     message += f'Last constraints:\n{current}\n'
@@ -278,59 +290,74 @@ def sample_attempt(lexicon, plan, tokens_by_type, seed):
     tokens = sample_types_from_bins(bins, tokens_by_type, plan.tokens_per_type,
         rng, reserved, minimums_only=True)
     tokens.extend(sample_types_from_bins(bins, tokens_by_type,
-        plan.tokens_per_type, rng, reserved, minimums_only=False))
+        plan.tokens_per_type, rng, reserved, minimums_only=False,
+        ideal_targets=plan.ideal_targets))
     return tokens
 
 
 def relax_plan(plan, failures, min_types):
-    '''Redistribute away from repeatedly exhausted bins; then reduce total.
-    Observed counts guide a preference, never a permanent capacity ceiling.
-    At the minimum total, remaining attempts keep exploring new seeds.
+    '''Rebalance from the original ideal while exploring a smaller total.
+    Exhaustion only limits this round's capacity estimate. Later rounds can
+    revisit bins; greedy failure is not a permanent capacity constraint.
     '''
-    exhausted = set.intersection(*(failure.exhausted for failure in failures))
-    preferred = dict(plan.targets)
-    for n in exhausted:
-        observed = max(failure.counts.get(n, 0) for failure in failures)
-        preferred[n] = min(preferred[n], observed)
-    targets = allocate_targets(preferred, plan.eligible, plan.proposed_total,
-        avoid=exhausted)
-    if targets == plan.targets:
-        total = max(min_types, plan.proposed_total
-            - ceil(plan.proposed_total / 20))
-        targets = allocate_targets(preferred, plan.eligible, total,
-            avoid=exhausted)
+    capacity = dict(plan.eligible)
+    if failures:
+        exhausted = set.intersection(*(f.exhausted for f in failures))
+        for n in exhausted:
+            observed = max(f.counts.get(n, 0) for f in failures)
+            capacity[n] = min(capacity[n], observed)
+    total = max(min_types, plan.proposed_total
+        - ceil(plan.proposed_total / 20))
+    # Preserve the requested total if the temporary estimates cannot supply it.
+    # Treat exhaustion as a preference, rather than silently violating the floor.
+    if sum(capacity.values()) < total:
+        capacity = plan.eligible
+    targets = allocate_targets(plan.ideal_targets, capacity, total)
     return plan.with_targets(targets)
 
 
-def allocate_targets(preferred, capacity, total, avoid=()):
-    '''Retain preferred counts, shifting deficits to nearby available lengths.
-    Redistribution first uses lengths outside avoid. Ties favor longer bins.
-    When reducing the total, first remove counts from avoided lengths.
+def marginal_distribution_cost(n, count, ideal, total):
+    '''Marginal weighted error, up to a common positive scale factor.
+    The reference proportions always come from the original ideal. Scaling
+    the ideal to the requested total makes smaller plans comparable.
     '''
-    targets = {n: min(count, capacity.get(n, 0))
-        for n, count in preferred.items()}
+    original_total = sum(ideal.values())
+    expected = total * ideal.get(n, 0) / original_total if original_total else 0
+    return (2 * count + 1 - 2 * expected) / max(ideal.get(n, 0), 1)
+
+
+def distribution_loss(ideal, actual):
+    '''Weighted squared error between normalized length distributions.
+    Use one ideal type as the weight floor for zero-target lengths.
+    '''
+    original_total, total = sum(ideal.values()), sum(actual.values())
+    if not original_total:
+        return 0.0 if not total else float('inf')
+    if not total: return float('inf')
+    return sum((actual.get(n, 0) / total - ideal.get(n, 0) / original_total)**2
+        / (max(ideal.get(n, 0), 1) / original_total)
+        for n in set(ideal) | set(actual))
+
+
+def allocate_targets(preferred, capacity, total):
+    '''Minimize relative distribution error at an exact capacity-limited total.
+    Allocate by increasing marginal cost of the separable convex objective.
+    Equal costs favor longer bins. The original ideal must be preferred.
+    '''
+    targets = dict.fromkeys(preferred, 0)
     total = min(total, sum(capacity.get(n, 0) for n in targets))
-    excess = sum(targets.values()) - total
-    for n in sorted(targets, key=lambda n: (n not in avoid, -n)):
-        if excess <= 0: break
-        removed = min(excess, targets[n])
-        targets[n] -= removed
-        excess -= removed
-    deficits = {n: max(0, preferred[n] - targets[n]) for n in targets}
-    remaining = total - sum(targets.values())
-    for source in sorted(targets, key=lambda n: (-deficits[n], -n)):
-        destinations = sorted(targets,
-            key=lambda n: (n in avoid, abs(n - source), -n))
-        budget = min(remaining, deficits[source])
-        # After explicit deficits, use spare capacity to reach the total.
-        if not any(deficits.values()): budget = remaining
-        for n in destinations:
-            if not budget: break
-            moved = min(budget, capacity.get(n, 0) - targets[n])
-            targets[n] += moved
-            budget -= moved
-            remaining -= moved
-        deficits[source] = 0
+    queue = []
+    for n in targets:
+        if capacity.get(n, 0):
+            heappush(queue, (marginal_distribution_cost(n, 0, preferred,
+                total), -n))
+    for _ in range(total):
+        _, negative_n = heappop(queue)
+        n = -negative_n
+        targets[n] += 1
+        if targets[n] < capacity.get(n, 0):
+            heappush(queue, (marginal_distribution_cost(n, targets[n],
+                preferred, total), -n))
     return targets
 
 
@@ -385,9 +412,10 @@ def group_sequence_types_by_length(tokens_by_type, rng):
 
 
 def sample_types_from_bins(bins, tokens_by_type, tokens_per_type, rng,
-    reserved_spans, minimums_only=False):
-    '''Cycle bins, sampling at most one type per bin in each round.
-    First meet all lower bounds; otherwise fill to the total target count.
+    reserved_spans, minimums_only=False, ideal_targets=None):
+    '''Fill minimums round-robin, then prioritize distribution improvement.
+    First meet all lower bounds round-robin. Then choose each next bin by
+    its marginal distribution cost against the original ideal.
     Modify bins and temporary occupancy only; return newly sampled tokens.
     Exhausted bins are skipped. Raise if a round cannot make progress.
     '''
@@ -405,7 +433,14 @@ def sample_types_from_bins(bins, tokens_by_type, tokens_per_type, rng,
     with ProgressBar(max_value=remaining_types) as bar:
         while n_selected_types < target_total_types:
             made_progress = False
-            for length_bin in bins:
+            ordered = bins
+            if not minimums_only:
+                ideal = ideal_targets if ideal_targets is not None else {
+                    b.n_phones: b.target_count for b in bins}
+                ordered = sorted(bins, key=lambda b: (
+                    marginal_distribution_cost(b.n_phones, b.n_selected_types,
+                        ideal, target_total_types), -b.n_phones))
+            for length_bin in ordered:
                 if n_selected_types == target_total_types: break
                 if length_bin.full: continue
                 if minimums_only and not length_bin.below_minimum: continue
@@ -416,6 +451,7 @@ def sample_types_from_bins(bins, tokens_by_type, tokens_per_type, rng,
                 n_selected_types += 1
                 made_progress = True
                 bar.update(n_selected_types - initial_selected_types)
+                if not minimums_only: break
             if not made_progress:
                 message = format_sampling_failure(bins, tokens_per_type)
                 raise SamplingFailure(message, bins=bins)
