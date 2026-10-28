@@ -3,6 +3,7 @@ from itertools import groupby, pairwise
 from math import isfinite
 from numbers import Real
 from pathlib import Path
+import pickle
 
 from progressbar import progressbar
 
@@ -91,19 +92,29 @@ class CrossBoundaryLexicon:
         self.successful_seed = result.seed
         return result.tokens
 
-    def make_markers(self, store, save=False):
+    def make_markers(self, store, save=False,
+        keys_path='data/cross_boundary_marker_keys.pkl'):
         '''Return markers for the retained sample, optionally saving in bulk.
         Use the phraser store containing the source phrases. Repeated calls
         create new marker identifiers; no manifest or deduplication is added.
+        When saving, pickle the ordered marker keys to keys_path afterward.
+        Set keys_path=None to skip the key file. Previews never write keys.
         '''
         if self.sampling_result is None:
             raise ValueError('sample the lexicon before making markers')
         from phraser import make_markers
 
+        if save and keys_path is not None:
+            keys_path = Path(keys_path)
+            keys_path.parent.mkdir(parents=True, exist_ok=True)
         data = [dict(label=token.phoneme_sequence, start=token.start,
             end=token.end, audio=token.audio, phrase=token.phrase)
             for token in self.sampling_result.tokens]
-        return make_markers(data, store=store, save=save)
+        markers = make_markers(data, store=store, save=save)
+        if save and keys_path is not None:
+            with keys_path.open('wb') as f:
+                pickle.dump([marker.key for marker in markers], f)
+        return markers
 
     def collect_candidate_tokens(self, tokens_per_type):
         '''Group tokens by phoneme string, keeping sufficiently frequent types.

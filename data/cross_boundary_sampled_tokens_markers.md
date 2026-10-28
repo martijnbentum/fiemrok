@@ -22,19 +22,29 @@ and raises `ValueError` if there is no successful sample. Pass the same
 phraser store that contains the source phrases.
 
 ```python
-# Preview without writing.
-markers = lexicon.make_markers(cgn)
-
-# Save the previewed markers after checking them.
-cgn.save_many(markers)
+markers = lexicon.make_markers(cgn, save=True,
+    keys_path='data/cross_boundary_marker_keys.pkl')
 
 # Refresh snapshot query roots before querying cgn.markers.
 cgn.refresh_query_roots()
 ```
 
-Alternatively, `lexicon.make_markers(cgn, save=True)` creates and bulk-saves
-in one call. Markers share the database with other objects, distinguished
-by object-type rank. No manifest is created.
+With `save=True`, ordered marker keys are pickled after the database save
+succeeds. The default key path is `data/cross_boundary_marker_keys.pkl`;
+choose a different path to keep another sample index, or pass `keys_path=None`
+to skip it. Parent directories are created as needed. With `save=False`,
+markers are returned for preview and no key file is written.
+
+```python
+import pickle
+
+with open('data/cross_boundary_marker_keys.pkl', 'rb') as f:
+    marker_keys = pickle.load(f)
+markers = cgn.load_many(marker_keys)
+```
+
+Markers share the database with other objects, distinguished by object-type
+rank. No manifest is created.
 
 ## EchoFrame integration
 

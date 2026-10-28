@@ -1,7 +1,9 @@
 import pathlib
+import pickle
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -45,7 +47,9 @@ class MarkerTests(unittest.TestCase):
             max_attempts=1)
 
     def test_preview_preserves_sample_order_links_and_phones_without_saving(self):
-        markers = self.lexicon.make_markers(self.store)
+        keys_path = pathlib.Path(self.path) / 'preview.pkl'
+        markers = self.lexicon.make_markers(self.store, keys_path=keys_path)
+        self.assertFalse(keys_path.exists())
         self.assertEqual(len(markers), len(self.tokens))
         for marker, token in zip(markers, self.tokens):
             self.assertEqual(marker.label, token.phoneme_sequence)
@@ -60,9 +64,16 @@ class MarkerTests(unittest.TestCase):
         self.assertEqual([item.key for item in self.phrase.items], self.source_keys)
 
     def test_saved_marker_round_trip_preserves_exact_source_phones(self):
-        markers = self.lexicon.make_markers(self.store, save=True)
+        keys_path = pathlib.Path(self.path) / 'sample' / 'marker_keys.pkl'
+        markers = self.lexicon.make_markers(self.store, save=True,
+            keys_path=keys_path)
+        with keys_path.open('rb') as f:
+            keys = pickle.load(f)
+        self.assertEqual(keys, [marker.key for marker in markers])
         self.store.close()
         self.store = phraser.Store(path=self.path)
+        self.assertEqual([marker.key for marker in self.store.load_many(keys)],
+            keys)
         for marker, token in zip(markers, self.tokens):
             loaded = self.store.load(marker.key)
             self.assertEqual(loaded.label, token.phoneme_sequence)
@@ -74,6 +85,21 @@ class MarkerTests(unittest.TestCase):
                 [p.key for p in token.phones])
             self.assertEqual([item.key for item in loaded.phrase.items],
                 self.source_keys)
+
+    def test_failed_save_does_not_replace_the_key_file(self):
+        keys_path = pathlib.Path(self.path) / 'marker_keys.pkl'
+        original = b'existing sample index'
+        keys_path.write_bytes(original)
+        with mock.patch.object(phraser, 'make_markers',
+            side_effect=RuntimeError('database save failed')):
+            with self.assertRaisesRegex(RuntimeError, 'database save failed'):
+                self.lexicon.make_markers(self.store, save=True,
+                    keys_path=keys_path)
+        self.assertEqual(keys_path.read_bytes(), original)
+
+    def test_key_file_can_be_disabled(self):
+        markers = self.lexicon.make_markers(self.store, save=True, keys_path=None)
+        self.assertTrue(all(self.store.DB.key_exists(m.key) for m in markers))
 
 
 if __name__ == '__main__':
