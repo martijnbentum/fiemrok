@@ -11,6 +11,13 @@ echoframe_cgn = None
 echoframe_stimuli = None
 echoframe_sonority = None
 
+def load_echoframe_cross_boundary_store(
+    path = locations.cross_boundary_wav2vec_store):
+    '''Open a cross-boundary store with CGN attached; caller closes the store.'''
+    echoframe_store = echoframe.store.Store(path)
+    _attach_cgn(echoframe_store)
+    return echoframe_store
+
 def load_echoframe_sonority_store(path=locations.echoframe_sonority_store_root):
     global echoframe_sonority
     if echoframe_sonority: return echoframe_sonority
@@ -62,4 +69,3 @@ def load_echoframe_cgn_store(path = locations.echoframe_cgn_lexicon_store):
     echoframe_cgn = echoframe.store.Store(path)
     _attach_cgn(echoframe_cgn)
     return echoframe_cgn
-

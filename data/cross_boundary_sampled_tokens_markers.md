@@ -31,8 +31,9 @@ cgn.refresh_query_roots()
 
 With `save=True`, ordered marker keys are pickled after the database save
 succeeds. The default key path is `svs_data/cross_boundary_marker_keys.pkl`;
-choose a different path to keep another sample index, or pass `keys_path=None`
-to skip it. Parent directories are created as needed. With `save=False`,
+it is defined in `locations.cross_boundary_marker_keys` and anchored to the
+repo root. Choose a different path to keep another sample index, or pass
+`keys_path=None` to skip it. Parent directories are created as needed. With `save=False`,
 markers are returned for preview and no key file is written.
 
 ```python

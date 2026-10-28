@@ -1,4 +1,5 @@
 import pathlib
+import inspect
 import pickle
 import sys
 import tempfile
@@ -101,17 +102,10 @@ class MarkerTests(unittest.TestCase):
         self.assertTrue(all(self.store.DB.key_exists(m.key) for m in markers))
 
     def test_default_key_directory_is_svs_data(self):
-        # Use a temporary working directory for both default-path operations.
-        import os
-
-        previous = os.getcwd()
-        self.addCleanup(os.chdir, previous)
-        os.chdir(self.path)
-        markers = self.lexicon.make_markers(self.store, save=True)
-        keys_path = pathlib.Path('svs_data/cross_boundary_marker_keys.pkl')
-        self.assertTrue(keys_path.exists())
-        restored = cbl.load_markers(self.store)
-        self.assertEqual([m.key for m in restored], [m.key for m in markers])
+        keys_path = cbl.locations.repo / 'svs_data/cross_boundary_marker_keys.pkl'
+        for function in (cbl.load_markers, cbl.CrossBoundaryLexicon.make_markers):
+            self.assertEqual(inspect.signature(function).parameters[
+                'keys_path'].default, keys_path)
 
 
 if __name__ == '__main__':

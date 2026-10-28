@@ -1,4 +1,5 @@
 from pathlib import Path
+repo = Path(__file__).resolve().parent
 data = Path(__file__).parent.parent
 
 
@@ -44,5 +45,9 @@ def audio_filename_to_webmaus_textgrid_path(audio_filename):
 phraser_stimuli_store_root = data / 'phraser_stimuli_store'
 echoframe_stimuli_store_root = data / 'echoframe_stimuli_store'
 echoframe_cgn_lexicon_store = data / 'echoframe_cgn_lexicon_store'
+
+cross_boundary_wav2vec_store = repo / 'cross_boundary_lexicon100_2200_cgn'
+cross_boundary_hubert_store = repo / 'cross_boundary_lexicon100_2200_cgn_hubert'
+cross_boundary_marker_keys = repo / 'svs_data/cross_boundary_marker_keys.pkl'
 
 echoframe_sonority_store_root =  '../sonority'

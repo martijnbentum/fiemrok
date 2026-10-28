@@ -7,9 +7,17 @@ import pickle
 
 from progressbar import progressbar
 
+import locations
 import cross_boundary_lexicon_sampling as sampling
 from cross_boundary_lexicon_sampling import SamplingPlan, plan_sampling
 from cross_boundary_lexicon_sampling import inspect_lexicon_phonemes
+
+
+def load_markers(store, keys_path=locations.cross_boundary_marker_keys):
+    '''Load a saved sample's markers in key-file order from its phraser store.'''
+    with Path(keys_path).open('rb') as f:
+        keys = pickle.load(f)
+    return store.load_many(keys)
 
 
 class CrossBoundaryLexicon:
@@ -93,7 +101,7 @@ class CrossBoundaryLexicon:
         return result.tokens
 
     def make_markers(self, store, save=False,
-        keys_path='svs_data/cross_boundary_marker_keys.pkl'):
+        keys_path=locations.cross_boundary_marker_keys):
         '''Return markers for the retained sample, optionally saving in bulk.
         Use the phraser store containing the source phrases. Repeated calls
         create new marker identifiers; no manifest or deduplication is added.
@@ -241,13 +249,6 @@ class CrossBoundarySequence:
     def __eq__(self, other):
         if not isinstance(other, CrossBoundarySequence): return NotImplemented
         return self.phoneme_sequence == other.phoneme_sequence
-
-
-def load_markers(store, keys_path='svs_data/cross_boundary_marker_keys.pkl'):
-    '''Load a saved sample's markers in key-file order from its phraser store.'''
-    with Path(keys_path).open('rb') as f:
-        keys = pickle.load(f)
-    return store.load_many(keys)
 
 
 def phrase_to_component(phrase):
