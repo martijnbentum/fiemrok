@@ -10,16 +10,16 @@ import stores
 
 def compute_embeddings_for_hubert(**kwargs):
     '''Compute HuBERT embeddings; return the open store for the caller to close.'''
-    embedding_store = stores.load_echoframe_cross_boundary_store(
-        locations.cross_boundary_hubert_store)
+    embedding_store = create_store(locations.cross_boundary_hubert_store,
+        'huibert_nl1_checkpoint-200000', 'hubert')
     compute_embeddings(embedding_store, **kwargs)
     return embedding_store
 
 
 def compute_embeddings_for_wv2(**kwargs):
     '''Compute wav2vec embeddings; return the open store for the caller to close.'''
-    embedding_store = stores.load_echoframe_cross_boundary_store(
-        locations.cross_boundary_wav2vec_store)
+    embedding_store = create_store(locations.cross_boundary_wav2vec_store,
+        'wav2vec2_nl1_checkpoint-200000', 'wav2vec2')
     compute_embeddings(embedding_store, **kwargs)
     return embedding_store
 

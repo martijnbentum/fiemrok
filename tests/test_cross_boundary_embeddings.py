@@ -96,6 +96,29 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
         self.assertIs(store.load_phraser_store('cgn'), self.cgn)
         self.assertEqual(store.model_registry.model_metadatas, [])
 
+    def test_wrappers_register_their_model_in_a_fresh_store(self):
+        for compute, path_setting, name in (
+            (cross_embeddings.compute_embeddings_for_wv2,
+                'cross_boundary_wav2vec_store', 'wav2vec2_nl1_checkpoint-200000'),
+            (cross_embeddings.compute_embeddings_for_hubert,
+                'cross_boundary_hubert_store', 'huibert_nl1_checkpoint-200000')):
+            with self.subTest(model=name):
+                path = self.root / f'fresh_{path_setting}'
+                self.assertFalse(path.exists())
+                with (mock.patch.object(locations, path_setting, path),
+                    mock.patch.object(echoframe.Store, 'load_model',
+                    return_value=object()) as load_model,
+                    mock.patch.object(batch_segment_features.to_vector,
+                    'iter_filename_batch_to_vector',
+                    return_value=iter(self.outputs()))):
+                    store = compute(verbose=False)
+                self.addCleanup(store.close)
+                load_model.assert_called_once_with(name, gpu=False)
+                self.assertEqual(store.root, path)
+                self.assertEqual([model.model_name for model in
+                    store.model_registry.model_metadatas], [name])
+                self.assertEqual(len(store.metadatas), 8)
+
     def test_full_frame_matrices_link_to_markers_and_repeat_skips_inference(self):
         for compute, name in (
             (cross_embeddings.compute_embeddings_for_wv2,

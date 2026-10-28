@@ -4,8 +4,9 @@
 bottom of the file:
 
 - `compute_embeddings_for_hubert(**kwargs)` and
-  `compute_embeddings_for_wv2(**kwargs)` open the corresponding configured
-  store, forward options to `compute_embeddings`, and return the open store.
+  `compute_embeddings_for_wv2(**kwargs)` create or open the corresponding
+  store, register its model if needed, forward options to `compute_embeddings`,
+  and return the open store.
 - `compute_embeddings(embedding_store, ...)` gets CGN from that open store,
   loads the saved markers, reads the store's sole model registration, and
   calls EchoFrame's batch embedding function.
@@ -34,7 +35,7 @@ The registrations use version 1/checkpoint 200000:
 `wav2vec2_nl1_checkpoint-200000` and `huibert_nl1_checkpoint-200000`.
 The checkpoint paths come directly from `model_paths.py`.
 
-After setup, compute a model directly with a wrapper:
+Compute a model directly with a wrapper; no separate setup is required:
 
 ```python
 hubert_store = cb.compute_embeddings_for_hubert(gpu=True, batch_size=32)
