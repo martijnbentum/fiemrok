@@ -36,6 +36,10 @@ The dataset comparison is descriptive: type inventories, label definitions,
 token samples, and retrieval indexes differ. The performance gap does not
 isolate a causal effect of crossing a word boundary.
 
+See the [mean-pooling dataset comparison](mean_pooling_dataset_comparison.md)
+for confidence intervals on dataset differences, failure distributions,
+and the neighbour data needed to compare kinds of mistakes.
+
 ## Best-layer results
 
 For each dataset, model, and pooling method, the table selects the highest

@@ -1,0 +1,374 @@
+{
+  "n_resamples": 10000,
+  "seed": 20261029,
+  "gap_definition": "word minus cross-boundary, percentage points",
+  "bootstrap": "independent types; fixed tokens and retrieval indexes",
+  "gaps": [
+    {
+      "model": "w2v",
+      "layer": 3,
+      "word_pct": 19.40417680454177,
+      "cross_boundary_pct": 21.860636363636367,
+      "gap_pp": -2.4564595590945952,
+      "ci95_pp": [
+        -3.236399684929095,
+        -1.6708420283966134
+      ]
+    },
+    {
+      "model": "w2v",
+      "layer": 6,
+      "word_pct": 63.938483373884836,
+      "cross_boundary_pct": 44.43172727272727,
+      "gap_pp": 19.506756101157563,
+      "ci95_pp": [
+        18.369567169749875,
+        20.65127467391371
+      ]
+    },
+    {
+      "model": "w2v",
+      "layer": 9,
+      "word_pct": 27.20924574209246,
+      "cross_boundary_pct": 27.892,
+      "gap_pp": -0.6827542579075419,
+      "ci95_pp": [
+        -1.5781055424872377,
+        0.21298821153784794
+      ]
+    },
+    {
+      "model": "w2v",
+      "layer": 12,
+      "word_pct": 4.574939172749392,
+      "cross_boundary_pct": 5.507636363636363,
+      "gap_pp": -0.9326971908869719,
+      "ci95_pp": [
+        -1.2161288633601892,
+        -0.6520904998252848
+      ]
+    },
+    {
+      "model": "hubert1",
+      "layer": 3,
+      "word_pct": 18.63507704785077,
+      "cross_boundary_pct": 20.013454545454547,
+      "gap_pp": -1.378377497603775,
+      "ci95_pp": [
+        -2.1292332221836507,
+        -0.5894166587660614
+      ]
+    },
+    {
+      "model": "hubert1",
+      "layer": 6,
+      "word_pct": 54.272789943227906,
+      "cross_boundary_pct": 46.99822727272727,
+      "gap_pp": 7.274562670500634,
+      "ci95_pp": [
+        6.09966166979102,
+        8.491323429888705
+      ]
+    },
+    {
+      "model": "hubert1",
+      "layer": 9,
+      "word_pct": 81.09444444444445,
+      "cross_boundary_pct": 56.562681818181815,
+      "gap_pp": 24.531762626262633,
+      "ci95_pp": [
+        23.46423389717588,
+        25.61932034944662
+      ]
+    },
+    {
+      "model": "hubert1",
+      "layer": 12,
+      "word_pct": 62.23495539334956,
+      "cross_boundary_pct": 46.563818181818185,
+      "gap_pp": 15.671137211531372,
+      "ci95_pp": [
+        14.542420529650563,
+        16.83141274577628
+      ]
+    }
+  ],
+  "best_tested_layer_profiles": {
+    "word": {
+      "w2v": {
+        "mean_pct": 63.938483373884836,
+        "type_quartiles_pct": [
+          50.625,
+          65.6,
+          79.5
+        ],
+        "zero_match_queries_pct": 8.299675587996756,
+        "perfect_queries_pct": 26.20721816707218,
+        "types_below_50_pct": 23.88483373884834,
+        "token_score_histogram": [
+          20467,
+          11656,
+          11664,
+          13319,
+          15282,
+          17246,
+          19131,
+          21026,
+          23452,
+          28730,
+          64627
+        ],
+        "hardest_types": [
+          {
+            "label": "be",
+            "mean_pct": 6.1
+          },
+          {
+            "label": "hoor",
+            "mean_pct": 7.200000000000001
+          },
+          {
+            "label": "eens",
+            "mean_pct": 7.8
+          },
+          {
+            "label": "we",
+            "mean_pct": 8.200000000000001
+          },
+          {
+            "label": "hé",
+            "mean_pct": 8.299999999999999
+          },
+          {
+            "label": "he",
+            "mean_pct": 9.099999999999998
+          },
+          {
+            "label": "hum",
+            "mean_pct": 9.7
+          },
+          {
+            "label": "daar",
+            "mean_pct": 10.0
+          },
+          {
+            "label": "hè",
+            "mean_pct": 10.2
+          },
+          {
+            "label": "ne",
+            "mean_pct": 10.3
+          }
+        ]
+      },
+      "hubert1": {
+        "mean_pct": 81.09444444444445,
+        "type_quartiles_pct": [
+          72.79999999999998,
+          85.3,
+          92.9
+        ],
+        "zero_match_queries_pct": 5.278588807785888,
+        "perfect_queries_pct": 56.20113544201135,
+        "types_below_50_pct": 4.014598540145985,
+        "token_score_histogram": [
+          13017,
+          5169,
+          4542,
+          5143,
+          6587,
+          8048,
+          9930,
+          12664,
+          16801,
+          26107,
+          138592
+        ],
+        "hardest_types": [
+          {
+            "label": "hum",
+            "mean_pct": 11.0
+          },
+          {
+            "label": "hé",
+            "mean_pct": 11.700000000000001
+          },
+          {
+            "label": "be",
+            "mean_pct": 17.5
+          },
+          {
+            "label": "hu",
+            "mean_pct": 17.800000000000004
+          },
+          {
+            "label": "ja",
+            "mean_pct": 18.900000000000002
+          },
+          {
+            "label": "hè",
+            "mean_pct": 19.500000000000004
+          },
+          {
+            "label": "we",
+            "mean_pct": 19.599999999999998
+          },
+          {
+            "label": "eens",
+            "mean_pct": 19.8
+          },
+          {
+            "label": "he",
+            "mean_pct": 21.1
+          },
+          {
+            "label": "the",
+            "mean_pct": 22.7
+          }
+        ]
+      }
+    },
+    "cross_boundary": {
+      "w2v": {
+        "mean_pct": 44.43172727272727,
+        "type_quartiles_pct": [
+          28.075,
+          41.800000000000004,
+          58.5
+        ],
+        "zero_match_queries_pct": 16.262727272727272,
+        "perfect_queries_pct": 11.373181818181818,
+        "types_below_50_pct": 63.45454545454545,
+        "token_score_histogram": [
+          35778,
+          23311,
+          21003,
+          19612,
+          18493,
+          17212,
+          16277,
+          15074,
+          14048,
+          14171,
+          25021
+        ],
+        "hardest_types": [
+          {
+            "label": "ə n w ə",
+            "mean_pct": 3.5999999999999996
+          },
+          {
+            "label": "ə m d ɑ",
+            "mean_pct": 3.6000000000000005
+          },
+          {
+            "label": "ə h ɛ t",
+            "mean_pct": 5.6
+          },
+          {
+            "label": "d h ɛ",
+            "mean_pct": 5.799999999999999
+          },
+          {
+            "label": "ɑ t ə m",
+            "mean_pct": 6.4
+          },
+          {
+            "label": "t ə t ɑ",
+            "mean_pct": 6.6000000000000005
+          },
+          {
+            "label": "ə n t ə",
+            "mean_pct": 6.6000000000000005
+          },
+          {
+            "label": "t ə ɣ",
+            "mean_pct": 6.699999999999999
+          },
+          {
+            "label": "k h ə",
+            "mean_pct": 6.9
+          },
+          {
+            "label": "n v",
+            "mean_pct": 7.000000000000001
+          }
+        ]
+      },
+      "hubert1": {
+        "mean_pct": 56.562681818181815,
+        "type_quartiles_pct": [
+          39.8,
+          55.60000000000001,
+          73.52499999999999
+        ],
+        "zero_match_queries_pct": 11.085909090909091,
+        "perfect_queries_pct": 22.487727272727273,
+        "types_below_50_pct": 41.090909090909086,
+        "token_score_histogram": [
+          24389,
+          15645,
+          15126,
+          15554,
+          15904,
+          16212,
+          16140,
+          15988,
+          16463,
+          19106,
+          49473
+        ],
+        "hardest_types": [
+          {
+            "label": "ə n w ə",
+            "mean_pct": 4.1
+          },
+          {
+            "label": "ə m d ɑ",
+            "mean_pct": 6.6000000000000005
+          },
+          {
+            "label": "ɑ t ə m",
+            "mean_pct": 7.500000000000001
+          },
+          {
+            "label": "ɑ t ə v",
+            "mean_pct": 9.5
+          },
+          {
+            "label": "d h ɛ",
+            "mean_pct": 10.299999999999997
+          },
+          {
+            "label": "ə n ɑ t y r",
+            "mean_pct": 10.3
+          },
+          {
+            "label": "l ə ɡ h",
+            "mean_pct": 10.5
+          },
+          {
+            "label": "ə l ə k d",
+            "mean_pct": 10.9
+          },
+          {
+            "label": "ɑ t ə ə",
+            "mean_pct": 11.6
+          },
+          {
+            "label": "ə ɣ ə",
+            "mean_pct": 11.6
+          }
+        ]
+      }
+    }
+  },
+  "best_tested_layer_type_agreement": {
+    "word": {
+      "type_spearman_r": 0.943639613035074
+    },
+    "cross_boundary": {
+      "type_spearman_r": 0.9364392842443875
+    }
+  }
+}

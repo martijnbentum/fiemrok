@@ -1,5 +1,82 @@
+import json
+from pathlib import Path
+
+import faiss
 import numpy
 from progressbar import progressbar
+import speech_vector_search as svs
+
+
+def export_neighbours(model_name, layer, pooling, directory='svs_data',
+    top_k=30, batch_size=512):
+    '''Export ranked non-self neighbours for every token in both datasets.
+    model_name: hubert or wav2vec2
+    layer:      3, 6, 9, or 12
+    pooling:    center or mean
+    directory:  saved indexes and output JSONL files
+    top_k:      neighbours to retain per query, default 30
+    batch_size: queries searched together, default 512
+    Returns a dictionary mapping dataset names to output paths.
+    Source keys are stored as hexadecimal strings for JSON serialization.
+    '''
+    models = {'hubert': 'hubert1', 'wav2vec2': 'w2v'}
+    if model_name not in models:
+        raise ValueError('model_name must be hubert or wav2vec2')
+    if not isinstance(layer, int) or layer not in (3, 6, 9, 12):
+        raise ValueError('layer must be 3, 6, 9, or 12')
+    if pooling not in ('center', 'mean'):
+        raise ValueError('pooling must be center or mean')
+    if not isinstance(top_k, int) or top_k < 1:
+        raise ValueError('top_k must be a positive integer')
+    if not isinstance(batch_size, int) or batch_size < 1:
+        raise ValueError('batch_size must be a positive integer')
+    model = models[model_name]
+    word_suffix = '_mean' if pooling == 'mean' else ''
+    names = {'word': f'{model}_{layer}{word_suffix}',
+        'cross_boundary':
+        f'cross_boundary_lexicon100_2200_{model}_{layer}_{pooling}'}
+    directory = Path(directory)
+    paths = {}
+    old_threads = faiss.omp_get_max_threads()
+    try:
+        faiss.omp_set_num_threads(1)
+        for dataset, name in names.items():
+            index = svs.VectorIndex.load(str(directory), name)
+            filename = directory / f'{name}_neighbours{top_k}.jsonl'
+            _write_neighbours(index, filename, top_k, batch_size)
+            paths[dataset] = filename
+            print(f'Saved {filename}')
+            del index
+    finally:
+        faiss.omp_set_num_threads(old_threads)
+    return paths
+
+
+def _write_neighbours(index, filename, top_k, batch_size):
+    '''Stream all queries, publishing the output only after completion.'''
+    n_tokens = len(index.metadatas)
+    if n_tokens <= top_k:
+        raise ValueError('index needs more entries than top_k')
+    temporary = filename.with_suffix('.jsonl.tmp')
+    with temporary.open('w', encoding='utf-8') as output:
+        for start in progressbar(range(0, n_tokens, batch_size)):
+            results = index.queries(index.vectors[start:start + batch_size],
+                top_k=top_k + 1)
+            for offset, result in enumerate(results):
+                query = index.metadatas[start + offset]
+                query_keys = set(query.source_echoframe_keys)
+                neighbours = [dict(label=md.label,
+                    source_keys_hex=md.source_echoframe_keys_hex,
+                    similarity=float(score))
+                    for md, score in zip(result['metadatas'], result['scores'])
+                    if query_keys.isdisjoint(md.source_echoframe_keys)][:top_k]
+                if len(neighbours) != top_k:
+                    raise ValueError(f'expected {top_k} non-self neighbours')
+                row = dict(label=query.label,
+                    source_keys_hex=query.source_echoframe_keys_hex,
+                    neighbours=neighbours)
+                output.write(json.dumps(row, ensure_ascii=False) + '\n')
+    temporary.replace(filename)
 
 def precision_at_k(result, query_metadata, top_k=10):
     '''Score neighbours after excluding the query token by source key.'''
