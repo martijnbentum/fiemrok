@@ -41,16 +41,12 @@ isolate a causal effect of crossing a word boundary.
 For each dataset, model, and pooling method, the table selects the highest
 mean P@10 among layers 3, 6, 9, and 12. Scores are percentages.
 
-| Dataset | Model | Pooling | Best layer | Mean P@10 (%) |
-|---|---|---|---:|---:|
-| Word-aligned | Wav2Vec 2.0 | centre | 6 | 46.27 |
-| Word-aligned | Wav2Vec 2.0 | mean | 6 | 63.94 |
-| Word-aligned | HuBERT | centre | 9 | 61.76 |
-| Word-aligned | HuBERT | mean | 9 | 81.09 |
-| Across-word | Wav2Vec 2.0 | centre | 6 | 30.55 |
-| Across-word | Wav2Vec 2.0 | mean | 6 | 44.43 |
-| Across-word | HuBERT | centre | 9 | 37.42 |
-| Across-word | HuBERT | mean | 9 | 56.56 |
+| Dataset | Model | Best layer | Centre pooling (%) | Mean pooling (%) |
+|---|---|---:|---:|---:|
+| Word-aligned | Wav2Vec 2.0 | 6 | 46.27 | 63.94 |
+| Word-aligned | HuBERT | 9 | 61.76 | 81.09 |
+| Across-word | Wav2Vec 2.0 | 6 | 30.55 | 44.43 |
+| Across-word | HuBERT | 9 | 37.42 | 56.56 |
 
 ## Means and error bars
 
@@ -104,13 +100,21 @@ without rerunning retrieval.
 Mean P@10 is expressed as a percentage for every dataset, model, pooling
 method, and evaluated layer.
 
-| Dataset | Model | Pooling | Layer 3 | Layer 6 | Layer 9 | Layer 12 |
-|---|---|---|---:|---:|---:|---:|
-| Word-aligned | Wav2Vec 2.0 | centre | 11.89 | 46.27 | 21.18 | 5.31 |
-| Word-aligned | Wav2Vec 2.0 | mean | 19.40 | 63.94 | 27.21 | 4.57 |
-| Word-aligned | HuBERT | centre | 11.30 | 25.49 | 61.76 | 29.92 |
-| Word-aligned | HuBERT | mean | 18.64 | 54.27 | 81.09 | 62.23 |
-| Across-word | Wav2Vec 2.0 | centre | 14.06 | 30.55 | 20.46 | 6.28 |
-| Across-word | Wav2Vec 2.0 | mean | 21.86 | 44.43 | 27.89 | 5.51 |
-| Across-word | HuBERT | centre | 12.99 | 25.47 | 37.42 | 22.81 |
-| Across-word | HuBERT | mean | 20.01 | 47.00 | 56.56 | 46.56 |
+| Dataset | Model | Layer | Centre pooling (%) | Mean pooling (%) |
+|---|---|---:|---:|---:|
+| Word-aligned | Wav2Vec 2.0 | 3 | 11.89 | 19.40 |
+| Word-aligned | Wav2Vec 2.0 | 6 | 46.27 | 63.94 |
+| Word-aligned | Wav2Vec 2.0 | 9 | 21.18 | 27.21 |
+| Word-aligned | Wav2Vec 2.0 | 12 | 5.31 | 4.57 |
+| Word-aligned | HuBERT | 3 | 11.30 | 18.64 |
+| Word-aligned | HuBERT | 6 | 25.49 | 54.27 |
+| Word-aligned | HuBERT | 9 | 61.76 | 81.09 |
+| Word-aligned | HuBERT | 12 | 29.92 | 62.23 |
+| Across-word | Wav2Vec 2.0 | 3 | 14.06 | 21.86 |
+| Across-word | Wav2Vec 2.0 | 6 | 30.55 | 44.43 |
+| Across-word | Wav2Vec 2.0 | 9 | 20.46 | 27.89 |
+| Across-word | Wav2Vec 2.0 | 12 | 6.28 | 5.51 |
+| Across-word | HuBERT | 3 | 12.99 | 20.01 |
+| Across-word | HuBERT | 6 | 25.47 | 47.00 |
+| Across-word | HuBERT | 9 | 37.42 | 56.56 |
+| Across-word | HuBERT | 12 | 22.81 | 46.56 |
