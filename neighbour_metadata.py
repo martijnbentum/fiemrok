@@ -171,7 +171,9 @@ def _segment_metadata(segment, n_phone_context, n_word_context, context_cache):
     speaker = segment.speaker
     key_record = dict(speaker_key=_hex(segment.speaker_key),
         recording_key=_hex(segment.audio_key))
-    speaker_record = dict(gender=speaker.gender, age=speaker.age)
+    gender = speaker.gender
+    if callable(gender): gender = gender()
+    speaker_record = dict(gender=gender, age=speaker.age)
     return dict(key=key_record, speaker=speaker_record,
         phone=phone_record, word=word_record)
 
