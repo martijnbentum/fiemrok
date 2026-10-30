@@ -4,6 +4,7 @@ from collections import Counter
 import json
 from pathlib import Path
 import pickle
+from time import monotonic
 
 
 def load_or_build_metadata(dataset='word', overwrite=False,
@@ -18,22 +19,27 @@ def load_or_build_metadata(dataset='word', overwrite=False,
     filename = directory / (f'{dataset}_metadata_'
         f'phones{n_phone_context}_words{n_word_context}.json')
     if filename.exists() and not overwrite:
+        print(f'Loading metadata from {filename}', flush=True)
         with filename.open() as handle: return json.load(handle)
 
     key_files = {'word': 'cgn_lexicon_phraser_keys.pkl',
         'cross_boundary': 'cross_boundary_marker_keys.pkl'}
+    print(f'Loading {dataset} Phraser keys', flush=True)
     with (directory / key_files[dataset]).open('rb') as handle:
         phraser_keys = pickle.load(handle)
 
     import stores
 
+    print('Initializing CGN Phraser store...', flush=True)
     store = stores.load_phraser_cgn_store()
     result = build_metadata_dicts(phraser_keys, store,
         n_phone_context, n_word_context)
     result['contributions'] = metadata_contributions(result['key_dict'])
     result['contributions']['n_failed'] = len(result['errors'])
+    print(f'Writing metadata to {filename}', flush=True)
     with filename.open('w') as handle:
         json.dump(result, handle, ensure_ascii=False)
+    print(f'Saved metadata to {filename}', flush=True)
     return result
 
 
@@ -44,24 +50,34 @@ def build_metadata_dicts(phraser_keys, store, n_phone_context=10,
     phraser_keys: unique or repeated annotation keys from the Echoframe store
     store:        CGN Phraser store used to load the annotations
     Source gender/age values are preserved, including unknown-value conventions.
+    Progress is printed after the first key, every 1,000 keys, and at the end.
     '''
     _validate_context_sizes(n_phone_context, n_word_context)
     result = {name: {} for name in
         ('key_dict', 'speaker_dict', 'phone_dict', 'word_dict', 'errors')}
     cache = {}
-    for key in sorted(set(_hex(key) for key in phraser_keys)):
+    phraser_keys = sorted(set(_hex(key) for key in phraser_keys))
+    total = len(phraser_keys)
+    started = monotonic()
+    print(f'Extracting metadata for {total:,} keys', flush=True)
+    for index, key in enumerate(phraser_keys, 1):
         try:
             segment = store.load(bytes.fromhex(key))
             record = _segment_metadata(segment, n_phone_context,
                 n_word_context, cache)
         except (ValueError, KeyError) as error:
             result['errors'][key] = str(error)
-            continue
-        keys = record['key']
-        result['key_dict'][key] = keys
-        result['speaker_dict'][keys['speaker_key']] = record['speaker']
-        result['phone_dict'][key] = record['phone']
-        result['word_dict'][key] = record['word']
+        else:
+            keys = record['key']
+            result['key_dict'][key] = keys
+            result['speaker_dict'][keys['speaker_key']] = record['speaker']
+            result['phone_dict'][key] = record['phone']
+            result['word_dict'][key] = record['word']
+        if index == 1 or index % 1000 == 0 or index == total:
+            elapsed = monotonic() - started
+            print(f'Metadata: {index:,}/{total:,} ({index / total:.1%}); '
+                f'{len(result["errors"]):,} failed joins; '
+                f'{elapsed:.1f}s elapsed', flush=True)
     return result
 
 
