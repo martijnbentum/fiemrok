@@ -9,7 +9,7 @@ New word token vectors are generated and matched with the 10 nearest neighbours 
 For each word 10 word token vectors are generated and matched below the accuracy and distribution of
 matched prototype words.
 
-The implementation is in [word_model_outputs.py](../word_model_outputs.py):
+The implementation is in [word_model_outputs.py](../archive/word_model_outputs.py):
 `aggregate_embedding_array()` mean-pools the frames of each word token,
 `make_prototypes()` calls `speech_vector_search.build_subset_prototypes()` to build
 10 prototypes from groups of 10 token vectors, and `test_prototypes()` mean-pools

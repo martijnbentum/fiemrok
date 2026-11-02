@@ -1,3 +1,18 @@
+'''Archived CGN embeddings and word-prototype experiments.
+
+Loads CGN occurrences of experimental target/filler labels, computes model
+embeddings with surrounding audio, pools token frames, and builds/evaluates
+word-type prototypes from sampled token subsets.
+
+Historical code, not part of the current stimulus-to-lexicon search workflow.
+It needs repair before reuse: load_store calls the absent stores.attach_cgn;
+test_prototypes overwrites random.seed instead of calling it; and embedding
+storage selects the default layer's frames before saving under every requested
+layer. Store/vector-search API assumptions also need checking. Imports and
+relative data paths still assume the repository root is available.
+Preserved for reference; archiving does not fix these issues.
+'''
+
 import random
 
 import echoframe

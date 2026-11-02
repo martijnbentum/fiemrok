@@ -8,6 +8,7 @@ import pickle
 from progressbar import progressbar
 
 import locations
+import lexicon_helper
 import cross_boundary_lexicon_sampling as sampling
 from cross_boundary_lexicon_sampling import SamplingPlan, plan_sampling
 from cross_boundary_lexicon_sampling import inspect_lexicon_phonemes
@@ -136,7 +137,8 @@ class CrossBoundaryLexicon:
             for sequence in ps.sequences:
                 if sequence.n_phones < 2: continue
                 duration = sequence.end - sequence.start
-                if not self.min_duration_ms <= duration <= self.max_duration_ms:
+                if not lexicon_helper.duration_is_eligible(duration,
+                    self.min_duration_ms, self.max_duration_ms):
                     continue
                 label = sequence.phoneme_sequence
                 tokens_by_type.setdefault(label, []).append(sequence)
@@ -253,24 +255,23 @@ class CrossBoundarySequence:
 
 def phrase_to_component(phrase):
     '''Return the CGN component encoded in the phrase's audio path.'''
-    return Path(phrase.audio.filename).parent.parent.name.split('-')[-1]
+    return lexicon_helper.filename_to_component(phrase.audio.filename)
 
 
 def filter_phrases_by_component(phrases, remove_components='acdhm'):
     '''Return phrases outside the excluded CGN components.'''
-    return [phrase for phrase in phrases
-        if phrase_to_component(phrase) not in remove_components]
+    return lexicon_helper.filter_components(phrases, remove_components)
 
 
 def filter_phrases_by_dutch_variant(phrases, dutch_variant='nl'):
     '''Return phrases from the requested Dutch variant's audio directory.'''
-    return [phrase for phrase in phrases
-        if Path(phrase.audio.filename).parent.name == dutch_variant]
+    return lexicon_helper.filter_dutch_variant(phrases, dutch_variant)
 
 
 def filter_phrases_with_insufficient_words(phrases, min_words=2):
     '''Return phrases containing at least min_words words.'''
-    return [phrase for phrase in phrases if len(phrase.words) >= min_words]
+    return lexicon_helper.filter_phrases_with_insufficient_words(phrases,
+        min_words)
 
 
 def filter_phrases_for_cross_boundary_lexicon(phrases, remove_components='acdhm',

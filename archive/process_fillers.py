@@ -1,3 +1,17 @@
+'''Archived prototype for processing CGN tokens of experimental filler words.
+
+Reads labels from data/filler_words, retrieves their CGN occurrences, shuffles
+with seed 42, and attempts to collect 100 audio/hidden-state examples per label.
+Includes a helper for averaging word frames at layer 6 with a 500 ms collar.
+
+Incomplete historical code, not part of the current stimulus-to-lexicon search
+workflow. load_model and load_audio are neither defined nor imported, and the
+imported cgn reference requires initialization. Failure tracking mixes label
+strings with dictionaries, so its duplicate checks are ineffective. Imports
+and relative data paths still assume the repository root is available.
+Preserved for reference; archiving does not fix these issues.
+'''
+
 import random
 
 import frame
