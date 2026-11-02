@@ -8,7 +8,7 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-import cross_boundary_lexicon as cbl
+from lexicon_validation import cross_boundary_lexicon as cbl
 
 try:
     import phraser

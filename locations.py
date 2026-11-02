@@ -1,11 +1,11 @@
 from pathlib import Path
 repo = Path(__file__).resolve().parent
-data = Path(__file__).parent.parent
+data = repo.parent
 
 
-excel_filename = '../trialsNewTryWithReps.ods'
+excel_filename = data / 'trialsNewTryWithReps.ods'
 
-audio_info_dict = Path('../audio_info.json')
+audio_info_dict = data / 'audio_info.json'
 
 
 cgn_lmdb = Path('/vol/mlusers/mbentum/phraser/data/cgn_lmdb')
@@ -46,8 +46,16 @@ phraser_stimuli_store_root = data / 'phraser_stimuli_store'
 echoframe_stimuli_store_root = data / 'echoframe_stimuli_store'
 echoframe_cgn_lexicon_store = data / 'echoframe_cgn_lexicon_store'
 
+svs_data = repo / 'svs_data'
+svs_experiment_data = repo / 'svs_experiment_data'
+
+filtered_word_keys = repo / 'data/filtered_word_keys.pkl'
+selected_word_keys = repo / 'data/selected_word_keys.pkl'
+
+cgn_word_wav2vec_store = repo / 'lexicon100_2466_cgn'
+cgn_word_hubert_store = repo / 'lexicon100_2466_cgn_hubert'
 cross_boundary_wav2vec_store = repo / 'cross_boundary_lexicon100_2200_cgn'
 cross_boundary_hubert_store = repo / 'cross_boundary_lexicon100_2200_cgn_hubert'
-cross_boundary_marker_keys = repo / 'svs_data/cross_boundary_marker_keys.pkl'
+cross_boundary_marker_keys = svs_data / 'cross_boundary_marker_keys.pkl'
 
-echoframe_sonority_store_root =  '../sonority'
+echoframe_sonority_store_root = data / 'sonority'

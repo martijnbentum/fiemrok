@@ -18,7 +18,7 @@ bottom of the file:
 ## Setup and compute
 
 ```python
-import make_cross_boundary_embeddings as cb
+from lexicon_validation import make_cross_boundary_embeddings as cb
 
 wav2vec_store, hubert_store = cb.create_wv2_and_hubert()
 

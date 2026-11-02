@@ -15,7 +15,7 @@ import phraser
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import locations
-import make_cross_boundary_embeddings as cross_embeddings
+from lexicon_validation import make_cross_boundary_embeddings as cross_embeddings
 import stores
 
 

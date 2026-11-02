@@ -193,7 +193,7 @@ def inspect_lexicon_phonemes():
     Return (n_types_by_phone_count, phone_counts).
     '''
     from stores import _attach_cgn
-    from validate_lexicon import load_metadata_layer, load_store_w2v
+    from .validate_lexicon import load_metadata_layer, load_store_w2v
 
     pronunciations = {}
     embedding_store = load_store_w2v()

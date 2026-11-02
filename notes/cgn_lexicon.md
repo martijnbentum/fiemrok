@@ -2,7 +2,7 @@ selected 2466 word types from cgn with minimally 100 word token (excluded compon
 excluded words shorter than .1 second and longer than 1.5 seconds)
 
 Word embeddings used the centre frame of each word's embedding frames,
-as implemented by `load_speech_vectors()` in [validate_lexicon.py](../validate_lexicon.py),
+as implemented by `load_speech_vectors()` in [validate_lexicon.py](../lexicon_validation/validate_lexicon.py),
 which loads the matching `lexicon100_2466_cgn` store and explicitly selects centre frames.
 The exact generating run was not recorded, so this is inferred from the code.
 

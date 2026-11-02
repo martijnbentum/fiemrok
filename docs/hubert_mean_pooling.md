@@ -27,8 +27,8 @@ from pathlib import Path
 
 import faiss
 
-import analyse_results as ar
-import validate_lexicon as vl
+from lexicon_validation import analyse_results as ar
+from lexicon_validation import validate_lexicon as vl
 
 faiss.omp_set_num_threads(1)
 filename = Path('cgn_lexicon_hubert1_mean_results.json')

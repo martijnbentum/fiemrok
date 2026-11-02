@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import neighbour_metadata as nm
+from lexicon_validation import neighbour_metadata as nm
 
 
 def fixture():

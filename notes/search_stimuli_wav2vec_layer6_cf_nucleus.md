@@ -12,9 +12,9 @@ The 120 scores match the corresponding `../all_results.json` arrays in order:
 rows alternate aligned and misaligned stimuli (60 per condition).
 
 Queries use the centre frame of the target vowel nucleus via
-[search_stimuli_embeddings.py: load_center_frame_nucleus_speech_vector()](../search_stimuli_embeddings.py#L171).
-[CompareEmbeddings.compute_results()](../search_stimuli_embeddings.py#L60) retrieves neighbours,
-and [compute_accuracy()](../search_stimuli_embeddings.py#L103) calculates `Hits / 10` (precision at 10).
+[search_stimuli_embeddings.py: load_center_frame_nucleus_speech_vector()](../fiemrok_experiment/search_stimuli_embeddings.py#L171).
+[CompareEmbeddings.compute_results()](../fiemrok_experiment/search_stimuli_embeddings.py#L60) retrieves neighbours,
+and [compute_accuracy()](../fiemrok_experiment/search_stimuli_embeddings.py#L103) calculates `Hits / 10` (precision at 10).
 [plot_result_dict.py: plot_accuracy()](../plot_result_dict.py#L50) plots the aggregate results.
 See the [plot note](search_stimuli_plot.md) for the CGN search-index functions and lexicon selection.
 

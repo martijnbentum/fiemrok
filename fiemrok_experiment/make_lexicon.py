@@ -1,12 +1,14 @@
 import pickle
-from progressbar import progressbar
-from stores import cgn, echoframe_stimuli, echoframe_cgn
-import echoframe
-import to_vector
-from echoframe import store
-from echoframe import segment_features 
 import random
+
+import echoframe
+from echoframe import segment_features, store
+from progressbar import progressbar
+import to_vector
+
 import lexicon_helper
+import locations
+from stores import cgn, echoframe_cgn, echoframe_stimuli
 
 def make_echoframe_cgn_store(lexicon = None, layers = [3,6,9,12], tags = ['cgn'], 
     model_name = 'wav2vec2_nl1_checkpoint-200000', gpu = False):
@@ -19,7 +21,7 @@ def make_echoframe_cgn_store(lexicon = None, layers = [3,6,9,12], tags = ['cgn']
 def make_lexicon(experiment = None, selected_words = None):
     print('making lexicon')
     if experiment is None: 
-        import fiemrok
+        from . import fiemrok
         e = fiemrok.Experiment() 
     if selected_words is None: selected_words = load_selected_words()
     lexicon_addition = find_targets_to_add(experiment, selected_words)
@@ -53,17 +55,17 @@ def make_filtered_word_keys(save = False):
 
 def save_filtered_word_keys(filtered_word_keys):
     print('saving filtered word keys')
-    with open('data/filtered_word_keys.pkl', 'wb') as f:
+    with open(locations.filtered_word_keys, 'wb') as f:
         pickle.dump(filtered_word_keys, f)
 
 def save_selected_word_keys(selected_word_keys):
     print('saving selected word keys')
-    with open('data/selected_word_keys.pkl', 'wb') as f:
+    with open(locations.selected_word_keys, 'wb') as f:
         pickle.dump(selected_word_keys, f)
 
 def load_filtered_word_keys():
     print('loading filtered word keys')
-    with open('data/filtered_word_keys.pkl', 'rb') as f:
+    with open(locations.filtered_word_keys, 'rb') as f:
         filtered_word_keys = pickle.load(f)
     return filtered_word_keys
 
@@ -75,7 +77,7 @@ def load_filtered_words():
 
 def load_selected_word_keys():
     print('loading selected word keys')
-    with open('data/selected_word_keys.pkl', 'rb') as f:
+    with open(locations.selected_word_keys, 'rb') as f:
         selected_word_keys = pickle.load(f)
     return selected_word_keys
 

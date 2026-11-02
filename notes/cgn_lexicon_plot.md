@@ -65,8 +65,8 @@ words; across-word labels are phoneme sequences. Self-matches are excluded
 by source key. Mean pooling averages each token's stored embedding frames;
 centre pooling selects its centre frame. Both query and reference vectors
 use the chosen pooling method. Vector pooling is implemented in
-[validate_lexicon.py](../validate_lexicon.py), and scoring in
-[analyse_results.py](../analyse_results.py).
+[validate_lexicon.py](../lexicon_validation/validate_lexicon.py), and scoring in
+[analyse_results.py](../lexicon_validation/analyse_results.py).
 
 
 ## Best-layer results

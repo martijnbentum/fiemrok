@@ -1,10 +1,10 @@
 import echoframe
-import locations
+from echoframe import segment_features
 import phraser
-import stores
 from progressbar import progressbar
 
-from echoframe import segment_features
+import locations
+import stores
 
 def load_echoframe_stimuli_store(path = locations.echoframe_stimuli_store_root):
     return stores.load_echoframe_stimuli_store(path)

@@ -6,9 +6,11 @@ from pathlib import Path
 import pickle
 from time import monotonic
 
+import locations
+
 
 def load_or_build_metadata(dataset='word', overwrite=False,
-    n_phone_context=10, n_word_context=3, directory='svs_data'):
+    n_phone_context=10, n_word_context=3, directory=locations.svs_data):
     '''Load cached metadata or build it from the shared Phraser key file.
 
     dataset:    word or cross_boundary; shared across models and pooling methods

@@ -2,10 +2,10 @@
 
 from echoframe.batch_segment_features import compute_embeddings_batch
 
-import cross_boundary_lexicon as cbl
 import locations
 import model_paths
 import stores
+from . import cross_boundary_lexicon as cbl
 
 
 def compute_embeddings_for_hubert(**kwargs):

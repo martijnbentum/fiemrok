@@ -8,7 +8,7 @@ from unittest import mock
 REPO_DIR = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_DIR))
 
-import fiemrok
+from fiemrok_experiment import fiemrok
 import sonority
 
 

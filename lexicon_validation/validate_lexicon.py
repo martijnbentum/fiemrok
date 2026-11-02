@@ -2,19 +2,20 @@ from pathlib import Path
 
 from echoframe import store
 import numpy as np
-import speech_vector_search as svs
 from progressbar import progressbar
+import speech_vector_search as svs
 
+import locations
 import stores
 
-def load_store_w2v(root='lexicon100_2466_cgn'):
+def load_store_w2v(root=locations.cgn_word_wav2vec_store):
     print(f'loading store from {root}')
     s = store.Store(root)
     if stores.cgn is not None:
         s.attach_phraser_store(stores.CGN_SOURCE_ID, stores.cgn)
     return s
 
-def load_store_hubert1(root='lexicon100_2466_cgn_hubert'):
+def load_store_hubert1(root=locations.cgn_word_hubert_store):
     print(f'loading store from {root}')
     s = store.Store(root)
     if stores.cgn is not None:
@@ -50,7 +51,7 @@ def load_speech_vectors(store, metadatas, pooling='center'):
     print(f'loaded {len(vectors)} vectors')
     return np.asarray(vectors, dtype=float)
     
-def make_vector_metadata(metadatas, name, directory = 'svs_data',
+def make_vector_metadata(metadatas, name, directory=locations.svs_data,
     unit_type='word'):
     print(f'making vector metadata for {len(metadatas)} entries')
     cls = svs.metadata.VectorMetadata
@@ -64,7 +65,7 @@ def make_vector_search_index(vectors, vector_metadata):
     return index
 
 def make_vector_search_index_for_layer(store, layer, name, save=True,
-    overwrite=False, pooling='center', directory='svs_data',
+    overwrite=False, pooling='center', directory=locations.svs_data,
     return_metadata=True, unit_type='word'):
     '''Return (index, metadata); mean pooling uses a separate index name.
     return_metadata: False returns None for metadata and skips its loading
@@ -103,7 +104,7 @@ def make_vector_search_index_for_layer(store, layer, name, save=True,
     return vector_index, metadata if return_metadata else None
 
 def make_vsi_for_layers(layers, model='w2v', save=True,
-    overwrite=False, pooling='center', directory='svs_data',
+    overwrite=False, pooling='center', directory=locations.svs_data,
     embedding_store=None, name_prefix='', unit_type='word'):
     '''Build layer indexes, using the original word stores/names by default.
     Supply embedding_store and name_prefix to index another dataset.

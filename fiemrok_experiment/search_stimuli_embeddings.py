@@ -1,8 +1,9 @@
-import speech_vector_search as svs
-import stores
-import fiemrok
-import cgn_lexicon_vector_search as clvs
 from progressbar import progressbar
+import speech_vector_search as svs
+
+import stores
+from . import cgn_lexicon_vector_search as clvs
+from . import fiemrok
 
 final_wav2vec2_model_name = 'wav2vec2_nl1_checkpoint-200000'
 final_hubert_model_name = 'huibert_nl1_checkpoint-200000'

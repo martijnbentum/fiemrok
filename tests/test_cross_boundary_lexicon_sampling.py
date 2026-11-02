@@ -11,9 +11,9 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-import cross_boundary_lexicon as cbl
-import cross_boundary_lexicon_sampling as sampling
-from test_cross_boundary_lexicon import make_phrase
+from lexicon_validation import cross_boundary_lexicon as cbl
+from lexicon_validation import cross_boundary_lexicon_sampling as sampling
+from tests.test_cross_boundary_lexicon import make_phrase
 
 
 def make_sampling_lexicon(type_counts, tokens_per_type=2):

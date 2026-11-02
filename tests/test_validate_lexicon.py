@@ -11,8 +11,8 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-import analyse_results
-import validate_lexicon
+from lexicon_validation import analyse_results
+from lexicon_validation import validate_lexicon
 
 
 def metadata(label, key):

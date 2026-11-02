@@ -6,8 +6,10 @@ import numpy
 from progressbar import progressbar
 import speech_vector_search as svs
 
+import locations
 
-def export_neighbours(model_name, layer, pooling, directory='svs_data',
+
+def export_neighbours(model_name, layer, pooling, directory=locations.svs_data,
     top_k=30, batch_size=512):
     '''Export ranked non-self neighbours for every token in both datasets.
     model_name: hubert or wav2vec2
@@ -141,7 +143,7 @@ def overall_result(output):
     return numpy.mean(accs), numpy.std(accs)
 
 
-def plot_precision(results_per_layer, save_path='_plot.png'):
+def plot_precision(results_per_layer, save_path=locations.repo / '_plot.png'):
     '''bar plot of average precision at 10 with 95% CI per layer.
     results_per_layer   {layer: output_dict} where output_dict is from
                         analyse_results(); each value is a list of per-item

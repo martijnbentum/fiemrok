@@ -1,6 +1,7 @@
-import locations
 from phraser import store
 from phraser import textgrid_loader as tl
+
+import locations
 import stores
 
 def experiment_to_db_objects(experiment, store = stores.stimuli):

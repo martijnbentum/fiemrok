@@ -33,6 +33,31 @@ For isolated tests or callers that already have trial rows in memory, pass
 `header=...`, `data=...`, and optionally `audio_info_dict=...` to avoid that
 workspace-dependent setup step.
 
+## Module layout
+
+Experimental materials, the experimental CGN lexicon, and stimulus comparisons
+live in `fiemrok_experiment/`. Word and cross-boundary lexicon construction
+and evaluation live together in `lexicon_validation/`.
+
+```python
+from fiemrok_experiment import fiemrok
+from fiemrok_experiment import make_lexicon
+from lexicon_validation import validate_lexicon
+from lexicon_validation import cross_boundary_lexicon
+```
+
+The previous top-level imports are no longer supported. Shared utilities
+(`locations`, `stores`, `lexicon_helper`, `model_paths`, `audio`, and
+`annotation`) remain at the repository root. Scripts and tests remain in
+`scripts/` and `tests/`. Run from the repository root, or put that directory
+on Python's import path.
+
+Default data and output paths are anchored to the repository or its parent
+workspace through `locations.py`; moving modules does not move stores or
+results. Explicitly supplied relative paths remain relative to the working
+directory. Previously pickled custom objects may require migration before
+loading under the new module names.
+
 ## CGN lexicon evaluation
 
 See [Resume HuBERT mean pooling](docs/hubert_mean_pooling.md) for efficient

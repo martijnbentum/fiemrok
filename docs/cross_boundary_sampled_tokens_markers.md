@@ -37,7 +37,7 @@ repo root. Choose a different path to keep another sample index, or pass
 markers are returned for preview and no key file is written.
 
 ```python
-import cross_boundary_lexicon as cbl
+from lexicon_validation import cross_boundary_lexicon as cbl
 
 markers = cbl.load_markers(cgn)
 # Or select another saved sample index:

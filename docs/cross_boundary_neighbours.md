@@ -28,10 +28,10 @@ import json
 
 import faiss
 
-import analyse_results as ar
+from lexicon_validation import analyse_results as ar
 import locations
 import stores
-import validate_lexicon as vl
+from lexicon_validation import validate_lexicon as vl
 
 faiss.omp_set_num_threads(1)
 output_dir = locations.repo / 'svs_data'

@@ -1,7 +1,9 @@
 from echoframe import store
 import numpy as np
-import speech_vector_search as svs
 from progressbar import progressbar
+import speech_vector_search as svs
+
+import locations
 import stores
 
 final_wav2vec2_model_name = 'wav2vec2_nl1_checkpoint-200000'
@@ -52,7 +54,8 @@ def metadatas_to_center_frame_nucleus_speech_vectors(metadatas):
         succesfull_metadatas.append(m)
     return np.asarray(vectors), succesfull_metadatas, errors
     
-def make_vector_metadata(metadatas, name, directory = 'svs_experiment_data'):
+def make_vector_metadata(metadatas, name,
+    directory=locations.svs_experiment_data):
     print(f'making vector metadata for {len(metadatas)} entries')
     cls = svs.metadata.VectorMetadata
     vmds = [cls(x.label, 'word', [x.echoframe_key], 0) for x in metadatas]
@@ -68,15 +71,16 @@ def make_vector_search_index_name(layer, model_name, name_prefix = ''):
     name = f'{name_prefix}_layer-{layer}_model-{model_name}'
     return name
 
-def load_search_vector_index(layer, name_prefix = '', 
-    directory = 'svs_experiment_data', model_name = final_wav2vec2_model_name):
+def load_search_vector_index(layer, name_prefix='',
+    directory=locations.svs_experiment_data,
+    model_name=final_wav2vec2_model_name):
     name = make_vector_search_index_name(layer, model_name, name_prefix)
     search_index = svs.VectorIndex.load(directory, name)
     return search_index
 
-def make_vector_search_index_for_layer(store, layer, name_prefix = '', 
-    directory = 'svs_experiment_data', model_name = final_wav2vec2_model_name,
-    save = True, overwrite = False):
+def make_vector_search_index_for_layer(store, layer, name_prefix='',
+    directory=locations.svs_experiment_data,
+    model_name=final_wav2vec2_model_name, save=True, overwrite=False):
     name = make_vector_search_index_name(layer, model_name, name_prefix)
     metadatas = filter_metadatas(store.metadatas, layer = layer, 
         model_name = model_name)

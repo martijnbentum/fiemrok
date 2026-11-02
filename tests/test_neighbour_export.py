@@ -10,7 +10,7 @@ import speech_vector_search as svs
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import analyse_results
+from lexicon_validation import analyse_results
 
 
 class NeighbourExportTests(unittest.TestCase):

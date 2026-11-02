@@ -1,7 +1,7 @@
 # Adaptive cross-boundary lexicon sampling
 
 ```python
-import cross_boundary_lexicon as cbl
+from lexicon_validation import cross_boundary_lexicon as cbl
 
 ideal_counts, _ = cbl.inspect_lexicon_phonemes()
 filtered_phrases = cbl.filter_phrases_for_cross_boundary_lexicon(phrases)
@@ -125,7 +125,7 @@ sampled_tokens = lexicon.sample_lexicon(result.plan, random_seed=result.seed,
 To continue after the attempt limit, preserve the final constraints too:
 
 ```python
-from cross_boundary_lexicon_sampling import SamplingFailure
+from lexicon_validation.cross_boundary_lexicon_sampling import SamplingFailure
 
 try:
     sampled_tokens = lexicon.sample_lexicon(plan, min_types=2200)
