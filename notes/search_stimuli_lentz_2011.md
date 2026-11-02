@@ -103,13 +103,13 @@ between synthetic stimuli and natural CGN speech also matter for interpretation.
 
 ## Code references
 
-- [search_stimuli_embeddings.py](../fiemrok_experiment/search_stimuli_embeddings.py):
+- [evaluate_retrieval.py](../fiemrok_experiment/evaluate_retrieval.py):
   `make_all_compare_embeddings()` runs models/layers;
-  `CompareEmbeddings._set_aligned_and_misaligned()` selects final-position
-  word targets; `load_center_frame_nucleus_speech_vector()` extracts queries;
+  `Experiment.select()` in fiemrok.py selects final-position word
+  targets; `load_center_frame_nucleus_speech_vector()` extracts queries;
   `compute_accuracy()` calculates retrieval precision.
-- [cgn_lexicon_vector_search.py](../fiemrok_experiment/cgn_lexicon_vector_search.py):
+- [make_lexicon_vector_index.py](../fiemrok_experiment/make_lexicon_vector_index.py):
   `metadata_to_center_frame_nucleus_speech_vector()` extracts CGN vectors;
   `make_vector_search_index_for_layer()` builds the reference index.
-- [plot_result_dict.py](../plot_result_dict.py): `plot_accuracy()` plots
+- [plot_retrieval.py](../fiemrok_experiment/plot_retrieval.py): `plot_accuracy()` plots
   condition means and `_mean_ci()` calculates their confidence intervals.

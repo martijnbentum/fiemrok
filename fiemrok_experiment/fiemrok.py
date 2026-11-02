@@ -60,24 +60,30 @@ class Experiment:
             
 
     def _set_info(self):
-        targets = [x for x in self.stimuli if x.target and
-            x.word_type == 'word']
-        self.targets = targets
-        fillers = [x for x in self.stimuli if x.filler and
-            x.word_type == 'word']
-        self.fillers = fillers
-        initial_targets = [x for x in self.targets if x.position == 'Initial']
-        self.initial_targets = initial_targets
-        self.final_targets = [x for x in self.targets if x.position == 'Final']
+        self.targets = self.select(word_type='word')
+        self.fillers = self.select(word_type='word', target=False)
+        self.initial_targets = self.select(word_type='word',
+            position='Initial')
+        self.final_targets = self.select(word_type='word', position='Final')
 
-        target_words = sorted(list(set([x.trial.word for x in self.targets])))
-        self.target_words = target_words
-        ftw = sorted(list(set([x.trial.word for x in self.final_targets])))
-        self.final_target_words = ftw
-        itw = sorted(list(set([x.trial.word for x in self.initial_targets])))
-        self.initial_target_words = itw
-        filler_words = sorted(list(set([x.trial.word for x in self.fillers])))
-        self.filler_words = filler_words
+        self.target_words = _unique_words(self.targets)
+        self.final_target_words = _unique_words(self.final_targets)
+        self.initial_target_words = _unique_words(self.initial_targets)
+        self.filler_words = _unique_words(self.fillers)
+
+    def select(self, position=None, word_type=None, aligned_type=None,
+        target=True):
+        '''Return stimuli matching all given attributes; None matches any.
+        position:       'Initial' or 'Final'
+        word_type:      'word' or 'non-word'
+        aligned_type:   'aligned' or 'misaligned'
+        target:         True for target, False for filler stimuli
+        '''
+        criteria = {'position': position, 'word_type': word_type,
+            'aligned_type': aligned_type, 'target': target}
+        criteria = {k: v for k, v in criteria.items() if v is not None}
+        return [x for x in self.stimuli
+            if all(getattr(x, k) == v for k, v in criteria.items())]
 
     def add_phraser_stimuli_store(self, store):
         for stimulus in self.stimuli:
@@ -92,12 +98,18 @@ class Experiment:
         for stimulus in self.fillers + self.targets:
             if not hasattr(stimulus, 'word'):
                 print(f'{stimulus} does not have a word attribute, skipping')
+                continue
             stimulus.metadatas = []
             for metadata in metadatas:
                 if metadata.label == stimulus.word.label:
                     stimulus.metadatas.append(metadata)
             
     
+
+def _unique_words(stimuli):
+    '''Return the sorted unique trial words of the stimuli.'''
+    return sorted(set([x.trial.word for x in stimuli]))
+
 
 class Trial:
     def __init__(self, line, experiment):
@@ -120,7 +132,6 @@ class Trial:
         self.position = self.line[13]
         self.target = 'F' not in self.condition
         self.filler = not self.target
-        self.fillter = self.filler
 
     def __repr__(self):
         return f'Trial({self.word} {self.condition} {self.position})'

@@ -82,3 +82,6 @@ def _handle_checkpoint(checkpoint = None, model_name = 'wav2vec'):
         if model_name in ['wav2vec2', 'hubert']: checkpoint = 200_000
         if model_name in ['spidr', 'spider']: checkpoint = '400_000'
     return checkpoint
+
+wav2vec2_nl1_name = 'wav2vec2_nl1_checkpoint-200000'
+hubert_nl1_name = 'huibert_nl1_checkpoint-200000'

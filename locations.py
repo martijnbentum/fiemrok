@@ -59,3 +59,5 @@ cross_boundary_hubert_store = repo / 'cross_boundary_lexicon100_2200_cgn_hubert'
 cross_boundary_marker_keys = svs_data / 'cross_boundary_marker_keys.pkl'
 
 echoframe_sonority_store_root = data / 'sonority'
+
+all_results = data / 'all_results.json'

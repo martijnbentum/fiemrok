@@ -20,18 +20,18 @@ target word is in each stimulus context, using the annotated nucleus location.
 
 Embeddings use the centre frame of the target vowel nucleus. Relevant modules and functions:
 
-- [search_stimuli_embeddings.py: make_all_compare_embeddings()](../fiemrok_experiment/search_stimuli_embeddings.py#L11)
-  computes results across models and layers; [CompareEmbeddings.compute_results()](../fiemrok_experiment/search_stimuli_embeddings.py#L60)
+- [evaluate_retrieval.py: make_all_compare_embeddings()](../fiemrok_experiment/evaluate_retrieval.py#L13)
+  computes results across models and layers; [CompareEmbeddings.compute_results()](../fiemrok_experiment/evaluate_retrieval.py#L54)
   evaluates the aligned and misaligned stimuli.
-- [load_center_frame_nucleus_speech_vector()](../fiemrok_experiment/search_stimuli_embeddings.py#L171)
-  extracts the query vector; [compute_accuracy()](../fiemrok_experiment/search_stimuli_embeddings.py#L103)
+- [load_center_frame_nucleus_speech_vector()](../fiemrok_experiment/evaluate_retrieval.py#L142)
+  extracts the query vector; [compute_accuracy()](../fiemrok_experiment/evaluate_retrieval.py#L75)
   calculates precision at 10 as the fraction of retrieved labels matching the target.
-- [cgn_lexicon_vector_search.py: metadata_to_center_frame_nucleus_speech_vector()](../fiemrok_experiment/cgn_lexicon_vector_search.py#L20)
+- [make_lexicon_vector_index.py: metadata_to_center_frame_nucleus_speech_vector()](../fiemrok_experiment/make_lexicon_vector_index.py#L33)
   extracts nucleus centre-frame vectors for CGN words;
-  [make_vector_search_index_for_layer()](../fiemrok_experiment/cgn_lexicon_vector_search.py#L77) builds the search index.
-- [plot_result_dict.py: plot_accuracy()](../plot_result_dict.py#L50)
+  [make_vector_search_index_for_layer()](../fiemrok_experiment/make_lexicon_vector_index.py#L91) builds the search index.
+- [plot_retrieval.py: plot_accuracy()](../fiemrok_experiment/plot_retrieval.py#L48)
   reads `../all_results.json` and plots the condition means across layers;
-  [_mean_ci()](../plot_result_dict.py#L24) calculates the 95% confidence intervals.
+  [_mean_ci()](../fiemrok_experiment/plot_retrieval.py#L22) calculates the 95% confidence intervals.
 
 - Created a lexicon from the Spoken Dutch Corpus.
   - Excluded components c, d, and m (telephone conversations and sermons).

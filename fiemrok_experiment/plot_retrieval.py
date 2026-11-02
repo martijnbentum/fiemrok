@@ -1,12 +1,10 @@
 import json
-import os
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy import stats
 
-# default results file, resolved relative to this module (../all_results.json)
-_RESULTS_PATH = os.path.join(os.path.dirname(__file__), '..', 'all_results.json')
+import locations
 
 # display name and panel order, matched on a substring of the model key
 _PANELS = [
@@ -51,11 +49,11 @@ def plot_accuracy(o=None, confidence=0.95):
     '''plot mean accuracy per layer, one panel per model (side by side),
     with a line per condition (aligned, misaligned) and a 95% CI band.
     o                      results dict model -> layer -> condition -> values;
-                           if None, loaded from ../all_results.json
+                           if None, loaded from locations.all_results
     confidence             confidence level for the interval band
     '''
     if o is None:
-        with open(_RESULTS_PATH) as f:
+        with open(locations.all_results) as f:
             o = json.load(f)
 
     fig, axes = plt.subplots(1, len(_PANELS), figsize=(7 * len(_PANELS), 5),

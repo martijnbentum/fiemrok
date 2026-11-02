@@ -22,7 +22,7 @@ tokens within those limits. Planning and sampling share this filter.
 Extracted sequences and raw `sequence_counts` remain available for inspection.
 Create a new plan after changing the limits.
 
-Compared with `make_lexicon.filter_word_tokens_for_lexicon`, possible additional
+Compared with `select_lexicon.filter_word_tokens_for_lexicon`, possible additional
 filters are:
 
 - **Annotated overlap:** the word collector rejects `word.overlap`. CBL could

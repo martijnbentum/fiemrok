@@ -41,7 +41,7 @@ and evaluation live together in `lexicon_validation/`.
 
 ```python
 from fiemrok_experiment import fiemrok
-from fiemrok_experiment import make_lexicon
+from fiemrok_experiment import select_lexicon
 from lexicon_validation import validate_lexicon
 from lexicon_validation import cross_boundary_lexicon
 ```
