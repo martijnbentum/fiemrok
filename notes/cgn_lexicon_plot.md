@@ -1,5 +1,54 @@
 # CGN retrieval for word-aligned and across-word segments
 
+![Word-aligned and across-word retrieval](assets/lexicon_cross_boundary_by_dataset.png)
+
+Panels show the two datasets; colour identifies the model. Solid lines show
+mean pooling and dashed lines show centre pooling. Error bars show 95%
+type-level BCa bootstrap confidence intervals.
+
+## Summary
+
+**Approach.** We tested whether self-supervised speech representations group
+tokens with the same word more consistently than tokens with the same
+phoneme sequence spanning a word boundary. The word-aligned set has 2,466 CGN
+word types and the across-word set has 2,200 phoneme-sequence types, each
+with 100 tokens per type. Each token is represented by its mean-pooled or
+centre-frame embedding from Wav2Vec 2.0 or HuBERT at layers 3, 6, 9 and 12.
+Each token is used as a query against all tokens in its own set. It is scored
+by the proportion of its ten nearest neighbours, excluding itself, that share
+its label (P@10).
+
+**Results.** Word-aligned segments are retrieved more accurately than
+across-word segments. In the best condition, mean-pooled HuBERT layer 9, P@10
+is 81.09% for word-aligned segments and 56.56% for across-word segments.
+Wav2Vec 2.0 at its best layer (6) shows the same pattern, with 63.94% and
+44.43%. Mean pooling outperforms centre pooling in almost all conditions.
+
+**Conclusion.** Tokens of the same word are grouped together much more
+consistently than tokens of a phoneme sequence that crosses a word boundary.
+This suggests that the representations are partly organised around whole
+words rather than around phoneme sequences alone. The cues that carry this
+grouping may include word-internal phonetic detail, stress and timing. These
+are treated as possible carriers of word identity, not as confounds to
+remove. The comparison is descriptive: the inventories, label types and token
+samples differ, so the gap does not yet isolate an effect of crossing a word
+boundary.
+
+**Alternative explanations.** The main nuisance variables are speaker and
+recording. If word types draw their tokens from fewer speakers or recordings
+than across-word types, same-speaker or same-recording neighbours could
+inflate word-aligned retrieval without any word-level organisation. The
+current confidence intervals resample only types, so they do not capture
+this. The two sets may also differ in how many near-identical competitor
+types they contain. Examples are nested sequences such as `t x r oː` and
+`t x r oː t` in the across-word set, and inflection pairs such as *maakte*
+and *maakten* in the word set. Segment duration and phone count may differ as
+well, and longer segments give mean pooling more frames. Finally, across-word
+segments cut into words, so alignment errors at their edges may matter more
+than at word edges.
+
+## Data and method
+
 The **Word-aligned** condition uses the CGN lexicon: 2,466 word types
 with 100 tokens per type, giving 246,600 queries per model and layer.
 CGN components a, c, d, h, and m are excluded, as are tokens shorter than
@@ -19,26 +68,6 @@ use the chosen pooling method. Vector pooling is implemented in
 [validate_lexicon.py](../validate_lexicon.py), and scoring in
 [analyse_results.py](../analyse_results.py).
 
-## Retrieval across conditions
-
-![Word-aligned and across-word retrieval](assets/lexicon_cross_boundary_by_dataset.png)
-
-Panels show the two datasets; colour identifies the model. Solid lines show
-mean pooling and dashed lines show centre pooling. Error bars show 95%
-type-level BCa bootstrap confidence intervals.
-
-HuBERT peaks at layer 9, and Wav2Vec 2.0 at layer 6, for both datasets and
-pooling methods. Mean pooling improves all evaluated conditions except
-Wav2Vec layer 12. The highest P@10 is 81.09% for word-aligned segments and
-56.56% for across-word segments, both using mean-pooled HuBERT layer 9.
-
-The dataset comparison is descriptive: type inventories, label definitions,
-token samples, and retrieval indexes differ. The performance gap does not
-isolate a causal effect of crossing a word boundary.
-
-See the [mean-pooling dataset comparison](mean_pooling_dataset_comparison.md)
-for confidence intervals on dataset differences, failure distributions,
-and the neighbour data needed to compare kinds of mistakes.
 
 ## Best-layer results
 
@@ -122,3 +151,8 @@ method, and evaluated layer.
 | Across-word | HuBERT | 6 | 25.47 | 47.00 |
 | Across-word | HuBERT | 9 | 37.42 | 56.56 |
 | Across-word | HuBERT | 12 | 22.81 | 46.56 |
+
+
+See the [mean-pooling dataset comparison](mean_pooling_dataset_comparison.md)
+for confidence intervals on dataset differences, failure distributions,
+and the neighbour data needed to compare kinds of mistakes.
