@@ -116,7 +116,7 @@ validate_lexicon.py                 + inspect_lexicon_phonemes
 7. **Style pass.** Follow applicable repository instructions and existing
    style. Keep this separate from algorithmic changes where practical.
 
-Internal signature changes must be reflected in tests and `data/*.md` usage
+Internal signature changes must be reflected in tests and `docs/*.md` usage
 notes. Preserve the existing CBL entry points with thin adapters if needed;
 removing or renaming public conveniences is outside this refactor.
 

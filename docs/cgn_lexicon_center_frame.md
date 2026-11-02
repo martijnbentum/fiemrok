@@ -25,7 +25,7 @@ word frames and saves separate indexes such as `svs_data/w2v_6_mean.npy`
 and `svs_data/w2v_6_mean.json`. The default `pooling='center'` retains the
 original index names. Both query and reference vectors use the chosen method.
 Frame loading now uses Echoframe's shard-grouped batch reader. See
-[Resume HuBERT mean pooling](../data/hubert_mean_pooling.md) for environment setup,
+[Resume HuBERT mean pooling](../docs/hubert_mean_pooling.md) for environment setup,
 saved-index reuse without metadata loading, and a resumable evaluation block.
 `analyse_results.evaluate_index()` returns per-token precision grouped by
 word type, suitable for `per_word()`, `overall_result()`, and

@@ -57,7 +57,7 @@ for the lexicon selection.
 
 The **Across-word** condition uses 2,200 phoneme-sequence types spanning
 word boundaries, with 100 tokens per type and 220,000 queries per model
-and layer. See the [cross-boundary evaluation procedure](../data/cross_boundary_neighbours.md).
+and layer. See the [cross-boundary evaluation procedure](../docs/cross_boundary_neighbours.md).
 
 Each query is scored by the proportion of its ten nearest non-self
 neighbours with the same label (precision at 10). Word-aligned labels are

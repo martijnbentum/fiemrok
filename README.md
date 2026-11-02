@@ -35,15 +35,15 @@ workspace-dependent setup step.
 
 ## CGN lexicon evaluation
 
-See [Resume HuBERT mean pooling](data/hubert_mean_pooling.md) for efficient
+See [Resume HuBERT mean pooling](docs/hubert_mean_pooling.md) for efficient
 shard-grouped frame loading, saved-index reuse, and resumable evaluation.
 
 ## Cross-boundary lexicon sampling
 
-See [Adaptive sampling](data/cross_boundary_sampling.md) for planning quotas,
+See [Adaptive sampling](docs/cross_boundary_sampling.md) for planning quotas,
 retrying with consecutive seeds, relaxing constraints, and resuming failures.
-See [Marker storage](data/cross_boundary_sampled_tokens_markers.md) for saving
-and loading the sample, and [Marker embeddings](data/cross_boundary_embeddings.md)
+See [Marker storage](docs/cross_boundary_sampled_tokens_markers.md) for saving
+and loading the sample, and [Marker embeddings](docs/cross_boundary_embeddings.md)
 for full-frame wav2vec2 and HuBERT computation.
-See [Cross-boundary neighbours](data/cross_boundary_neighbours.md) to run both
+See [Cross-boundary neighbours](docs/cross_boundary_neighbours.md) to run both
 models with mean and center pooling and save results after each layer.

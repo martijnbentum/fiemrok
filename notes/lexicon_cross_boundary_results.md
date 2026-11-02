@@ -11,8 +11,8 @@ All eight local files match the remote SHA-256 checksums.
 Values below are mean precision at 10 non-self neighbours, expressed as
 percentages. Each token score is the fraction of ten retrieved neighbours
 sharing its label. Lexicon labels are words; cross-boundary labels are
-phoneme sequences. See [evaluation procedure](../data/cross_boundary_neighbours.md)
-and [lexicon centre-pooling checks](../data/cgn_lexicon_center_frame.md).
+phoneme sequences. See [evaluation procedure](../docs/cross_boundary_neighbours.md)
+and [lexicon centre-pooling checks](../docs/cgn_lexicon_center_frame.md).
 
 All eight files contain layers 3, 6, 9, and 12. Every lexicon layer has
 2,466 types and 246,600 token scores; every cross-boundary layer has
