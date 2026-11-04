@@ -3,6 +3,7 @@ pandas
 odfpy
 TextGrid
 ipython
+h5py>=3.0
 
 # Additional pip-installable repositories requested for this environment.
 git+https://github.com/martijnbentum/to_vector.git

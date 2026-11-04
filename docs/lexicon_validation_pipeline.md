@@ -197,8 +197,10 @@ For individual operations use `word_lexicon`, `cross_boundary_lexicon`,
 `embeddings`, and `vector_indices`. The old module names
 `make_cross_boundary_embeddings` and `validate_lexicon` have been replaced.
 
-Retrieval output contents, neighbour counts, and metrics remain deferred.
-Existing retrieval examples document the previous dataset and naming scheme.
+See [Compact neighbour results](neighbour_results.md) for exporting 30 nearest
+neighbours and all same-type global ranks, with float32 similarities and lazy
+annotation lookup. Older retrieval examples document the previous dataset
+and naming scheme. Aggregate evaluation metrics remain separate.
 This pipeline neither deletes old remote files nor launches remote jobs.
 
 ## Tests

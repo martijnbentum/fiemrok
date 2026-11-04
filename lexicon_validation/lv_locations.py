@@ -61,3 +61,39 @@ def find_store_path(model, condition, workspace=workspace):
     if len(matches) > 1:
         raise ValueError(f'multiple {model}/{condition} stores in {directory}')
     return matches[0]
+
+
+def _index_condition(model, condition, layer, pooling):
+    store_path(model, condition, 1)
+    if (isinstance(layer, bool) or not isinstance(layer, Integral)
+        or layer not in (3, 6, 9, 12)):
+        raise ValueError('layer must be 3, 6, 9, or 12')
+    if pooling not in ('center', 'mean'):
+        raise ValueError('pooling must be center or mean')
+
+
+def find_index_path(model, condition, layer, pooling, directory=svs_data):
+    '''Find the single current pipeline vector index for one condition.'''
+    _index_condition(model, condition, layer, pooling)
+    prefix, suffix = f'{model}_{condition}_', f'_{layer}_{pooling}'
+    matches = [path for path in Path(directory).glob(f'{prefix}*{suffix}.npy')
+        if path.is_file() and path.stem[len(prefix):-len(suffix)].isdigit()]
+    if not matches:
+        raise FileNotFoundError(f'no vector index for '
+            f'{model}/{condition}/{layer}/{pooling} in {directory}')
+    if len(matches) > 1:
+        raise ValueError(f'multiple vector indexes for '
+            f'{model}/{condition}/{layer}/{pooling} in {directory}')
+    return matches[0]
+
+
+def neighbour_mapping_path(condition, workspace=workspace):
+    selection_path(condition, workspace)
+    return Path(workspace) / 'neighbours' / condition / 'token_mapping.npz'
+
+
+def neighbour_results_path(model, condition, layer, pooling,
+    workspace=workspace):
+    _index_condition(model, condition, layer, pooling)
+    return (Path(workspace) / 'neighbours' / condition / model /
+        f'layer{layer:02d}_{pooling}.h5')

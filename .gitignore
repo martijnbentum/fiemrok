@@ -12,6 +12,8 @@ test_*
 !tests/test_cross_boundary_embeddings.py
 !tests/test_validate_lexicon.py
 !tests/test_neighbour_metadata.py
+!tests/test_neighbour_export.py
+!tests/test_neighbour_results.py
 lexicon100_2466_cgn/
 data/*.pkl
 data/*.npy

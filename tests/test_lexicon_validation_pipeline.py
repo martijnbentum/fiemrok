@@ -18,6 +18,8 @@ from lexicon_validation import pipeline
 from lexicon_validation import lv_locations
 from lexicon_validation import lv_stores
 from lexicon_validation import embeddings
+from lexicon_validation import neighbour_results
+from lexicon_validation import retrieval_evaluation
 
 
 class PipelineTests(unittest.TestCase):
@@ -140,6 +142,21 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual({p.name for p in self.workspace.iterdir()},
             {'word_keys.pkl', 'cross_boundary_marker_keys.pkl',
             'echoframe_stores', 'svs_data', 'cgn_befgijklno_nl'})
+        for condition in pipeline.CONDITIONS:
+            with self.subTest(retrieval=condition), mock.patch(
+                'stores.load_phraser_cgn_store',
+                side_effect=AssertionError('must use local materials')):
+                outputs = retrieval_evaluation.export_neighbours('hubert', 3,
+                    'mean', condition=condition, top_k=1,
+                    workspace=self.workspace)
+                with neighbour_results.NeighbourResults(
+                    outputs[condition]) as results:
+                    self.assertEqual(results[0].metadata.phraser_object.key,
+                        selected[condition][0])
+                    context = results.context(0)
+                    self.assertTrue(context['phone']['target'])
+                    self.assertEqual(context['word']['boundary_index'],
+                        1 if condition == 'cross_boundary' else None)
         lv_locations.selection_path('cross_boundary', self.workspace).unlink()
         directory = self.root / 'single-index'
         paths = pipeline.build_indexes(model='hubert', condition='word',

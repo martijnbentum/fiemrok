@@ -60,7 +60,9 @@ Use the [lexicon validation pipeline](docs/lexicon_validation_pipeline.md)
 to select words and cross-boundary items, extract both models, and build
 center/mean indexes. The experiments have independent selection rules and
 outputs. The new validation pipeline rebuilds generated data from saved
-selection keys; retrieval outputs and metrics are being redesigned separately.
+selection keys. [Compact neighbour results](docs/neighbour_results.md) store
+nearest neighbours and same-type ranks while resolving annotations through
+the local stores. Aggregate evaluation metrics remain separate.
 
 ## Cross-boundary lexicon sampling
 

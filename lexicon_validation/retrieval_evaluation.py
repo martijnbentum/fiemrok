@@ -1,84 +1,58 @@
-import json
+import pickle
+from numbers import Integral
 from pathlib import Path
 
-import faiss
 import numpy
 from progressbar import progressbar
 import speech_vector_search as svs
 
 import locations
+from . import lv_locations
 
 
-def export_neighbours(model_name, layer, pooling, directory=locations.svs_data,
-    top_k=30, batch_size=512):
-    '''Export ranked non-self neighbours for every token in both datasets.
-    model_name: hubert or wav2vec2
+def export_neighbours(model_name, layer, pooling, condition='word',
+    directory=None, top_k=30, batch_size=64, overwrite=False,
+    workspace=lv_locations.workspace, compression='lzf'):
+    '''Export compact neighbours and all same-type ranks for one condition.
+
+    model_name: hubert, w2v, or wav2vec2
     layer:      3, 6, 9, or 12
     pooling:    center or mean
-    directory:  saved indexes and output JSONL files
-    top_k:      neighbours to retain per query, default 30
-    batch_size: queries searched together, default 512
-    Returns a dictionary mapping dataset names to output paths.
-    Source keys are stored as hexadecimal strings for JSON serialization.
+    condition:  word (default) or cross_boundary
+    directory:  vector-index directory; defaults to workspace/svs_data
+    top_k:      non-self neighbours to retain, default 30
+    batch_size: query rows of temporary all-candidate similarities, default 64
+    overwrite:  explicitly replace existing results
+    workspace:  local lexicon-validation workspace with saved selections
+    Returns {condition: HDF5 output path}. Annotation metadata is not exported.
     '''
-    models = {'hubert': 'hubert1', 'wav2vec2': 'w2v'}
+    from .neighbour_results import write_neighbours
+
+    models = {'hubert': 'hubert', 'wav2vec2': 'w2v', 'w2v': 'w2v'}
     if model_name not in models:
-        raise ValueError('model_name must be hubert or wav2vec2')
-    if not isinstance(layer, int) or layer not in (3, 6, 9, 12):
-        raise ValueError('layer must be 3, 6, 9, or 12')
-    if pooling not in ('center', 'mean'):
-        raise ValueError('pooling must be center or mean')
-    if not isinstance(top_k, int) or top_k < 1:
-        raise ValueError('top_k must be a positive integer')
-    if not isinstance(batch_size, int) or batch_size < 1:
-        raise ValueError('batch_size must be a positive integer')
+        raise ValueError('model_name must be hubert, w2v, or wav2vec2')
+    for name, value in (('top_k', top_k), ('batch_size', batch_size)):
+        if isinstance(value, bool) or not isinstance(value, Integral) or value < 1:
+            raise ValueError(f'{name} must be a positive integer')
     model = models[model_name]
-    word_suffix = '_mean' if pooling == 'mean' else ''
-    names = {'word': f'{model}_{layer}{word_suffix}',
-        'cross_boundary':
-        f'cross_boundary_lexicon100_2200_{model}_{layer}_{pooling}'}
-    directory = Path(directory)
-    paths = {}
-    old_threads = faiss.omp_get_max_threads()
-    try:
-        faiss.omp_set_num_threads(1)
-        for dataset, name in names.items():
-            index = svs.VectorIndex.load(str(directory), name)
-            filename = directory / f'{name}_neighbours{top_k}.jsonl'
-            _write_neighbours(index, filename, top_k, batch_size)
-            paths[dataset] = filename
-            print(f'Saved {filename}')
-            del index
-    finally:
-        faiss.omp_set_num_threads(old_threads)
-    return paths
+    filename = lv_locations.neighbour_results_path(model, condition, layer,
+        pooling, workspace)
+    if filename.exists() and not overwrite: raise FileExistsError(filename)
+    if directory is None: directory = Path(workspace) / 'svs_data'
+    path = lv_locations.find_index_path(model, condition, layer, pooling,
+        directory)
+    with lv_locations.selection_path(condition, workspace).open('rb') as handle:
+        selected_keys = pickle.load(handle)
+    print(f'Loading vector index {path.stem}', flush=True)
+    index = svs.VectorIndex.load(str(path.parent), path.stem)
+    mapping_path = lv_locations.neighbour_mapping_path(condition, workspace)
+    write_neighbours(index, filename, mapping_path, selected_keys,
+        top_k=top_k, batch_size=batch_size, overwrite=overwrite,
+        compression=compression, model=model, condition=condition,
+        workspace=workspace)
+    print(f'Saved {filename}', flush=True)
+    return {condition: filename}
 
-
-def _write_neighbours(index, filename, top_k, batch_size):
-    '''Stream all queries, publishing the output only after completion.'''
-    n_tokens = len(index.metadatas)
-    if n_tokens <= top_k:
-        raise ValueError('index needs more entries than top_k')
-    temporary = filename.with_suffix('.jsonl.tmp')
-    with temporary.open('w', encoding='utf-8') as output:
-        for start in progressbar(range(0, n_tokens, batch_size)):
-            results = index.queries(index.vectors[start:start + batch_size],
-                top_k=top_k + 1)
-            for offset, result in enumerate(results):
-                query = index.metadatas[start + offset]
-                query_keys = set(query.source_echoframe_keys)
-                neighbours = [dict(label=md.label,
-                    source_keys_hex=md.source_echoframe_keys_hex,
-                    similarity=float(score))
-                    for md, score in zip(result['metadatas'], result['scores'])
-                    if query_keys.isdisjoint(md.source_echoframe_keys)][:top_k]
-                if len(neighbours) != top_k:
-                    raise ValueError(f'expected {top_k} non-self neighbours')
-                row = dict(label=query.label,
-                    source_keys_hex=query.source_echoframe_keys_hex,
-                    neighbours=neighbours)
-                output.write(json.dumps(row, ensure_ascii=False) + '\n')
-    temporary.replace(filename)
 
 def precision_at_k(result, query_metadata, top_k=10):
     '''Score neighbours after excluding the query token by source key.'''
