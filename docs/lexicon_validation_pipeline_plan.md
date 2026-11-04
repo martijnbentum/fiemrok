@@ -21,11 +21,26 @@ and remains unchanged.
 
 ## Word selection
 
+Implemented prerequisite: build one experiment-specific Phraser material store.
+Select Audio records from the current CGN source with variant nl and
+components outside acdhm. Copy the selected recordings' complete phrase,
+word, syllable, and phone hierarchies plus their linked speakers. Preserve
+all original keys and identifiers; exclude existing markers. Deduplicate
+shared speakers without following their links into unselected recordings.
+Keep audio filenames unchanged. Use this material store for both datasets,
+all later metadata lookups, and new cross-boundary markers. The generic
+`phraser.copy_materials.copy_audio_materials(audio_keys, goal_store_root,
+source_store)` operation is implemented in the sibling Phraser repository;
+pipeline integration uses build_local_phraser_store(components, language,
+source_store=None). The destination name is cgn_{components}_{language},
+using included, sorted component letters. Any existing destination is rejected.
+Subsequent stages open this local store and never implicitly use shared CGN.
+
 Add filter_word_tokens(), select_words(), save_selected_word_keys(), and
 load_selected_word_keys() in word_lexicon.py.
 
-Apply nl-only and acdhm exclusions; require at least two phones; allow any
-syllable count; apply inclusive 100-1500 ms bounds; group by orthographic
+Population filtering happens only in the material-store stage. Require at
+least two phones; allow any syllable count; apply inclusive 100-1500 ms bounds; group by orthographic
 label; apply per-type 5 * IQR duration filtering; check frequency; sample
 exactly n_tokens=100 per type, configurable. Save ordered Phraser keys.
 Use stable candidate ordering and a local random generator. No additional
@@ -40,7 +55,8 @@ reproducibility, and ordered key round trips.
 
 Change CrossBoundaryLexicon.__init__() and collect_candidate_tokens() to
 apply per-type iqr_multiplier=5 after absolute duration bounds and before
-frequency eligibility. Keep nl/acdhm filters and no shared source phones.
+frequency eligibility. Remove phrase-level component/variant filters;
+retain the no-shared-source-phones sampling rule.
 
 Change inspect_lexicon_phonemes() to accept newly selected word objects,
 not an old layer-6 store. Retain modal pronunciation per word type with
@@ -77,7 +93,8 @@ inputs, order, pooling, unit types, and missing requested embeddings.
 
 ## Pipeline and placement
 
-Add prepare_samples(), build_embeddings(), and build_indexes() in
+Provide build_local_phraser_store(), prepare_samples(), build_embeddings(),
+and build_indexes() in
 build_speech_vector_index_pipeline.py. prepare_samples() exposes both
 n_tokens=100 and min_types=2000.
 
@@ -101,7 +118,8 @@ Thirty saved neighbours and precision@10 remain undecided.
 
 ## Implementation order
 
-1. Establish validation-local paths and module names.
+1. Build the new local Phraser recording store, filtering component/variant
+   only here. Other stages use it for annotations and new markers.
 2. Select words with per-type 5 * IQR filtering and save ordered keys.
 3. Derive phone-count targets, sample cross-boundary items using the new
    floor, create markers, and save ordered marker keys.

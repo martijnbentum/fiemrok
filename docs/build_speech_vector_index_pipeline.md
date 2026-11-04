@@ -3,25 +3,52 @@
 This pipeline belongs to `lexicon_validation`, independently of
 `fiemrok_experiment`. Run from `repo/` with the workspace environment active.
 CGN and the two model checkpoints must be accessible for the full rebuild.
+Use Phraser 0.2.84 or newer for its recording copy API.
 
 ```python
 from lexicon_validation import build_speech_vector_index_pipeline as pipeline
 
+materials = pipeline.build_local_phraser_store(
+    components='befgijklno', language='nl')
+materials.close()
 pipeline.prepare_samples(n_tokens=100, min_types=2000, random_seed=0)
 pipeline.build_embeddings(gpu=True, batch_size=32)
 pipeline.build_indexes()
 ```
 
-The three stages are separate so a completed selection can be used in later
+The four stages are separate so a completed selection can be used in later
 sessions without sampling again. `prepare_samples()` generates a replacement
 selection and new cross-boundary markers: call it once for a new dataset.
 It saves ordered Phraser keys, which both models and every layer/pooling
 condition then use. To choose another validation workspace, pass the same
-`workspace=...` to all three calls.
+`workspace=...` to all four calls. For a different material population, pass
+the same `components` and `language` to every stage. The defaults include
+components `b,e,f,g,i,j,k,l,n,o` and variant `nl`.
+
+## Local Phraser materials
+
+`build_local_phraser_store` selects Audio records from the shared CGN store
+and copies their complete phrase/word/syllable/phone hierarchy and linked
+speakers. Pass `source_store=...` to choose an already open source Store.
+Keys, persisted metadata, and audio paths remain unchanged; old markers
+are excluded. The returned Store is open and belongs to the caller.
+
+The destination is `cgn_{components}_{language}` directly under the validation
+workspace. Components are included letters and are sorted/deduplicated for
+the name. `language` is the CGN variant directory (`nl` or `vl`), not the
+Audio object's language description. An existing destination raises
+`FileExistsError`, including an empty directory. No matching recordings
+raises `ValueError` before a destination is created.
+
+All later stages default to this local store and close their own handles.
+They never fall back to the shared source when local materials are missing.
+An explicit `cgn=...` supplies a caller-owned Phraser Store instead.
 
 ## Selection
 
-Both datasets use Netherlandic Dutch, excluding CGN components `a,c,d,h,m`.
+With the defaults, the local material store contains Netherlandic Dutch
+outside CGN components `a,c,d,h,m`. Component and variant filtering occurs
+only when building that store, and is not repeated during sampling.
 Duration must be within 100-1500 ms, inclusive. Per-type duration fences are
 Q1 - 5 * IQR and Q3 + 5 * IQR, calculated after absolute duration filtering.
 Frequency eligibility and sampling happen afterward. Each accepted type
@@ -38,8 +65,8 @@ phone occurrences.
 
 The defaults retain existing quota tolerance and search settings. Override
 `tolerance`, `max_attempts`, or `tries_per_round` on `prepare_samples()` when
-needed. Shared source annotations remain in the CGN Phraser store; selected
-cross-boundary markers are saved there too.
+needed. Both datasets and new cross-boundary markers use the local Phraser
+material store. Sampling does not modify the shared source annotations.
 
 ## Files
 
@@ -48,6 +75,7 @@ workspace next to `repo/`:
 
 ```text
 fiemrok/lexicon_validation/
+  cgn_befgijklno_nl/             # local Phraser materials, default population
   word_keys.pkl
   cross_boundary_marker_keys.pkl
   echoframe_stores/
@@ -93,5 +121,6 @@ OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
 ```
 
 Integration tests build real temporary Phraser/Echoframe stores and all 32
-vector-index conditions with synthetic model outputs. They do not load the
+vector-index conditions with synthetic model outputs, including the initial
+Audio selection/copy stage. They do not load the
 remote checkpoints or process the real CGN corpus.

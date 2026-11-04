@@ -13,8 +13,8 @@ from .cross_boundary_lexicon_sampling import validate_integer
 
 def filter_word_tokens(words, n_tokens=100, iqr_multiplier=5,
     min_duration_ms=100, max_duration_ms=1500):
-    '''Return eligible words after population and per-type duration filters.
-    words:              CGN word objects; durations are in milliseconds
+    '''Filter words from the already selected recording material.
+    words:              local word objects; durations are in milliseconds
     n_tokens:           minimum eligible occurrences per orthographic type
     iqr_multiplier:     per-type fence multiplier, applied before frequency
     '''
@@ -26,8 +26,6 @@ def filter_word_tokens(words, n_tokens=100, iqr_multiplier=5,
     if min_duration_ms > max_duration_ms:
         raise ValueError('duration bounds must be ordered and nonnegative')
     lexicon_helper.filter_outlier_tokens_from_type([], iqr_multiplier)
-    words = lexicon_helper.filter_components(words, 'acdhm')
-    words = lexicon_helper.filter_dutch_variant(words, 'nl', strict=True)
     words = [word for word in words if len(word.phones) >= 2]
     words = lexicon_helper.filter_duration(words, min_duration_ms,
         max_duration_ms)

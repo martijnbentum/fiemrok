@@ -18,6 +18,7 @@ fiemrok/
     audio_info.json
     results/                         retrieval summaries and plots
   lexicon_validation/
+    cgn_befgijklno_nl/                local Phraser recordings and annotations
     word_keys.pkl                    rebuilt validation word selection
     cross_boundary_marker_keys.pkl   rebuilt cross-boundary selection
     echoframe_stores/                 {model}_{condition}_{n_types}

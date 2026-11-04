@@ -9,6 +9,19 @@ word_keys = workspace / 'word_keys.pkl'
 cross_boundary_marker_keys = workspace / 'cross_boundary_marker_keys.pkl'
 echoframe_stores = workspace / 'echoframe_stores'
 svs_data = workspace / 'svs_data'
+default_components = 'befgijklno'
+default_language = 'nl'
+
+
+def phraser_store_path(components=default_components,
+    language=default_language, workspace=workspace):
+    '''Name the local material store by included CGN components and variant.'''
+    components = ''.join(sorted(set(components)))
+    if not components or not set(components) <= set('abcdefghijklmno'):
+        raise ValueError('components must contain CGN letters a through o')
+    if language not in ('nl', 'vl'):
+        raise ValueError('language must be nl or vl')
+    return Path(workspace) / f'cgn_{components}_{language}'
 
 
 def selection_path(condition, workspace=workspace):

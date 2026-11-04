@@ -28,11 +28,13 @@ def compute_embeddings_for_wv2(items, condition='word', n_types=None,
 
 def _compute_for_model(items, model, condition, n_types, workspace, **kwargs):
     items = list(items)
+    if not items: raise ValueError('no selected items to embed')
     if n_types is None: n_types = len({item.label for item in items})
     path = lv_locations.store_path(model, condition, n_types,
         workspace=workspace)
     model_name, architecture = MODELS[model]
-    embedding_store = create_store(path, model_name, architecture)
+    embedding_store = create_store(path, model_name, architecture,
+        cgn=items[0].store)
     try:
         compute_embeddings(embedding_store, items, condition=condition,
             model_name=model_name, **kwargs)
@@ -62,15 +64,11 @@ def compute_embeddings(embedding_store, items, condition='word',
         tags=['cgn', condition], verbose=verbose)
 
 
-def create_store(path, model_name, architecture, cgn=None):
+def create_store(path, model_name, architecture, cgn):
     '''Open a CGN store and register the version 1/checkpoint 200000 model.'''
-    if cgn is None:
-        embedding_store = stores.load_echoframe_cross_boundary_store(path)
-    else:
-        embedding_store = Store(path)
+    embedding_store = Store(path)
     try:
-        if cgn is not None:
-            embedding_store.attach_phraser_store(stores.CGN_SOURCE_ID, cgn)
+        embedding_store.attach_phraser_store(stores.CGN_SOURCE_ID, cgn)
         if embedding_store.load_model_metadata(model_name) is None:
             checkpoint = model_paths.get_pretrained_model(architecture,
                 checkpoint=200_000, version=1)
@@ -85,15 +83,16 @@ def create_store(path, model_name, architecture, cgn=None):
     return embedding_store
 
 
-def create_wv2_and_hubert(condition, n_types, workspace=lv_locations.workspace):
+def create_wv2_and_hubert(condition, n_types, cgn,
+    workspace=lv_locations.workspace):
     '''Return both configured stores for a selection; caller closes them.'''
     wav2vec_path = lv_locations.store_path('w2v', condition, n_types,
         workspace=workspace)
     hubert_path = lv_locations.store_path('hubert', condition, n_types,
         workspace=workspace)
-    wav2vec_store = create_store(wav2vec_path, *MODELS['w2v'])
+    wav2vec_store = create_store(wav2vec_path, *MODELS['w2v'], cgn=cgn)
     try:
-        hubert_store = create_store(hubert_path, *MODELS['hubert'])
+        hubert_store = create_store(hubert_path, *MODELS['hubert'], cgn=cgn)
     except Exception:
         wav2vec_store.close()
         raise

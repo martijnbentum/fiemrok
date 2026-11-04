@@ -13,7 +13,8 @@ There is no need to introduce a separate `Span` type.
 - Copy start/end in milliseconds and the source audio.
 - Explicitly supply the source phrase so its speaker and phrase link are
   used; do not rely on automatic overlap lookup.
-- Bind and save the markers in the same phraser store as the source phrases.
+- Bind and save markers in the experiment's local Phraser store, which also
+  contains the copied source phrases.
 - Do not reparent or copy the original words, syllables, or phones.
 
 `lexicon.make_markers(store, save=False)` converts the retained sampling

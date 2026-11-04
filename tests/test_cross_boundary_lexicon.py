@@ -302,66 +302,30 @@ class LexiconTests(unittest.TestCase):
 
 
 class FilteringTests(unittest.TestCase):
-    def test_component_is_read_from_audio_path(self):
-        phrase = make_phrase([], component='h')
-        self.assertEqual(cbl.phrase_to_component(phrase), 'h')
-
-    def test_default_filters_match_historical_component_exclusions(self):
-        components = 'abcdefghijklmno'
-        phrases = [make_phrase([['a'], ['n']], component=c) for c in components]
-        original = list(phrases)
-        for function in (cbl.filter_phrases_by_component,
-            cbl.filter_phrases_for_cross_boundary_lexicon):
-            with self.subTest(function=function.__name__):
-                filtered = function(phrases)
-                self.assertIsInstance(filtered, list)
-                self.assertEqual([cbl.phrase_to_component(p) for p in filtered],
-                    list('befgijklno'))
-                for phrase in filtered:
-                    self.assertTrue(any(phrase is p for p in phrases))
-        self.assertEqual(phrases, original)
-
-    def test_custom_and_empty_component_exclusions(self):
-        phrases = [make_phrase([['a'], ['n']], component=c) for c in 'abc']
-        filtered = cbl.filter_phrases_for_cross_boundary_lexicon(
-            phrases, remove_components=['b'])
-        self.assertEqual([cbl.phrase_to_component(p) for p in filtered],
-            ['a', 'c'])
-        self.assertEqual(cbl.filter_phrases_by_component(
-            phrases, remove_components=''), phrases)
-        self.assertEqual(cbl.filter_phrases_for_cross_boundary_lexicon([]), [])
-
-    def test_dutch_variant_filter_defaults_to_netherlands_dutch(self):
-        dutch = make_phrase([['a'], ['n']])
-        flemish = make_phrase([['a'], ['n']], variant='vl')
-        phrases = [flemish, dutch]
-        self.assertEqual(cbl.filter_phrases_by_dutch_variant(phrases), [dutch])
-        self.assertEqual(cbl.filter_phrases_by_dutch_variant(
-            phrases, dutch_variant='vl'), [flemish])
-        self.assertEqual(phrases, [flemish, dutch])
-
     def test_word_count_filter_keeps_phrases_with_at_least_two_words(self):
         phrases = [make_phrase([]), make_phrase([['a']]),
             make_phrase([['a'], ['n']]), make_phrase([['a'], ['n'], ['d']])]
-        filtered = cbl.filter_phrases_with_insufficient_words(phrases)
-        self.assertEqual(filtered, phrases[2:])
-        self.assertIs(filtered[0], phrases[2])
-        self.assertEqual(cbl.filter_phrases_with_insufficient_words(
-            phrases, min_words=3), phrases[3:])
+        for function in (cbl.filter_phrases_with_insufficient_words,
+            cbl.filter_phrases_for_cross_boundary_lexicon):
+            with self.subTest(function=function.__name__):
+                filtered = function(phrases)
+                self.assertEqual(filtered, phrases[2:])
+                self.assertIs(filtered[0], phrases[2])
+                self.assertEqual(function(phrases, min_words=3), phrases[3:])
+                self.assertEqual(function([]), [])
 
-    def test_combined_filter_applies_variant_and_word_count_without_overlap(self):
-        kept = make_phrase([['a'], ['n']])
-        kept.overlap = True
-        excluded_component = make_phrase([['a'], ['n']], component='a')
+    def test_corpus_filters_are_not_reapplied_to_local_material(self):
+        dutch = make_phrase([['a'], ['n']])
+        dutch.overlap = True
         flemish = make_phrase([['a'], ['n']], variant='vl')
-        single_word = make_phrase([['a']])
-        phrases = [excluded_component, flemish, single_word, kept]
+        former_exclusions = [make_phrase([['a'], ['n']], component=c)
+            for c in 'acdhm']
+        phrases = [dutch, flemish] + former_exclusions
         self.assertEqual(cbl.filter_phrases_for_cross_boundary_lexicon(
-            phrases), [kept])
+            phrases), phrases)
+        flemish.audio.filename = 'local-recording.wav'
         self.assertEqual(cbl.filter_phrases_for_cross_boundary_lexicon(
-            phrases, dutch_variant='vl'), [flemish])
-        self.assertEqual(cbl.filter_phrases_for_cross_boundary_lexicon(
-            phrases, min_words=1), [single_word, kept])
+            phrases), phrases)
 
 
 if __name__ == '__main__':

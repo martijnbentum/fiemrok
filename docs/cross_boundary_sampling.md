@@ -22,8 +22,9 @@ occurrences. Planning and sampling share these filters.
 Extracted sequences and raw `sequence_counts` remain available for inspection.
 Create a new plan after changing the limits.
 
-Both validation datasets now use Netherlandic Dutch and exclude components
-`acdhm`. Word selection lives in `word_lexicon.py`, allows any syllable
+The local material-store stage selects Netherlandic Dutch and excludes
+components `acdhm` by default. Sampling does not repeat those filters.
+Word selection lives in `word_lexicon.py`, allows any syllable
 count, and excludes one-phone words. Its saved selection supplies the
 phone-count targets above. `fiemrok_experiment` has independent rules.
 See the [pipeline](build_speech_vector_index_pipeline.md) for both datasets.

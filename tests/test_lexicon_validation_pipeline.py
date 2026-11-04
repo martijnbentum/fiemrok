@@ -49,11 +49,14 @@ class PipelineTests(unittest.TestCase):
                     phone_start + 100, **identity))
         self.cgn.save_many(phrase.items)
         self.phrase = phrase
+        self.cgn.refresh_query_roots()
+        local = pipeline.build_local_phraser_store(source_store=self.cgn,
+            workspace=self.workspace)
+        local.close()
 
     def prepare(self, min_types=1):
         return pipeline.prepare_samples(n_tokens=1, min_types=min_types,
-            max_attempts=1, tolerance=0, cgn=self.cgn,
-            words=self.phrase.words, phrases=[self.phrase],
+            max_attempts=1, tolerance=0,
             workspace=self.workspace)
 
     def test_selection_files_are_ordered_keys_at_workspace_root(self):
@@ -65,8 +68,13 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(path.parent, self.workspace)
             with path.open('rb') as handle:
                 self.assertEqual(pickle.load(handle), selected[condition])
-        markers = self.cgn.load_many(selected['cross_boundary'])
+        local = phraser.Store(path=lv_locations.phraser_store_path(
+            workspace=self.workspace))
+        self.addCleanup(local.close)
+        markers = local.load_many(selected['cross_boundary'])
         self.assertEqual(markers[0].label, 'a n')
+        self.assertEqual(list(self.cgn.DB.audio_id_to_child_keys(
+            self.phrase.audio_id, 'Marker')), [])
 
     def test_infeasible_floor_does_not_publish_partial_selection_files(self):
         with self.assertRaisesRegex(ValueError, 'below min_types'):
@@ -90,13 +98,13 @@ class PipelineTests(unittest.TestCase):
             return_value=object()), mock.patch.object(
             batch_segment_features.to_vector, 'iter_filename_batch_to_vector',
             side_effect=inference) as extract):
-            stores = pipeline.build_embeddings(cgn=self.cgn,
-                workspace=self.workspace, verbose=False)
+            stores = pipeline.build_embeddings(workspace=self.workspace,
+                verbose=False)
         self.assertEqual(extract.call_count, 4)
         self.assertEqual({p.name for p in stores.values()},
             {'w2v_word_2', 'hubert_word_2',
             'w2v_cross_boundary_1', 'hubert_cross_boundary_1'})
-        paths = pipeline.build_indexes(cgn=self.cgn, workspace=self.workspace)
+        paths = pipeline.build_indexes(workspace=self.workspace)
         self.assertEqual(len(paths), 32)
         for (model, condition, layer, pooling), path in paths.items():
             with self.subTest(condition=(model, condition, layer, pooling)):
@@ -111,7 +119,65 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(len(list((self.workspace / 'svs_data').glob('*'))), 64)
         self.assertEqual({p.name for p in self.workspace.iterdir()},
             {'word_keys.pkl', 'cross_boundary_marker_keys.pkl',
-            'echoframe_stores', 'svs_data'})
+            'echoframe_stores', 'svs_data', 'cgn_befgijklno_nl'})
+
+    def test_material_stage_filters_audio_and_preserves_hierarchy(self):
+        for component, language in (('a', 'nl'), ('b', 'vl'), ('o', 'nl')):
+            self.cgn.create(phraser.Audio,
+                filename=f'/cgn/comp-{component}/{language}/extra.wav',
+                duration=1000, save=True)
+        phraser.make_markers([dict(label='old marker', start=1100, end=1300,
+            audio=self.phrase.audio, phrase=self.phrase)], self.cgn, save=True)
+        self.cgn.refresh_query_roots()
+        goal = pipeline.build_local_phraser_store(components='obbb',
+            language='nl', source_store=self.cgn,
+            workspace=self.root / 'filtered')
+        self.addCleanup(goal.close)
+        self.assertEqual(Path(goal.path).name, 'cgn_bo_nl')
+        self.assertEqual(len(list(goal.audios.all())), 2)
+        self.assertEqual(list(goal.markers.all()), [])
+        for item in [self.phrase.audio, self.phrase.speaker,
+            *self.phrase.items]:
+            self.assertEqual(goal.DB.load(item.key), self.cgn.DB.load(item.key))
+
+    def test_material_stage_language_is_parameterized(self):
+        audio = self.cgn.create(phraser.Audio,
+            filename='/cgn/comp-a/vl/sample.wav', duration=1000, save=True)
+        self.cgn.refresh_query_roots()
+        goal = pipeline.build_local_phraser_store(components='a',
+            language='vl', source_store=self.cgn, workspace=self.workspace)
+        self.addCleanup(goal.close)
+        self.assertEqual(Path(goal.path).name, 'cgn_a_vl')
+        self.assertEqual([a.key for a in goal.audios.all()], [audio.key])
+
+    def test_material_stage_rejects_any_existing_destination(self):
+        for components in (lv_locations.default_components, 'a'):
+            root = lv_locations.phraser_store_path(components,
+                workspace=self.workspace)
+            root.mkdir(exist_ok=True)
+            with self.subTest(components=components):
+                with self.assertRaises(FileExistsError):
+                    pipeline.build_local_phraser_store(components=components,
+                        source_store=self.cgn, workspace=self.workspace)
+
+    def test_no_matching_audio_does_not_create_a_store(self):
+        root = lv_locations.phraser_store_path('a', 'vl', self.workspace)
+        with self.assertRaisesRegex(ValueError, 'no recordings match'):
+            pipeline.build_local_phraser_store(components='a', language='vl',
+                source_store=self.cgn, workspace=self.workspace)
+        self.assertFalse(root.exists())
+
+    def test_default_sampling_requires_local_store_without_fallback(self):
+        with mock.patch.object(pipeline.stores, 'load_phraser_cgn_store',
+            side_effect=AssertionError('must not open the source CGN store')):
+            with self.assertRaisesRegex(FileNotFoundError, 'local Phraser'):
+                pipeline.prepare_samples(workspace=self.root / 'missing')
+
+    def test_store_name_validation(self):
+        for components, language in (('', 'nl'), ('z', 'nl'), ('b', '../nl')):
+            with self.subTest(components=components, language=language):
+                with self.assertRaises(ValueError):
+                    lv_locations.phraser_store_path(components, language)
 
 
 if __name__ == '__main__':

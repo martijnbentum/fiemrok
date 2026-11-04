@@ -23,13 +23,20 @@ def word(key, label='word', duration=200, variant='nl', component='b',
 
 
 class WordSelectionTests(unittest.TestCase):
-    def test_population_filters_allow_multisyllabic_words(self):
+    def test_word_filters_allow_multisyllabic_words(self):
         keep = [word(1), word(2, label='I')]
-        reject = [word(10, variant='vl'), word(11, pronunciation=('a',)),
+        reject = [word(11, pronunciation=('a',)),
             word(12, duration=99), word(13, duration=1501)]
-        reject += [word(20 + i, component=c) for i, c in enumerate('acdhm')]
         actual = wl.filter_word_tokens(keep + reject, n_tokens=1)
         self.assertEqual({w.key for w in actual}, {w.key for w in keep})
+
+    def test_corpus_filters_are_not_reapplied_to_local_material(self):
+        tokens = [word(1, variant='vl')]
+        tokens += [word(20 + i, component=c) for i, c in enumerate('acdhm')]
+        self.assertEqual(wl.filter_word_tokens(tokens, n_tokens=1), tokens)
+        # Selection does not depend on corpus-layout paths in the local store.
+        tokens[0].audio.filename = 'local-recording.wav'
+        self.assertEqual(wl.filter_word_tokens(tokens, n_tokens=1), tokens)
 
     def test_duration_bounds_are_inclusive(self):
         tokens = [word(1, duration=100), word(2, duration=1500)]

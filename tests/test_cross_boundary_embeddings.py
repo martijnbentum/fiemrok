@@ -248,7 +248,7 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
 
     def create_stores(self):
         stores_pair = cross_embeddings.create_wv2_and_hubert('cross_boundary',
-            2, workspace=self.root)
+            2, self.cgn, workspace=self.root)
         for store in stores_pair:
             self.addCleanup(store.close)
         return stores_pair

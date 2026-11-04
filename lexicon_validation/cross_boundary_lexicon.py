@@ -264,36 +264,14 @@ class CrossBoundarySequence:
         return self.phoneme_sequence == other.phoneme_sequence
 
 
-def phrase_to_component(phrase):
-    '''Return the CGN component encoded in the phrase's audio path.'''
-    return lexicon_helper.filename_to_component(phrase.audio.filename)
-
-
-def filter_phrases_by_component(phrases, remove_components='acdhm'):
-    '''Return phrases outside the excluded CGN components.'''
-    return lexicon_helper.filter_components(phrases, remove_components)
-
-
-def filter_phrases_by_dutch_variant(phrases, dutch_variant='nl'):
-    '''Return phrases from the requested Dutch variant's audio directory.'''
-    return lexicon_helper.filter_dutch_variant(phrases, dutch_variant)
-
-
 def filter_phrases_with_insufficient_words(phrases, min_words=2):
     '''Return phrases containing at least min_words words.'''
     return lexicon_helper.filter_phrases_with_insufficient_words(phrases,
         min_words)
 
 
-def filter_phrases_for_cross_boundary_lexicon(phrases, remove_components='acdhm',
-    dutch_variant='nl', min_words=2):
-    '''Apply phrase filters and return a filtered list of phrases.'''
-    print('filtering phrases by component')
-    phrases = filter_phrases_by_component(progressbar(phrases),
-        remove_components)
-    print('filtering phrases by Dutch variant')
-    phrases = filter_phrases_by_dutch_variant(progressbar(phrases),
-        dutch_variant)
+def filter_phrases_for_cross_boundary_lexicon(phrases, min_words=2):
+    '''Keep sufficiently long phrases from the selected recording material.'''
     print('filtering phrases by word count')
     return filter_phrases_with_insufficient_words(progressbar(phrases),
         min_words)
