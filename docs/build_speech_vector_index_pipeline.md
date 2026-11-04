@@ -11,7 +11,7 @@ from lexicon_validation import build_speech_vector_index_pipeline as pipeline
 materials = pipeline.build_local_phraser_store(
     components='befgijklno', language='nl')
 materials.close()
-pipeline.prepare_samples(n_tokens=100, min_types=2000, random_seed=0)
+pipeline.prepare_samples(n_tokens=100, random_seed=0)
 pipeline.build_embeddings(gpu=True, batch_size=32)
 pipeline.build_indexes()
 ```
@@ -58,10 +58,26 @@ Words may have any syllable count but must contain at least two phones.
 Their type labels are orthographic. Cross-boundary types are phoneme
 sequences and follow the selected word types' phone-count distribution,
 using the modal pronunciation of each word type. Cross-boundary selection
-can contain fewer types, with `min_types=2000` by default. A failed bounded
-sampling search raises an error; it does not silently reduce that floor or
-the per-type token quota. Selected cross-boundary items cannot share source
-phone occurrences.
+starts with the same type-count goal as the words. Only failed sampling
+rounds permit reducing the count, down to 90% of the word types (rounded up).
+Once a total succeeds, subsequent attempts keep that total and try to improve
+the phone-count distribution. The sampler never requests more cross-boundary
+types than word types. A known frequency ceiling can reduce the initial plan
+before attempts start.
+
+For 1,655 word types, the allowed range is 1,490-1,655 cross-boundary types.
+`min_types=None` derives that lower bound automatically. An explicit
+`min_types` can make the floor stricter; one exceeding the word-type count
+raises an error. The former 2,000-type floor is not a pipeline default.
+Each type still requires exactly `n_tokens` non-overlapping occurrences.
+Selected cross-boundary items cannot share source phone occurrences.
+
+There is no word-type cap: all types meeting the eligibility rules are kept.
+Progress output announces word/phrase loading, reports elapsed times, and
+shows starting and retained type/token counts at each filtering step. Word
+reports additionally show types newly falling below the token quota after
+each filter. IQR removal and frequency rejection are reported separately,
+followed by sampling counts and the cross-boundary distribution diagnostics.
 
 The defaults retain existing quota tolerance and search settings. Override
 `tolerance`, `max_attempts`, or `tries_per_round` on `prepare_samples()` when

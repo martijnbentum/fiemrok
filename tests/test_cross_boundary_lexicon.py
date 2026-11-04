@@ -2,6 +2,8 @@ import pathlib
 import sys
 import unittest
 from collections import Counter
+from contextlib import redirect_stdout
+from io import StringIO
 from types import SimpleNamespace
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -213,6 +215,43 @@ class LexiconTests(unittest.TestCase):
                 phone.end = (i + 1) * duration / 2
             phrases.append(phrase)
         return cbl.CrossBoundaryLexicon(phrases, **kwargs)
+
+    def test_candidate_reports_separate_token_losses_and_whole_type_losses(self):
+        retained = self.make_duration_lexicon([200] * 10 + [1400, 99])
+        infrequent = self.make_duration_lexicon([250, 260])
+        too_long = self.make_duration_lexicon([1501])
+        for ps in infrequent.phrase_sequences:
+            ps.sequences[0].phoneme_sequence = 'b c'
+        too_long.phrase_sequences[0].sequences[0].phoneme_sequence = 'd e'
+        retained.phrase_sequences += infrequent.phrase_sequences
+        retained.phrase_sequences += too_long.phrase_sequences
+        expected = [ps.sequences[0] for ps in retained.phrase_sequences[:10]]
+        output = StringIO()
+        with redirect_stdout(output):
+            candidates = retained.collect_candidate_tokens(10)
+        report = output.getvalue()
+        self.assertIn('3 types, 15 tokens before duration filtering', report)
+        self.assertIn('Absolute duration (100-1500 ms): 2 types, '
+            '13 tokens retained; whole types removed: 1; tokens removed: 2',
+            report)
+        self.assertIn('Per-type duration IQR: 2 types, 12 tokens retained; '
+            'whole types removed: 0; tokens removed: 1', report)
+        self.assertIn('Frequency (>= 10/type): 1 types, 10 tokens retained; '
+            'whole types removed: 1; tokens removed: 2', report)
+        self.assertIn('whole types below the token quota', report)
+        self.assertEqual(list(candidates), ['a n'])
+        self.assertEqual([id(token) for token in candidates['a n']],
+            [id(token) for token in expected])
+
+    def test_empty_candidates_report_zero_counts_for_all_filters(self):
+        lexicon = cbl.CrossBoundaryLexicon([])
+        output = StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(lexicon.collect_candidate_tokens(100), {})
+        report = output.getvalue()
+        self.assertIn('0 types, 0 tokens before duration filtering', report)
+        self.assertEqual(report.count(
+            'whole types removed: 0; tokens removed: 0'), 3)
 
     def test_duration_limits_are_inclusive_and_precede_frequency(self):
         lexicon = self.make_duration_lexicon([99, 100, 1500, 1501])

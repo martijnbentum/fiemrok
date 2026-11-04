@@ -50,12 +50,24 @@ class PipelineTests(unittest.TestCase):
                     phone_start + 100, **identity))
         self.cgn.save_many(phrase.items)
         self.phrase = phrase
+        second = phraser.Phrase('second phrase', 2000, 2400, **identity)
+        for start, label, phones in ((2000, 'left', ('x', 'b')),
+            (2200, 'right', ('m', 'x'))):
+            word = phraser.Word(label, start, start + 200, **identity)
+            syllable = phraser.Syllable(label, start, start + 200, **identity)
+            second.add_child(word)
+            word.add_child(syllable)
+            for index, phone in enumerate(phones):
+                phone_start = start + index * 100
+                syllable.add_child(phraser.Phone(phone, phone_start,
+                    phone_start + 100, **identity))
+        self.cgn.save_many(second.items)
         self.cgn.refresh_query_roots()
         local = pipeline.build_local_phraser_store(source_store=self.cgn,
             workspace=self.workspace)
         local.close()
 
-    def prepare(self, min_types=1):
+    def prepare(self, min_types=None):
         return pipeline.prepare_samples(n_tokens=1, min_types=min_types,
             max_attempts=1, tolerance=0,
             workspace=self.workspace)
@@ -63,7 +75,7 @@ class PipelineTests(unittest.TestCase):
     def test_selection_files_are_ordered_keys_at_workspace_root(self):
         selected = self.prepare()
         self.assertEqual(len(selected['word']), 2)
-        self.assertEqual(len(selected['cross_boundary']), 1)
+        self.assertEqual(len(selected['cross_boundary']), 2)
         for condition in pipeline.CONDITIONS:
             path = lv_locations.selection_path(condition, self.workspace)
             self.assertEqual(path.parent, self.workspace)
@@ -73,13 +85,13 @@ class PipelineTests(unittest.TestCase):
             workspace=self.workspace))
         self.addCleanup(local.close)
         markers = local.load_many(selected['cross_boundary'])
-        self.assertEqual(markers[0].label, 'a n')
+        self.assertEqual({marker.label for marker in markers}, {'a n', 'b m'})
         self.assertEqual(list(self.cgn.DB.audio_id_to_child_keys(
             self.phrase.audio_id, 'Marker')), [])
 
     def test_infeasible_floor_does_not_publish_partial_selection_files(self):
-        with self.assertRaisesRegex(ValueError, 'below min_types'):
-            self.prepare(min_types=2)
+        with self.assertRaisesRegex(ValueError, 'exceeds the word-type goal'):
+            self.prepare(min_types=3)
         self.assertFalse(lv_locations.selection_path('word',
             self.workspace).exists())
         self.assertFalse(lv_locations.selection_path('cross_boundary',
@@ -104,7 +116,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(extract.call_count, 4)
         self.assertEqual({p.name for p in stores.values()},
             {'w2v_word_2', 'hubert_word_2',
-            'w2v_cross_boundary_1', 'hubert_cross_boundary_1'})
+            'w2v_cross_boundary_2', 'hubert_cross_boundary_2'})
         paths = pipeline.build_indexes(workspace=self.workspace)
         self.assertEqual(len(paths), 32)
         for (model, condition, layer, pooling), path in paths.items():
@@ -179,6 +191,16 @@ class PipelineTests(unittest.TestCase):
             with self.subTest(components=components, language=language):
                 with self.assertRaises(ValueError):
                     lv_locations.phraser_store_path(components, language)
+
+    def test_cross_boundary_bounds_follow_word_count(self):
+        self.assertEqual(pipeline.cross_boundary_type_bounds(1655),
+            (1490, 1655))
+        self.assertEqual(pipeline.cross_boundary_type_bounds(10), (9, 10))
+        self.assertEqual(pipeline.cross_boundary_type_bounds(1), (1, 1))
+        self.assertEqual(pipeline.cross_boundary_type_bounds(1655, 1600),
+            (1600, 1655))
+        with self.assertRaisesRegex(ValueError, 'min_types=2000'):
+            pipeline.cross_boundary_type_bounds(1655, 2000)
 
     def test_store_loaders_attach_local_materials_without_opening_source(self):
         path = lv_locations.store_path('w2v', 'word', 2, self.workspace)

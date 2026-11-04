@@ -62,11 +62,14 @@ Change inspect_lexicon_phonemes() to accept newly selected word objects,
 not an old layer-6 store. Retain modal pronunciation per word type with
 deterministic tie-breaking.
 
-Expose n_tokens=100 through plan_sampling(). Set min_types=2000 on both
-CrossBoundaryLexicon.sample_lexicon() and sampling.sample_lexicon(); pass it
-through the pipeline. Retain adaptive quotas: fewer cross-boundary types
-are acceptable, subject to the floor. Report failure if sampling cannot
-satisfy the floor and token quota; do not relax either silently.
+Expose n_tokens=100 through plan_sampling(). The pipeline uses min_types=None
+to derive a floor of ceil(0.9 * word_type_count) and passes it to the sampler.
+Start at the word-type goal, never request more, and reduce only after
+failed rounds (or an insufficient frequency ceiling). Keep a successful
+total and improve distribution fit within that total. An explicit floor
+cannot exceed the word-type goal. Report failure rather than relaxing the
+90% floor or token quota. Generic low-level sampling retains an explicit
+floor parameter; the pipeline supplies the experiment-specific bound.
 
 Create markers once through make_markers(), save ordered keys, and load
 those keys in later stages. Tests cover outlier filtering, word-derived
@@ -96,7 +99,7 @@ inputs, order, pooling, unit types, and missing requested embeddings.
 Provide build_local_phraser_store(), prepare_samples(), build_embeddings(),
 and build_indexes() in
 build_speech_vector_index_pipeline.py. prepare_samples() exposes both
-n_tokens=100 and min_types=2000.
+n_tokens=100 and min_types=None (derive the relative type-count floor).
 
 Put the two selection PKLs directly in the external
 fiemrok/lexicon_validation workspace. Put the four Echoframe stores under

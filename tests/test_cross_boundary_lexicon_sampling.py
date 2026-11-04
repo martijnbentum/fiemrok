@@ -394,7 +394,7 @@ class SamplingTests(unittest.TestCase):
         self.assertEqual(bounds[1].lower_bound, 0)
         self.assertEqual(plan.targets, {2: 50, 12: 26})
 
-    def test_successes_search_full_budget_and_explore_smaller_totals(self):
+    def test_successes_search_full_budget_without_reducing_total(self):
         lexicon = make_sampling_lexicon({2: 10, 3: 10})
         plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, n_tokens=2)
         original = sampling.sample_attempt
@@ -407,10 +407,9 @@ class SamplingTests(unittest.TestCase):
         with mock.patch.object(sampling, 'sample_attempt', side_effect=attempt):
             lexicon.sample_lexicon(plan, tries_per_round=1, max_attempts=4,
                 min_types=8)
-        self.assertEqual(totals, [10, 9, 8, 8])
+        self.assertEqual(totals, [10, 10, 10, 10])
         result = lexicon.sampling_result
         self.assertEqual(result.attempts, 4)
-        # Both 10 and 8 can match perfectly; larger total wins the tie.
         self.assertEqual(sum(result.actual_counts.values()), 10)
         self.assertEqual(result.seed, 0)
         self.assertEqual(result.selected_attempt, 1)
@@ -435,7 +434,7 @@ class SamplingTests(unittest.TestCase):
         self.assertEqual(lexicon.sampling_result.attempts, 3)
         self.assertEqual(len(lexicon.selected_sequence_counts), 10)
 
-    def test_smaller_better_distribution_can_win(self):
+    def test_distribution_improves_without_reducing_successful_total(self):
         lexicon = make_sampling_lexicon({2: 10, 3: 10})
         plan = cbl.plan_sampling(lexicon, {2: 4, 3: 6}, n_tokens=2)
         original = sampling.sample_attempt
@@ -451,7 +450,27 @@ class SamplingTests(unittest.TestCase):
             lexicon.sample_lexicon(plan, tries_per_round=1, max_attempts=2,
                 min_types=9)
         self.assertEqual(lexicon.successful_seed, 1)
+        self.assertEqual(sum(lexicon.sampling_result.actual_counts.values()), 10)
+        self.assertEqual(lexicon.sampling_result.actual_counts, {2: 4, 3: 6})
+
+    def test_reduction_stops_at_first_success_above_floor(self):
+        lexicon = make_sampling_lexicon({2: 10, 3: 10})
+        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, n_tokens=2)
+        original = sampling.sample_attempt
+        totals = []
+
+        def attempt(lexicon, current, candidates, seed):
+            totals.append(current.proposed_total)
+            if seed == 0:
+                raise sampling.SamplingFailure('initial search failed')
+            return original(lexicon, current, candidates, seed)
+
+        with mock.patch.object(sampling, 'sample_attempt', side_effect=attempt):
+            lexicon.sample_lexicon(plan, tries_per_round=1, max_attempts=6,
+                min_types=8)
+        self.assertEqual(totals, [10, 9, 9, 9, 9, 9])
         self.assertEqual(sum(lexicon.sampling_result.actual_counts.values()), 9)
+        self.assertEqual(lexicon.sampling_result.attempts, 6)
 
     def test_final_fill_uses_original_ideal_instead_of_current_quota(self):
         lexicon = make_sampling_lexicon({2: 12, 3: 12})
@@ -476,10 +495,9 @@ class SamplingTests(unittest.TestCase):
         with mock.patch.object(sampling, 'sample_attempt', side_effect=attempt):
             lexicon.sample_lexicon(plan, tries_per_round=1, max_attempts=10,
                 min_types=8)
-        # After exploring smaller totals, two rounds out of three return to
-        # the best plan (10 types); exploration continues at the 8-type floor.
+        # New seeds and quota probes preserve the first successful total.
         self.assertEqual([sum(counts.values()) for _, counts in calls],
-            [10, 9, 8, 8, 10, 10, 8, 10, 10, 8])
+            [10] * 10)
         self.assertEqual([seed for seed, _ in calls], list(range(10)))
         self.assertEqual(lexicon.sampling_result.seed, 0)
         self.assertEqual(lexicon.sampling_result.attempts, 10)

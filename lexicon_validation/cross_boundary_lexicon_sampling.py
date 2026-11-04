@@ -238,10 +238,10 @@ def plan_sampling(lexicon, sequence_types_by_phone_count, n_tokens=100,
 def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
     max_attempts=100, min_types=2000):
     '''Return a successful provisional result; never change phrase selection.
-    Search the full attempt budget, retaining the lowest distribution error.
-    Learn exhaustion across rounds while exploring totals down to min_types.
-    At the floor, reuse the best successful plan in two of every three rounds;
-    the third round probes remembered capacities. Larger successes break ties.
+    Reduce totals toward min_types only while no sample has succeeded.
+    After success, preserve that total and optimize the length distribution.
+    Reuse successful quotas in two of every three rounds; the third probes
+    remembered capacities without reducing the successful total.
     A final failure retains the current plan for explicit continuation.
     '''
     if not isinstance(plan, SamplingPlan):
@@ -290,9 +290,9 @@ def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
             successes.append(counts)
             result = SamplingResult(tokens, seed, attempts, current, counts,
                 selected_attempt=attempts)
-            key = (result.distortion_score, -sum(counts.values()))
-            if best is None or key < (best.distortion_score,
-                -sum(best.actual_counts.values())):
+            key = (-sum(counts.values()), result.distortion_score)
+            if best is None or key < (-sum(best.actual_counts.values()),
+                best.distortion_score):
                 best = result
                 print('New best successful sample:')
                 print(result)
@@ -301,7 +301,18 @@ def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
         estimates.observe(failures, successes)
         if attempts == max_attempts: break
         rounds += 1
-        if search_total > min_types:
+        if best is not None:
+            search_total = best.plan.proposed_total
+            if rounds % 3 == 0:
+                print('Exploration round: rebalancing the successful total.')
+                revised = estimates.plan_for_total(plan, search_total,
+                    probe_index=probes)
+                probes += 1
+            else:
+                print(f'Reusing best successful quotas (seed={best.seed}) '
+                    'with new seeds.')
+                revised = best.plan
+        elif search_total > min_types:
             search_total = max(min_types, search_total - ceil(search_total / 20))
             revised = estimates.plan_for_total(plan, search_total)
         elif rounds % 3 == 0:
@@ -309,10 +320,6 @@ def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
             revised = estimates.plan_for_total(plan, search_total,
                 probe_index=probes)
             probes += 1
-        elif best is not None:
-            print(f'Reusing best successful quotas (seed={best.seed}) '
-                'with new seeds.')
-            revised = best.plan
         else:
             revised = estimates.plan_for_total(plan, search_total)
         if revised.targets == current.targets:

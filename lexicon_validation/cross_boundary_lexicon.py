@@ -90,7 +90,8 @@ class CrossBoundaryLexicon:
         tries_per_round:  attempts before adjusting quotas
         max_attempts:     search budget, including attempts after success
         min_types:        floor for totals explored in 5% reduction steps
-        Rank by normalized distribution error, then prefer larger totals.
+        Prefer the word-type goal; reduce only after failed sampling rounds.
+        Once a total succeeds, retain it and optimize distribution fit.
         Inspect sampling_result for final quotas, counts, and successful seed.
         '''
         if any(ps.selected_sequences for ps in self.phrase_sequences):
@@ -135,26 +136,68 @@ class CrossBoundaryLexicon:
         Frequency is a preliminary filter; tokens may still overlap.
         '''
         tokens_by_type = {}
-        print('grouping candidate tokens by phoneme string')
+        starting_types = set()
+        starting_tokens = 0
+        print('grouping candidate tokens by phoneme string', flush=True)
         for ps in progressbar(self.phrase_sequences):
             for sequence in ps.sequences:
                 if sequence.n_phones < 2: continue
+                label = sequence.phoneme_sequence
+                starting_types.add(label)
+                starting_tokens += 1
                 duration = sequence.end - sequence.start
                 if not lexicon_helper.duration_is_eligible(duration,
                     self.min_duration_ms, self.max_duration_ms):
                     continue
-                label = sequence.phoneme_sequence
                 tokens_by_type.setdefault(label, []).append(sequence)
+        print(f'Cross-boundary candidates: {len(starting_types):,} types, '
+            f'{starting_tokens:,} tokens before duration filtering', flush=True)
+        duration_types = len(tokens_by_type)
+        duration_tokens = sum(map(len, tokens_by_type.values()))
+        limits = f'{self.min_duration_ms:g}-{self.max_duration_ms:g} ms'
+        _report_candidate_filter(f'Absolute duration ({limits})',
+            len(starting_types), starting_tokens, duration_types,
+            duration_tokens)
+        del starting_types
+
         filtered = {}
-        for label in sorted(tokens_by_type):
+        print(f'Filtering per-type durations at {self.iqr_multiplier:g} * IQR',
+            flush=True)
+        for label in progressbar(sorted(tokens_by_type)):
             tokens = lexicon_helper.filter_outlier_tokens_from_type(
                 tokens_by_type[label], iqr_multiplier=self.iqr_multiplier)
+            if tokens: filtered[label] = tokens
+        iqr_types = len(filtered)
+        iqr_tokens = sum(map(len, filtered.values()))
+        _report_candidate_filter('Per-type duration IQR', duration_types,
+            duration_tokens, iqr_types, iqr_tokens)
+        del tokens_by_type
+
+        print(f'Keeping types with at least {tokens_per_type:,} tokens',
+            flush=True)
+        candidates = {}
+        for label in progressbar(list(filtered)):
+            tokens = filtered[label]
             if len(tokens) >= tokens_per_type:
-                filtered[label] = sorted(tokens, key=lambda sequence: (
+                candidates[label] = sorted(tokens, key=lambda sequence: (
                     sequence.audio.filename,
                     getattr(sequence.phrase, 'key', b''),
                     sequence.start, sequence.end))
-        return filtered
+        frequency_types = len(candidates)
+        frequency_tokens = sum(map(len, candidates.values()))
+        _report_candidate_filter(f'Frequency (>= {tokens_per_type:,}/type)',
+            iqr_types, iqr_tokens, frequency_types, frequency_tokens)
+        print('Frequency losses are whole types below the token quota; '
+            'duration token losses can leave their type eligible.', flush=True)
+        return candidates
+
+
+def _report_candidate_filter(stage, before_types, before_tokens, after_types,
+    after_tokens):
+    '''Print retained counts and losses for one candidate filtering stage.'''
+    print(f'{stage}: {after_types:,} types, {after_tokens:,} tokens retained; '
+        f'whole types removed: {before_types - after_types:,}; '
+        f'tokens removed: {before_tokens - after_tokens:,}', flush=True)
 
 
 class PhraseSequences:

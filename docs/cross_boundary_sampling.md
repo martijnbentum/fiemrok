@@ -2,6 +2,7 @@
 
 ```python
 from lexicon_validation import cross_boundary_lexicon as cbl
+from lexicon_validation.build_speech_vector_index_pipeline import cross_boundary_type_bounds
 
 ideal_counts, _ = cbl.inspect_lexicon_phonemes(selected_words)
 filtered_phrases = cbl.filter_phrases_for_cross_boundary_lexicon(phrases)
@@ -10,7 +11,8 @@ lexicon = cbl.CrossBoundaryLexicon(filtered_phrases,
 plan = cbl.plan_sampling(lexicon, ideal_counts, n_tokens=100,
     tolerance=10)
 print(plan)
-sampled_tokens = lexicon.sample_lexicon(plan, min_types=2000,
+min_types, _ = cross_boundary_type_bounds(sum(ideal_counts.values()))
+sampled_tokens = lexicon.sample_lexicon(plan, min_types=min_types,
     tries_per_round=3, max_attempts=100, random_seed=0)
 result = lexicon.sampling_result
 ```
@@ -33,8 +35,8 @@ The plan owns the token count and tolerance. It starts from all sufficiently
 frequent types and balances deviations from the original length proportions
 under the frequency limits. It preserves the original total if possible.
 The frequency ceiling does not account for phone overlap. A plan below
-`min_types` fails before sampling; for small experiments, explicitly choose
-a smaller minimum.
+`min_types` fails before sampling. The pipeline derives the minimum from
+the selected word-type count rather than using an absolute 2,000-type floor.
 
 Quota allocation minimizes weighted squared error between normalized length
 proportions: `sum((actual_share - ideal_share)**2 / weight)`, where `weight`
@@ -61,10 +63,12 @@ favor a long bin over a short bin even when both satisfy their minimums.
 Every attempt starts with fresh bins and reservations; no failed attempt
 changes phrase selections.
 
-Three consecutive seeds use identical quotas by default. During initial
-exploration, the requested total falls by 5% (rounded up) after each round,
-never below `min_types`, even if the round succeeded. Quotas are recalculated
-against the original ideal.
+Three consecutive seeds use identical quotas by default. While no sample
+has succeeded, failed rounds reduce the requested total by 5% (rounded up),
+never below `min_types`. Once a sample succeeds, all remaining attempts
+preserve its type count and optimize distribution fit. The pipeline sets
+the floor to 90% of the word-type count and starts with the full word-type
+goal, subject to frequency eligibility.
 
 Capacity observations persist across rounds within a search. Bins exhausted
 in every failed attempt in a round use the best count observed across all
@@ -75,8 +79,8 @@ are heuristic estimates under competition, not proven capacity limits.
 If estimates cannot supply the requested total, only the missing slots are
 allocated beyond them; other learned limits are not reset.
 
-After total exploration reaches `min_types`, two of every three subsequent
-rounds reuse the best successful plan with new seeds. The third round tests
+After success, two of every three subsequent rounds reuse the best
+successful plan with new seeds. The third round tests
 quotas calculated from the learned estimates, increasing one constrained
 bin's estimate by 10% (rounded up, at least one type), capped by frequency
 eligibility. Probes rotate through constrained positive-ideal bins; a failed
@@ -85,9 +89,9 @@ continue to use the learned estimates. The best plan can contain more than
 `min_types`; reusing it does not restart the total reduction sequence.
 
 The sampler uses the full `max_attempts` search budget, including attempts
-after the first success. It retains the success with the lowest weighted
-distribution error, preferring more types on an exact score tie, then the
-earlier success. Only the retained result is committed after the search.
+after the first success. It prioritizes type count, then the lowest weighted
+distribution error, then the earlier success. Only the retained result is
+committed after the search.
 Consequently a run can return an earlier success even if later attempts
 fail. `max_attempts=1` remains available for a single attempt.
 
@@ -109,7 +113,7 @@ To reproduce a success, retain both its seed and its final plan:
 ```python
 lexicon.reset_selection()
 sampled_tokens = lexicon.sample_lexicon(result.plan, random_seed=result.seed,
-    max_attempts=1, min_types=2200)
+    max_attempts=1, min_types=min_types)
 ```
 
 To continue after the attempt limit, preserve the final constraints too:
@@ -118,14 +122,14 @@ To continue after the attempt limit, preserve the final constraints too:
 from lexicon_validation.cross_boundary_lexicon_sampling import SamplingFailure
 
 try:
-    sampled_tokens = lexicon.sample_lexicon(plan, min_types=2200)
+    sampled_tokens = lexicon.sample_lexicon(plan, min_types=min_types)
 except SamplingFailure as error:
     resume_plan = error.plan
     next_seed = error.next_random_seed
     print(error)
 
 # If you decide to continue:
-sampled_tokens = lexicon.sample_lexicon(resume_plan, min_types=2200,
+sampled_tokens = lexicon.sample_lexicon(resume_plan, min_types=min_types,
     random_seed=next_seed, max_attempts=100)
 ```
 

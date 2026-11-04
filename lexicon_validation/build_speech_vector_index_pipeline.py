@@ -3,11 +3,13 @@
 from contextlib import contextmanager
 from pathlib import Path
 import pickle
+from time import monotonic
 
 import lexicon_helper
 import model_paths
 import stores
 from . import cross_boundary_lexicon as cbl
+from . import cross_boundary_lexicon_sampling as sampling
 from . import lv_locations
 from . import lv_stores
 from . import word_lexicon
@@ -61,39 +63,81 @@ def _local_phraser_store(cgn, workspace, components, language):
         local_store.close()
 
 
-def prepare_samples(n_tokens=100, min_types=2000, random_seed=0,
+def cross_boundary_type_bounds(n_word_types, min_types=None):
+    '''Require cross-boundary types within 90-100% of the word-type count.'''
+    sampling.validate_integer(n_word_types, 'n_word_types', minimum=1)
+    lower = (9 * n_word_types + 9) // 10
+    if min_types is not None:
+        sampling.validate_integer(min_types, 'min_types')
+        lower = max(lower, min_types)
+    if lower > n_word_types:
+        message = f'min_types={min_types} exceeds the word-type goal '
+        message += f'{n_word_types}; allowed range is '
+        message += f'{(9 * n_word_types + 9) // 10}-{n_word_types}'
+        raise ValueError(message)
+    return lower, n_word_types
+
+
+def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
     tolerance=10, max_attempts=100, tries_per_round=3, cgn=None,
     words=None, phrases=None, workspace=lv_locations.workspace,
     components=lv_locations.default_components,
     language=lv_locations.default_language):
     '''Select both datasets and save their ordered Phraser keys.
     n_tokens:   exact number of selected occurrences per type
-    min_types:  minimum accepted cross-boundary type count
+    min_types:  optional stricter floor; defaults to 90% of word types
     workspace: validation output directory, containing both key files
     '''
+    started = monotonic()
     with _local_phraser_store(cgn, workspace, components, language) as cgn:
-        if words is None: words = cgn.words.all()
-        if phrases is None: phrases = cgn.phrases.all()
+        print('Loading word objects from local materials...', flush=True)
+        loading_started = monotonic()
+        words = list(cgn.words.all() if words is None else words)
+        print(f'Loaded {len(words):,} word tokens in '
+            f'{monotonic() - loading_started:.1f}s', flush=True)
         eligible = word_lexicon.filter_word_tokens(words, n_tokens=n_tokens)
         selected_words = word_lexicon.select_words(eligible, n_tokens=n_tokens,
             random_seed=random_seed)
         if not selected_words:
             raise ValueError('no word types have enough eligible tokens')
+        print('Inspecting sampled word pronunciations...', flush=True)
         targets, _ = cbl.inspect_lexicon_phonemes(selected_words)
+        n_word_types = sum(targets.values())
+        lower, upper = cross_boundary_type_bounds(n_word_types, min_types)
+        print(f'Cross-boundary goal: {n_word_types:,} types; '
+            f'allowed {lower:,}-{upper:,}; reduce only when necessary.',
+            flush=True)
+        print('Loading phrase objects from local materials...', flush=True)
+        loading_started = monotonic()
+        phrases = list(cgn.phrases.all() if phrases is None else phrases)
+        print(f'Loaded {len(phrases):,} phrases in '
+            f'{monotonic() - loading_started:.1f}s', flush=True)
+        n_phrases = len(phrases)
         phrases = cbl.filter_phrases_for_cross_boundary_lexicon(phrases)
+        print(f'At least 2 words: phrases {n_phrases:,} -> {len(phrases):,} '
+            f'(lost {n_phrases - len(phrases):,})', flush=True)
         phrases = sorted(phrases, key=lambda phrase: phrase.key)
         lexicon = cbl.CrossBoundaryLexicon(phrases)
         plan = cbl.plan_sampling(lexicon, targets, n_tokens=n_tokens,
             tolerance=tolerance)
         lexicon.sample_lexicon(plan, random_seed=random_seed,
             tries_per_round=tries_per_round, max_attempts=max_attempts,
-            min_types=min_types)
+            min_types=lower)
+        n_cross_types = sum(lexicon.sampling_result.actual_counts.values())
+        if not lower <= n_cross_types <= upper:
+            raise ValueError('cross-boundary type count outside allowed range')
+        print(f'Selected {n_cross_types:,} cross-boundary types versus '
+            f'{n_word_types:,} word types; '
+            f'change {(n_cross_types / n_word_types - 1):+.1%}', flush=True)
+        print('Saving selected cross-boundary markers and key files...',
+            flush=True)
         marker_path = lv_locations.selection_path('cross_boundary', workspace)
         markers = lexicon.make_markers(cgn, save=True, keys_path=marker_path)
         word_keys = [word.key for word in selected_words]
         word_lexicon.save_selected_word_keys(word_keys,
             lv_locations.selection_path('word', workspace))
         print(f'Saved {len(word_keys)} word tokens and {len(markers)} markers')
+        print(f'Sampling finished in {monotonic() - started:.1f}s', flush=True)
         return {'word': word_keys,
             'cross_boundary': [marker.key for marker in markers]}
 
