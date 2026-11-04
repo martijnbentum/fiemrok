@@ -228,13 +228,27 @@ def build_w2v_cross_boundary_embeddings(**kwargs):
 def build_indexes(layers=LAYERS, collar=500, overwrite=False, cgn=None,
     workspace=lv_locations.workspace, directory=None,
     components=lv_locations.default_components,
-    language=lv_locations.default_language):
-    '''Build center/mean indexes from exactly the two saved selections.
+    language=lv_locations.default_language, model=None, condition=None,
+    pooling=None):
+    '''Build indexes from the requested frozen selections.
+    model:     w2v or hubert; None selects both
+    condition: word or cross_boundary; None selects both
+    pooling:   center or mean; None selects both
     overwrite: explicitly allow replacing existing vector-index files
     directory: vector output folder; defaults to workspace/svs_data
+    Returns paths keyed by (model, condition, layer, pooling).
     '''
     from . import vector_indices as builder
 
+    if model is not None and model not in tuple(MODELS):
+        raise ValueError('model must be w2v or hubert')
+    if condition is not None and condition not in CONDITIONS:
+        raise ValueError('condition must be word or cross_boundary')
+    if pooling is not None and pooling not in ('center', 'mean'):
+        raise ValueError('pooling must be center or mean')
+    models = tuple(MODELS) if model is None else (model,)
+    conditions = CONDITIONS if condition is None else (condition,)
+    poolings = ('center', 'mean') if pooling is None else (pooling,)
     build_index = builder.make_vector_search_index_for_layer
     with _local_phraser_store(cgn, workspace, components, language) as cgn:
         if directory is None: directory = Path(workspace) / 'svs_data'
@@ -242,17 +256,18 @@ def build_indexes(layers=LAYERS, collar=500, overwrite=False, cgn=None,
         directory.mkdir(parents=True, exist_ok=True)
         layers = tuple(layers)
         paths = {}
-        for condition in CONDITIONS:
+        for condition in conditions:
             keys, items = _load_items(condition, cgn, workspace)
             n_types = len({item.label for item in items})
             unit_type = 'word' if condition == 'word' else 'marker'
-            for model, model_name in MODELS.items():
+            for model in models:
+                model_name = MODELS[model]
                 prefix = f'{model}_{condition}_{n_types}'
                 embedding_store = lv_stores.load_echoframe_store(model,
                     condition, materials=cgn, workspace=workspace)
                 try:
                     for layer in layers:
-                        for pooling in ('center', 'mean'):
+                        for pooling in poolings:
                             name = f'{prefix}_{layer}_{pooling}'
                             index, _ = build_index(embedding_store, layer,
                                 name, selected_keys=keys,

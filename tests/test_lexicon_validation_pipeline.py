@@ -140,6 +140,61 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual({p.name for p in self.workspace.iterdir()},
             {'word_keys.pkl', 'cross_boundary_marker_keys.pkl',
             'echoframe_stores', 'svs_data', 'cgn_befgijklno_nl'})
+        lv_locations.selection_path('cross_boundary', self.workspace).unlink()
+        directory = self.root / 'single-index'
+        paths = pipeline.build_indexes(model='hubert', condition='word',
+            layers=(6,), pooling='mean', workspace=self.workspace,
+            directory=directory)
+        self.assertEqual(set(paths), {('hubert', 'word', 6, 'mean')})
+        self.assertEqual({p.name for p in directory.iterdir()},
+            {'hubert_word_2_6_mean.npy', 'hubert_word_2_6_mean.json'})
+        np.testing.assert_array_equal(
+            np.load(paths['hubert', 'word', 6, 'mean']),
+            np.load(self.workspace / 'svs_data/hubert_word_2_6_mean.npy'))
+
+    def test_index_selectors_only_load_requested_datasets_and_stores(self):
+        from lexicon_validation import vector_indices
+
+        self.prepare()
+        cases = [({'model': 'hubert', 'condition': 'word', 'pooling': 'mean'},
+            {('hubert', 'word', 3, 'mean')}),
+            ({'model': 'w2v'},
+                {('w2v', condition, 3, pooling)
+                    for condition in pipeline.CONDITIONS
+                    for pooling in ('center', 'mean')}),
+            ({'condition': 'cross_boundary', 'pooling': 'center'},
+                {(model, 'cross_boundary', 3, 'center')
+                    for model in pipeline.MODELS})]
+        for selectors, expected in cases:
+            with (self.subTest(selectors=selectors),
+                mock.patch.object(pipeline, '_load_items',
+                    wraps=pipeline._load_items) as load,
+                mock.patch.object(lv_stores, 'load_echoframe_store') as store,
+                mock.patch.object(vector_indices,
+                    'make_vector_search_index_for_layer',
+                    return_value=(object(), [])) as build):
+                paths = pipeline.build_indexes(layers=(3,),
+                    workspace=self.workspace, **selectors)
+                self.assertEqual(set(paths), expected)
+                self.assertEqual({call.args[0] for call in load.call_args_list},
+                    {condition for _, condition, _, _ in expected})
+                self.assertEqual({call.args for call in store.call_args_list},
+                    {(model, condition) for model, condition, _, _ in expected})
+                self.assertEqual(build.call_count, len(expected))
+                self.assertEqual({call.kwargs['pooling']
+                    for call in build.call_args_list},
+                    {pooling for _, _, _, pooling in expected})
+
+    def test_index_selectors_reject_invalid_values_before_loading(self):
+        for selectors in ({'model': 'wav2vec2'}, {'condition': 'words'},
+            {'pooling': 'median'}):
+            with (self.subTest(selectors=selectors),
+                mock.patch.object(lv_stores, 'load_phraser_store') as load):
+                with self.assertRaises(ValueError):
+                    pipeline.build_indexes(workspace=self.root / 'invalid',
+                        **selectors)
+                load.assert_not_called()
+                self.assertFalse((self.root / 'invalid').exists())
 
     def test_embedding_selectors_only_load_requested_datasets_and_stores(self):
         self.prepare()

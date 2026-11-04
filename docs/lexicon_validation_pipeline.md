@@ -179,6 +179,20 @@ reuse the frozen selection when resuming.
 replace existing index files. It reports missing requested embeddings
 rather than dropping selected tokens.
 
+To build a single index in an independent job:
+
+```python
+pipeline.build_indexes(model='hubert', condition='word', layers=(3,),
+    pooling='center')
+```
+
+`model` accepts `'hubert'` or `'w2v'`, `condition` accepts `'word'` or
+`'cross_boundary'`, and `pooling` accepts `'center'` or `'mean'`. Each defaults
+to `None`, selecting both values. Only requested selections and embedding
+stores are loaded; invalid selectors fail before opening materials or
+creating output directories. The returned dictionary maps
+`(model, condition, layer, pooling)` tuples to vector-array paths.
+
 For individual operations use `word_lexicon`, `cross_boundary_lexicon`,
 `embeddings`, and `vector_indices`. The old module names
 `make_cross_boundary_embeddings` and `validate_lexicon` have been replaced.
