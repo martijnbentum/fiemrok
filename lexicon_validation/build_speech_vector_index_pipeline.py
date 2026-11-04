@@ -32,6 +32,8 @@ def build_local_phraser_store(components=lv_locations.default_components,
     components = ''.join(sorted(set(components)))
     root = lv_locations.phraser_store_path(components, language, workspace)
     if root.exists(): raise FileExistsError(f'store already exists: {root}')
+    print(f'Selecting source recordings: components={components}, '
+        f'language={language}', flush=True)
     if source_store is None: source_store = stores.load_phraser_cgn_store()
     audio_keys = []
     for audio in source_store.audios.all():
@@ -41,6 +43,7 @@ def build_local_phraser_store(components=lv_locations.default_components,
             audio_keys.append(audio.key)
     if not audio_keys:
         raise ValueError('no recordings match the components and language')
+    print(f'Selected {len(audio_keys):,} recordings for {root}', flush=True)
     return copy_audio_materials(sorted(audio_keys), root, source_store)
 
 
