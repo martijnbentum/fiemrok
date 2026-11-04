@@ -185,33 +185,21 @@ class CapacityEstimates:
 
 
 
-def inspect_lexicon_phonemes():
-    '''Return length and phone counters from one pronunciation per word type.
-    Load layer 6 from lexicon100_2466_cgn. Each word type contributes its
-    most frequent token pronunciation; ties use lexical phone-label order.
-    Print token/type counts, token counts per type, and one-phone types.
-    Return (n_types_by_phone_count, phone_counts).
+def inspect_lexicon_phonemes(words):
+    '''Return length/phone counters from each selected word type's modal form.
+    words: selected word objects, independent of model or embedding layer
+    Ties use lexical phone-label order. Each orthographic type counts once.
     '''
-    from stores import _attach_cgn
-    from .validate_lexicon import load_metadata_layer, load_store_w2v
-
     pronunciations = {}
-    embedding_store = load_store_w2v()
-    try:
-        _attach_cgn(embedding_store)
-        metadatas = load_metadata_layer(embedding_store, 6)
-        if not metadatas: raise ValueError('no lexicon metadata for layer 6')
-        print('counting pronunciations in CGN lexicon layer 6')
-        for metadata in progressbar(metadatas):
-            word = metadata.phraser_object
-            phones = sorted(word.phones, key=lambda phone: phone.start)
-            pronunciation = tuple(phone.label for phone in phones)
-            if not pronunciation:
-                raise ValueError(f'no phones found for word {word.label}')
-            counts = pronunciations.setdefault(word.label, Counter())
-            counts[pronunciation] += 1
-    finally:
-        embedding_store.close()
+    n_tokens = 0
+    for word in progressbar(words):
+        phones = sorted(word.phones, key=lambda phone: phone.start)
+        pronunciation = tuple(phone.label for phone in phones)
+        if not pronunciation:
+            raise ValueError(f'no phones found for word {word.label}')
+        counts = pronunciations.setdefault(word.label, Counter())
+        counts[pronunciation] += 1
+        n_tokens += 1
 
     n_types_by_phone_count = Counter()
     phone_counts = Counter()
@@ -223,32 +211,32 @@ def inspect_lexicon_phonemes():
         phone_counts.update(pronunciation)
         if len(pronunciation) == 1:
             print(f'one-phone type: {label!r} -> {pronunciation[0]!r}')
-    print(f'{len(metadatas)} tokens, {len(pronunciations)} word types')
+    print(f'{n_tokens} tokens, {len(pronunciations)} word types')
     print(f'tokens per type -> number of types: {dict(tokens_per_type)}')
     return n_types_by_phone_count, phone_counts
 
 
-def plan_sampling(lexicon, sequence_types_by_phone_count, tokens_per_type=100,
+def plan_sampling(lexicon, sequence_types_by_phone_count, n_tokens=100,
     tolerance=10):
     '''Plan from all frequent types, with no fixed capacity discount.
     lexicon:                       lexicon containing candidate tokens
     sequence_types_by_phone_count: ideal length distribution
-    tokens_per_type:               exact number of occurrences per type
+    n_tokens:                      exact number of occurrences per type
     tolerance:                     absolute floor for quota deviations
     Balance relative deviations from the ideal under frequency limits.
     Keep the ideal total if frequency capacity allows; otherwise report less.
     Existing selections do not affect the frequency diagnostic.
     '''
-    validate_integer(tokens_per_type, 'tokens_per_type', minimum=1)
+    validate_integer(n_tokens, 'n_tokens', minimum=1)
     bins = make_length_bins(sequence_types_by_phone_count, tolerance)
-    candidates = lexicon.collect_candidate_tokens(tokens_per_type)
+    candidates = lexicon.collect_candidate_tokens(n_tokens)
     eligible = count_eligible_types(candidates)
     ideal = {b.n_phones: b.target_count for b in bins}
-    return SamplingPlan(ideal, eligible, tokens_per_type, tolerance)
+    return SamplingPlan(ideal, eligible, n_tokens, tolerance)
 
 
 def sample_lexicon(lexicon, plan, random_seed=0, tries_per_round=3,
-    max_attempts=100, min_types=2200):
+    max_attempts=100, min_types=2000):
     '''Return a successful provisional result; never change phrase selection.
     Search the full attempt budget, retaining the lowest distribution error.
     Learn exhaustion across rounds while exploring totals down to min_types.

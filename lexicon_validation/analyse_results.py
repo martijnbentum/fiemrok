@@ -143,7 +143,8 @@ def overall_result(output):
     return numpy.mean(accs), numpy.std(accs)
 
 
-def plot_precision(results_per_layer, save_path=locations.repo / '_plot.png'):
+def plot_precision(results_per_layer,
+    save_path=locations.lexicon_validation / 'results/precision.png'):
     '''bar plot of average precision at 10 with 95% CI per layer.
     results_per_layer   {layer: output_dict} where output_dict is from
                         analyse_results(); each value is a list of per-item
@@ -173,6 +174,8 @@ def plot_precision(results_per_layer, save_path=locations.repo / '_plot.png'):
     ax.set_title('CGN lexicon: average precision at 10 with 95% CI')
     ax.set_ylim(0, 1)
     fig.tight_layout()
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(save_path)
     imgcat(open(save_path, 'rb'))
     return fig, ax

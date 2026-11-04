@@ -9,8 +9,10 @@ import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'cgn_lexicon_frame_counts.json'
-OUTPUT = ROOT / 'data/cgn_lexicon_frame_count_analysis.json'
+sys.path.insert(0, str(ROOT))
+import locations
+SOURCE = locations.frame_counts
+OUTPUT = locations.frame_count_analysis
 FIGURE = ROOT / 'notes/assets/cgn_lexicon_frame_counts.png'
 
 
@@ -250,7 +252,7 @@ recover that word's source-key list in the same order as when the counts
 were generated. The count alone cannot identify a token; a newly generated
 or differently ordered index must not be assumed to preserve this mapping.
 
-The source counts and complete [per-word analysis](../data/cgn_lexicon_frame_count_analysis.json)
+The source counts and complete [per-word analysis](../../lexicon_validation/frame_analysis/cgn_lexicon_frame_count_analysis.json)
 are local JSON files ignored by Git. The analysis contains every word's
 statistics, fences and flagged token positions, together with a source hash.
 To regenerate the analysis and figure, and print this report to stdout,

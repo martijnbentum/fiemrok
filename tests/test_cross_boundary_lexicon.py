@@ -228,11 +228,35 @@ class LexiconTests(unittest.TestCase):
     def test_custom_duration_limits_apply_to_planning_and_sampling(self):
         lexicon = self.make_duration_lexicon([100, 200, 300],
             min_duration_ms=200, max_duration_ms=200)
-        plan = cbl.plan_sampling(lexicon, {2: 1}, tokens_per_type=1)
+        plan = cbl.plan_sampling(lexicon, {2: 1}, n_tokens=1)
         self.assertEqual(plan.eligible, {2: 1})
         tokens = lexicon.sample_lexicon(plan, min_types=1, max_attempts=1)
         self.assertEqual([t.end - t.start for t in tokens], [200])
         self.assertEqual(lexicon.sequence_counts, {'a n': 3})
+
+    def test_per_type_iqr_filter_precedes_frequency(self):
+        lexicon = self.make_duration_lexicon([200] * 10 + [1400])
+        candidates = lexicon.collect_candidate_tokens(10)
+        self.assertEqual(len(candidates['a n']), 10)
+        self.assertEqual({s.end - s.start for s in candidates['a n']}, {200})
+        self.assertEqual(lexicon.collect_candidate_tokens(11), {})
+
+    def test_iqr_multiplier_is_configurable(self):
+        lexicon = self.make_duration_lexicon([100, 150, 200, 250, 700])
+        self.assertEqual(len(lexicon.collect_candidate_tokens(1)['a n']), 5)
+        lexicon = self.make_duration_lexicon([100, 150, 200, 250, 700],
+            iqr_multiplier=1.5)
+        self.assertEqual(len(lexicon.collect_candidate_tokens(1)['a n']), 4)
+
+    def test_candidate_order_is_independent_of_phrase_order(self):
+        lexicon = self.make_duration_lexicon([200, 220, 240, 260])
+        for i, ps in enumerate(lexicon.phrase_sequences):
+            ps.phrase.key = i.to_bytes(4, 'big')
+        original = lexicon.collect_candidate_tokens(1)['a n']
+        lexicon.phrase_sequences.reverse()
+        reordered = lexicon.collect_candidate_tokens(1)['a n']
+        self.assertEqual([id(token) for token in original],
+            [id(token) for token in reordered])
 
     def test_invalid_duration_limits_are_rejected(self):
         for kwargs in (dict(min_duration_ms=-1), dict(max_duration_ms=-1),

@@ -1,3 +1,7 @@
+Historical workflow for the previous selection and index APIs. Its old module names,
+filenames, and reuse options are retained as historical context. For the current
+rebuild use the [pipeline](build_speech_vector_index_pipeline.md).
+
 
 Checks on 26 October 2026 found that `svs_data/results_w2v_results.pkl`
 and `svs_data/hubert_results.pkl` contain 246,600 queries per layer

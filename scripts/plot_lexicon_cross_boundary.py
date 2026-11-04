@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import sys
 
 import matplotlib
 import numpy as np
@@ -15,6 +16,8 @@ from matplotlib.ticker import PercentFormatter
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+import locations
 LAYERS = [3, 6, 9, 12]
 SEED = 20261029
 N_RESAMPLES = 10000
@@ -42,7 +45,7 @@ def summarize(scores, n_types):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--data-dir', type=Path, default=ROOT / 'svs_data')
+    parser.add_argument('--data-dir', type=Path, default=locations.svs_data)
     parser.add_argument('--output', type=Path,
         default=ROOT / 'notes/assets/lexicon_cross_boundary_by_dataset')
     args = parser.parse_args()

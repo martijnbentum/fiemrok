@@ -1,5 +1,7 @@
-import stores
 from sonority_rsa import display_analysis, run_analysis, save_analysis
+
+import locations
+import stores
 
 
 def load_cgn():
@@ -39,7 +41,8 @@ def compute_and_store_vectors(model_name, batch_size= 32, selection = None,
 
 def run_sonority_analysis(model_name, syllables = None, layers = [1, 3, 6, 9, 12],
     subset_size = 1000, n_subsets = 12, echoframe_store = None,
-    compute_intensity_baseline = True, compute_random_baseline = True):
+    compute_intensity_baseline = True, compute_random_baseline = True,
+    output_dir=None):
     if syllables is None: syllables, _, _ = select_cgn_data(load_cgn())
     if echoframe_store is None: echoframe_store = load_echoframe_sonority_store()
     summary, scores, log = run_analysis(syllables, model_name = model_name, 
@@ -47,7 +50,7 @@ def run_sonority_analysis(model_name, syllables = None, layers = [1, 3, 6, 9, 12
         echoframe_store = echoframe_store, 
         compute_intensity_baseline = compute_intensity_baseline,
         compute_random_baseline = compute_random_baseline)
-    output_dir = f'../sonority_results/{model_name}/'
+    if output_dir is None: output_dir = locations.sonority_results / model_name
     print(f'Saving analysis results to {output_dir}')
     save_analysis(summary, scores, log, output_dir)
     return summary, scores, log

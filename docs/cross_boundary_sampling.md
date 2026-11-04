@@ -3,41 +3,30 @@
 ```python
 from lexicon_validation import cross_boundary_lexicon as cbl
 
-ideal_counts, _ = cbl.inspect_lexicon_phonemes()
+ideal_counts, _ = cbl.inspect_lexicon_phonemes(selected_words)
 filtered_phrases = cbl.filter_phrases_for_cross_boundary_lexicon(phrases)
 lexicon = cbl.CrossBoundaryLexicon(filtered_phrases,
     min_duration_ms=100, max_duration_ms=1500)
-plan = cbl.plan_sampling(lexicon, ideal_counts, tokens_per_type=100,
+plan = cbl.plan_sampling(lexicon, ideal_counts, n_tokens=100,
     tolerance=10)
 print(plan)
-sampled_tokens = lexicon.sample_lexicon(plan, min_types=2200,
+sampled_tokens = lexicon.sample_lexicon(plan, min_types=2000,
     tries_per_round=3, max_attempts=100, random_seed=0)
 result = lexicon.sampling_result
 ```
 
 The lexicon owns inclusive token duration limits (100–1500 ms by default).
-Candidate collection filters on `sequence.end - sequence.start` before
-counting occurrences per type, so frequency eligibility requires enough
-tokens within those limits. Planning and sampling share this filter.
+Candidate collection filters on `sequence.end - sequence.start`, then
+applies per-type 5 * IQR duration filtering before counting eligible
+occurrences. Planning and sampling share these filters.
 Extracted sequences and raw `sequence_counts` remain available for inspection.
 Create a new plan after changing the limits.
 
-Compared with `select_lexicon.filter_word_tokens_for_lexicon`, possible additional
-filters are:
-
-- **Annotated overlap:** the word collector rejects `word.overlap`. CBL could
-  reject sequences touching a word with that annotation. This differs from
-  preventing shared phones between selected sequences, which sampling already
-  enforces.
-- **Syllable count:** the word collector defaults to exactly one syllable.
-  An equivalent restriction on cross-boundary sequences would require counting
-  syllables within the extracted span, rather than the two full source words.
-
-Dutch variant and frequency checks already have CBL equivalents. CBL's phrase
-filter excludes components `acdhm`, whereas the word collector defaults to
-`cdm`. The word collector also requires at least two orthographic characters;
-that criterion does not directly transfer to phone sequences. No additional
-filters from this comparison are enabled automatically.
+Both validation datasets now use Netherlandic Dutch and exclude components
+`acdhm`. Word selection lives in `word_lexicon.py`, allows any syllable
+count, and excludes one-phone words. Its saved selection supplies the
+phone-count targets above. `fiemrok_experiment` has independent rules.
+See the [pipeline](build_speech_vector_index_pipeline.md) for both datasets.
 
 The plan owns the token count and tolerance. It starts from all sufficiently
 frequent types and balances deviations from the original length proportions

@@ -65,7 +65,7 @@ def metadatas_to_center_frame_nucleus_speech_vectors(metadatas):
 
 
 def make_vector_metadata(metadatas, name,
-    directory=locations.svs_experiment_data):
+    directory=locations.svs_fiemrok_experiment_data):
     print(f'making vector metadata for {len(metadatas)} entries')
     cls = svs.metadata.VectorMetadata
     vmds = [cls(x.label, 'word', [x.echoframe_key], 0) for x in metadatas]
@@ -82,14 +82,14 @@ def make_vector_search_index_name(layer, model_name, name_prefix=''):
 
 
 def load_search_vector_index(layer, name_prefix='',
-    directory=locations.svs_experiment_data,
+    directory=locations.svs_fiemrok_experiment_data,
     model_name=model_paths.wav2vec2_nl1_name):
     name = make_vector_search_index_name(layer, model_name, name_prefix)
     return svs.VectorIndex.load(directory, name)
 
 
 def make_vector_search_index_for_layer(store, layer, name_prefix='',
-    directory=locations.svs_experiment_data,
+    directory=locations.svs_fiemrok_experiment_data,
     model_name=model_paths.wav2vec2_nl1_name, save=True, overwrite=False):
     name = make_vector_search_index_name(layer, model_name, name_prefix)
     metadatas = filter_metadatas(store.metadatas, layer=layer,

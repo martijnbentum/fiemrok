@@ -8,8 +8,8 @@ import pickle
 from progressbar import progressbar
 
 import lexicon_helper
-import locations
 from . import cross_boundary_lexicon_sampling as sampling
+from . import lv_locations as locations
 from .cross_boundary_lexicon_sampling import SamplingPlan, plan_sampling
 from .cross_boundary_lexicon_sampling import inspect_lexicon_phonemes
 
@@ -24,7 +24,8 @@ def load_markers(store, keys_path=locations.cross_boundary_marker_keys):
 class CrossBoundaryLexicon:
     '''Hold phrase sequences and aggregate counts by phoneme string.'''
 
-    def __init__(self, phrases, min_duration_ms=100, max_duration_ms=1500):
+    def __init__(self, phrases, min_duration_ms=100, max_duration_ms=1500,
+        iqr_multiplier=5):
         for name, value in (('min_duration_ms', min_duration_ms),
             ('max_duration_ms', max_duration_ms)):
             if (isinstance(value, bool) or not isinstance(value, Real)
@@ -34,6 +35,8 @@ class CrossBoundaryLexicon:
             raise ValueError('min_duration_ms must not exceed max_duration_ms')
         self.min_duration_ms = min_duration_ms
         self.max_duration_ms = max_duration_ms
+        lexicon_helper.filter_outlier_tokens_from_type([], iqr_multiplier)
+        self.iqr_multiplier = iqr_multiplier
         self.successful_seed = None
         self.sampling_result = None
         ps = PhraseSequences
@@ -80,7 +83,7 @@ class CrossBoundaryLexicon:
             ps.reset_selection()
 
     def sample_lexicon(self, plan, random_seed=0, tries_per_round=3,
-        max_attempts=100, min_types=2200):
+        max_attempts=100, min_types=2000):
         '''Search adaptive quotas, committing only the best successful sample.
         plan:             SamplingPlan containing token count and tolerance
         random_seed:      first seed; incremented once per attempt
@@ -128,7 +131,7 @@ class CrossBoundaryLexicon:
     def collect_candidate_tokens(self, tokens_per_type):
         '''Group tokens by phoneme string, keeping sufficiently frequent types.
         Exclude one-phone sequences, which cannot cross a word boundary.
-        Apply instance duration limits inclusively before counting frequency.
+        Apply absolute and per-type IQR duration filters before frequency.
         Frequency is a preliminary filter; tokens may still overlap.
         '''
         tokens_by_type = {}
@@ -142,8 +145,16 @@ class CrossBoundaryLexicon:
                     continue
                 label = sequence.phoneme_sequence
                 tokens_by_type.setdefault(label, []).append(sequence)
-        return {label: tokens for label, tokens in tokens_by_type.items()
-            if len(tokens) >= tokens_per_type}
+        filtered = {}
+        for label in sorted(tokens_by_type):
+            tokens = lexicon_helper.filter_outlier_tokens_from_type(
+                tokens_by_type[label], iqr_multiplier=self.iqr_multiplier)
+            if len(tokens) >= tokens_per_type:
+                filtered[label] = sorted(tokens, key=lambda sequence: (
+                    sequence.audio.filename,
+                    getattr(sequence.phrase, 'key', b''),
+                    sequence.start, sequence.end))
+        return filtered
 
 
 class PhraseSequences:

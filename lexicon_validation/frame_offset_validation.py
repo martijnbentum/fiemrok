@@ -160,4 +160,4 @@ def load_index(layer=6, model_name=model_paths.wav2vec2_nl1_name,
     name_prefix='cgn_center_nucleus'):
     '''Load the existing center-frame nucleus lexicon index.'''
     name = f'{name_prefix}_layer-{layer}_model-{model_name}'
-    return svs.VectorIndex.load(locations.svs_experiment_data, name)
+    return svs.VectorIndex.load(locations.svs_fiemrok_experiment_data, name)

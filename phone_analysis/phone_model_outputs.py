@@ -26,7 +26,7 @@ def load_models_final_checkpoint():
 
 def store_all_phones(store, models = None, layers = [3,6,12], collar = 500,
     min_count = 20_000, n_store = 10_000):
-    with open('../phone_counts.json') as f:
+    with open(locations.phone_counts) as f:
         phone_counts = json.load(f)
     if models is None: models = load_models_final_checkpoint()
     phone_labels = [k for k,v in phone_counts.items() if v > min_count]

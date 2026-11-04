@@ -3,12 +3,15 @@
 import argparse
 import json
 from pathlib import Path
+import sys
 
 import numpy as np
 from scipy.stats import bootstrap, spearmanr
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+import locations
 LAYERS = ('3', '6', '9', '12')
 DATASETS = {'word': ('cgn_lexicon', 2466),
     'cross_boundary': ('cross_boundary_lexicon100_2200', 2200)}
@@ -96,9 +99,9 @@ def compare(scores, labels, n_resamples):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--data-dir', type=Path, default=ROOT / 'svs_data')
+    parser.add_argument('--data-dir', type=Path, default=locations.svs_data)
     parser.add_argument('--output', type=Path,
-        default=ROOT / 'data/mean_pooling_dataset_comparison.json')
+        default=locations.mean_pooling_comparison)
     parser.add_argument('--n-resamples', type=int, default=10000)
     args = parser.parse_args()
     if args.n_resamples < 2:

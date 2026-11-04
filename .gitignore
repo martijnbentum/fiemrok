@@ -3,7 +3,6 @@ __pycache__/
 AGENTS.md
 .env
 *.json
-phone_store/
 phrases_cgn/
 test_store/
 test_*
@@ -18,7 +17,6 @@ data/*.pkl
 data/*.npy
 data/spider_*
 data/pnmi_results
-echoframe/
 ci_phrases_cgn/
 lexicon100_2466_cgn_hubert/
 cross_boundary100_2200_cgn/
@@ -32,3 +30,6 @@ lexicon100_phones_cgn/
 lexicon100_phones_cgn_hubert/
 lexicon100_syllables_cgn_hubert/
 svs_experiment_data/
+!tests/test_workspace_restructure.py
+!tests/test_word_lexicon.py
+!tests/test_lexicon_validation_pipeline.py

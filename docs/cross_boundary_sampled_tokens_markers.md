@@ -22,17 +22,16 @@ and raises `ValueError` if there is no successful sample. Pass the same
 phraser store that contains the source phrases.
 
 ```python
-markers = lexicon.make_markers(cgn, save=True,
-    keys_path='svs_data/cross_boundary_marker_keys.pkl')
+markers = lexicon.make_markers(cgn, save=True)
 
 # Refresh snapshot query roots before querying cgn.markers.
 cgn.refresh_query_roots()
 ```
 
 With `save=True`, ordered marker keys are pickled after the database save
-succeeds. The default key path is `svs_data/cross_boundary_marker_keys.pkl`;
-it is defined in `locations.cross_boundary_marker_keys` and anchored to the
-repo root. Choose a different path to keep another sample index, or pass
+succeeds. The default key path is the external validation workspace's
+`cross_boundary_marker_keys.pkl`, defined in `lv_locations`. Choose a
+different path to keep another sample index, or pass
 `keys_path=None` to skip it. Parent directories are created as needed. With `save=False`,
 markers are returned for preview and no key file is written.
 

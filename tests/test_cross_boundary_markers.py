@@ -43,7 +43,7 @@ class MarkerTests(unittest.TestCase):
         self.phrase = phrase
         self.source_keys = [item.key for item in phrase.items]
         self.lexicon = cbl.CrossBoundaryLexicon([phrase])
-        plan = cbl.plan_sampling(self.lexicon, {2: 1}, tokens_per_type=1)
+        plan = cbl.plan_sampling(self.lexicon, {2: 1}, n_tokens=1)
         self.tokens = self.lexicon.sample_lexicon(plan, min_types=1,
             max_attempts=1)
 
@@ -101,8 +101,8 @@ class MarkerTests(unittest.TestCase):
         markers = self.lexicon.make_markers(self.store, save=True, keys_path=None)
         self.assertTrue(all(self.store.DB.key_exists(m.key) for m in markers))
 
-    def test_default_key_directory_is_svs_data(self):
-        keys_path = cbl.locations.repo / 'svs_data/cross_boundary_marker_keys.pkl'
+    def test_default_key_directory_is_validation_workspace(self):
+        keys_path = cbl.locations.cross_boundary_marker_keys
         for function in (cbl.load_markers, cbl.CrossBoundaryLexicon.make_markers):
             self.assertEqual(inspect.signature(function).parameters[
                 'keys_path'].default, keys_path)

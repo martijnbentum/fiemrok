@@ -1,6 +1,6 @@
-from echoframe.store import Store
 from echoframe import segment_features as sf
 import random
+import locations
 import model_paths
 from stores import cgn
 import stores
@@ -15,17 +15,18 @@ def load_spider_model():
     return sm, model_name
 
 def load_phone_labels():
-    with open('data/phone_labels', 'r') as f:
+    with open(locations.phone_labels, 'r') as f:
         phone_labels = f.read().split('\n')
     return phone_labels
 
 def compute_load_ci(phone_labels = None, model = None, model_name = None,
     store = None, n_tokens = 1000):
+    if store is None:
+        message = 'Pass an existing codebook store explicitly; '
+        message += 'the legacy phone store was removed'
+        raise ValueError(message)
     if phone_labels is None: phone_labels = load_phone_labels()
     if model is None: model, model_name = load_spider_model()
-    if store is None:
-        store = Store('phone_store')
-        stores.attach_cgn(store)
     random.seed(42)
     ci_dict = {}
     for phone_label in progressbar(phone_labels):

@@ -1,5 +1,10 @@
 # Cross-boundary neighbours with mean and center pooling
 
+Historical workflow for the previous selection and index APIs. Its old module names,
+filenames, and reuse options are retained as historical context. For the current
+rebuild use the [pipeline](build_speech_vector_index_pipeline.md).
+
+
 The existing `validate_lexicon.py` and `analyse_results.py` functions support
 both datasets. The index helpers have optional arguments; existing word
 calls keep their stores, names, pooling, and `unit_type='word'` defaults.

@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+import sys
 
 import matplotlib
 import numpy as np
@@ -13,6 +14,8 @@ import matplotlib.pyplot as plt
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+import locations
 OUTPUT = ROOT / 'notes/assets/cgn_lexicon_mean_pooling'
 LAYERS = [3, 6, 9, 12]
 N_RESAMPLES = 10000
@@ -41,7 +44,7 @@ def word_summary(scores):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data-dir', type=Path,
-        default=ROOT.parent / 'svs_data', help='directory of saved scores')
+        default=locations.svs_data, help='directory of saved scores')
     args = parser.parse_args()
     fig, ax = plt.subplots(figsize=(8, 4.8))
     colors = ['steelblue', '#c97732']

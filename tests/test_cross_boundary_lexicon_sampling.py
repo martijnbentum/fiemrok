@@ -79,7 +79,7 @@ class PlanningTests(unittest.TestCase):
 
     def test_public_planner_does_not_modify_selections(self):
         lexicon = make_sampling_lexicon({2: 8, 3: 3})
-        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, n_tokens=2)
         self.assertIsInstance(plan, cbl.SamplingPlan)
         self.assertEqual(plan.targets, {2: 7, 3: 3})
         self.assertEqual(lexicon.selected_sequence_counts, {})
@@ -211,7 +211,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_scarce_first_round_robin_has_exact_tokens_without_overlap(self):
         lexicon = make_sampling_lexicon({2: 8, 3: 6})
-        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, tokens_per_type=2,
+        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, n_tokens=2,
             tolerance=2)
         tokens = lexicon.sample_lexicon(plan, min_types=10)
         counts = Counter(t.phoneme_sequence for t in tokens)
@@ -228,7 +228,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_meets_minimums_before_optional_bins(self):
         lexicon = make_sampling_lexicon({2: 5, 3: 12})
-        plan = cbl.plan_sampling(lexicon, {2: 2, 3: 10}, tokens_per_type=2,
+        plan = cbl.plan_sampling(lexicon, {2: 2, 3: 10}, n_tokens=2,
             tolerance=2)
         tokens = lexicon.sample_lexicon(plan, min_types=12)
         self.assertEqual([t.n_phones for t in tokens[::2]][:8], [3] * 8)
@@ -249,7 +249,7 @@ class SamplingTests(unittest.TestCase):
         phrases = [make_phrase([['edge', 'a', 'b'], ['c', 'edge']])
             for _ in range(2)]
         lexicon = cbl.CrossBoundaryLexicon(phrases)
-        plan = cbl.plan_sampling(lexicon, {2: 1, 3: 1}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 1, 3: 1}, n_tokens=2)
         with self.assertRaises(sampling.SamplingFailure) as caught:
             lexicon.sample_lexicon(plan, random_seed=5, max_attempts=4,
                 min_types=2)
@@ -266,7 +266,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_retries_keep_quotas_three_times_and_then_adapt(self):
         lexicon = make_sampling_lexicon({2: 8, 3: 8})
-        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, n_tokens=2)
         original = sampling.sample_attempt
         calls = []
 
@@ -307,7 +307,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_total_attempt_limit_and_seed_continuity_across_rounds(self):
         lexicon = make_sampling_lexicon({2: 8})
-        plan = cbl.plan_sampling(lexicon, {2: 5}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 5}, n_tokens=2)
         with mock.patch.object(sampling, 'sample_attempt',
             side_effect=sampling.SamplingFailure('failure')) as attempt:
             with self.assertRaises(sampling.SamplingFailure) as caught:
@@ -323,7 +323,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_default_total_attempt_limit_is_one_hundred(self):
         lexicon = make_sampling_lexicon({2: 1})
-        plan = cbl.plan_sampling(lexicon, {2: 1}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 1}, n_tokens=2)
         with contextlib.redirect_stdout(io.StringIO()):
             with mock.patch.object(sampling, 'sample_attempt',
                 side_effect=sampling.SamplingFailure('failure')) as attempt:
@@ -334,20 +334,20 @@ class SamplingTests(unittest.TestCase):
 
     def test_invalid_controls_and_minimum_fail_before_attempting(self):
         lexicon = make_sampling_lexicon({2: 3})
-        plan = cbl.plan_sampling(lexicon, {2: 2}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 2}, n_tokens=2)
         invalid = [dict(max_attempts=0), dict(tries_per_round=0),
             dict(random_seed=None), dict(min_types=-1)]
         for kwargs in invalid:
             with self.assertRaises(ValueError):
                 lexicon.sample_lexicon(plan, **kwargs)
         with mock.patch.object(sampling, 'sample_attempt') as attempt:
-            with self.assertRaisesRegex(ValueError, 'below min_types=2200'):
+            with self.assertRaisesRegex(ValueError, 'below min_types=2000'):
                 lexicon.sample_lexicon(plan)
         attempt.assert_not_called()
 
     def test_unexpected_errors_are_not_retried(self):
         lexicon = make_sampling_lexicon({2: 3})
-        plan = cbl.plan_sampling(lexicon, {2: 2}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 2}, n_tokens=2)
         with mock.patch.object(sampling, 'sample_attempt',
             side_effect=RuntimeError('unexpected')) as attempt:
             with self.assertRaisesRegex(RuntimeError, 'unexpected'):
@@ -356,7 +356,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_existing_selections_are_preserved(self):
         lexicon = make_sampling_lexicon({2: 3})
-        plan = cbl.plan_sampling(lexicon, {2: 2}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 2}, n_tokens=2)
         token = lexicon.phrase_sequences[0].sequences[0]
         token.parent.select(token)
         with self.assertRaisesRegex(ValueError, 'reset selections'):
@@ -372,7 +372,7 @@ class SamplingTests(unittest.TestCase):
         phrases = [make_phrase([['edge', 'a', 'b'], ['c', 'edge']])
             for _ in range(2)]
         lexicon = cbl.CrossBoundaryLexicon(phrases)
-        plan = cbl.plan_sampling(lexicon, {2: 1, 3: 1}, tokens_per_type=2,
+        plan = cbl.plan_sampling(lexicon, {2: 1, 3: 1}, n_tokens=2,
             tolerance=0)
         candidates = lexicon.collect_candidate_tokens(2)
         with self.assertRaises(sampling.SamplingFailure) as caught:
@@ -396,7 +396,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_successes_search_full_budget_and_explore_smaller_totals(self):
         lexicon = make_sampling_lexicon({2: 10, 3: 10})
-        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, n_tokens=2)
         original = sampling.sample_attempt
         totals = []
 
@@ -417,7 +417,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_later_better_success_replaces_first_and_survives_failure(self):
         lexicon = make_sampling_lexicon({2: 10, 3: 10})
-        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, n_tokens=2)
         candidates = lexicon.collect_candidate_tokens(2)
         by_length = {n: [ts for ts in candidates.values()
             if ts[0].n_phones == n] for n in (2, 3)}
@@ -437,7 +437,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_smaller_better_distribution_can_win(self):
         lexicon = make_sampling_lexicon({2: 10, 3: 10})
-        plan = cbl.plan_sampling(lexicon, {2: 4, 3: 6}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 4, 3: 6}, n_tokens=2)
         original = sampling.sample_attempt
 
         def attempt(lexicon, current, candidates, seed):
@@ -455,7 +455,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_final_fill_uses_original_ideal_instead_of_current_quota(self):
         lexicon = make_sampling_lexicon({2: 12, 3: 12})
-        plan = cbl.plan_sampling(lexicon, {2: 2, 3: 10}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 2, 3: 10}, n_tokens=2)
         plan = plan.with_targets({2: 8, 3: 4})
         tokens = sampling.sample_attempt(lexicon, plan,
             lexicon.collect_candidate_tokens(2), seed=0)
@@ -465,7 +465,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_most_rounds_reuse_successful_quotas_with_new_seeds(self):
         lexicon = make_sampling_lexicon({2: 10, 3: 10})
-        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 5, 3: 5}, n_tokens=2)
         original = sampling.sample_attempt
         calls = []
 
@@ -487,7 +487,7 @@ class SamplingTests(unittest.TestCase):
     def test_search_retains_capacity_from_separate_failed_rounds(self):
         lexicon = make_sampling_lexicon({2: 40, 5: 10, 6: 8})
         plan = cbl.plan_sampling(lexicon, {2: 10, 5: 10, 6: 8},
-            tokens_per_type=2, tolerance=0)
+            n_tokens=2, tolerance=0)
         calls = []
         original = sampling.sample_attempt
 
@@ -535,7 +535,7 @@ class SamplingTests(unittest.TestCase):
 
     def test_long_optional_bins_remain_eligible(self):
         lexicon = make_sampling_lexicon({2: 2, 12: 1})
-        plan = cbl.plan_sampling(lexicon, {2: 2, 12: 1}, tokens_per_type=2)
+        plan = cbl.plan_sampling(lexicon, {2: 2, 12: 1}, n_tokens=2)
         tokens = lexicon.sample_lexicon(plan, min_types=3)
         self.assertIn(12, [t.n_phones for t in tokens])
 

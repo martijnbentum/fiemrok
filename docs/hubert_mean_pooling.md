@@ -1,5 +1,10 @@
 # Resume HuBERT mean pooling
 
+Historical workflow for the previous selection and index APIs. Its old module names,
+filenames, and reuse options are retained as historical context. For the current
+rebuild use the [pipeline](build_speech_vector_index_pipeline.md).
+
+
 Run from the remote `repo/` directory with its environment activated and the
 updated Fiemrok code available. Install
 the Echoframe batch-reader fix (version 0.1.191 or later), then start a fresh

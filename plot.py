@@ -1,8 +1,13 @@
+from pathlib import Path
+
 import numpy as np
 import matplotlib.pyplot as plt
 from imgcat import imgcat
 
-def plot_words_pyplot(x_2d, labels, max_points_per_word=None):
+import locations
+
+def plot_words_pyplot(x_2d, labels, max_points_per_word=None,
+    save_path=locations.fiemrok_experiment / 'results/word_vectors.png'):
     '''plot 2d points per word using matplotlib with well-distributed 
     color/marker pairs.
     x_2d                   array (n_samples, 2)
@@ -50,8 +55,10 @@ def plot_words_pyplot(x_2d, labels, max_points_per_word=None):
         plt.legend(fontsize=8, ncols=2)
 
     plt.tight_layout()
-    plt.savefig('_plot.png')
-    imgcat(open('_plot.png'))
+    save_path = Path(save_path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path)
+    imgcat(open(save_path, 'rb'))
 
 
 def make_styles(colors, markers):
