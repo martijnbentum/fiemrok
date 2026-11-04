@@ -14,12 +14,11 @@ pipeline.build_embeddings(gpu=True, batch_size=32)
 For a single dataset/model, pass selected objects explicitly:
 
 ```python
-from phraser import Store
 from lexicon_validation import cross_boundary_lexicon as cbl
-from lexicon_validation import lv_locations
+from lexicon_validation import lv_stores
 from lexicon_validation import make_embeddings
 
-cgn = Store(path=lv_locations.phraser_store_path())
+cgn = lv_stores.load_phraser_store()
 markers = cbl.load_markers(cgn)
 hubert_store = make_embeddings.compute_embeddings_for_hubert(
     markers, condition='cross_boundary', gpu=True, batch_size=32)

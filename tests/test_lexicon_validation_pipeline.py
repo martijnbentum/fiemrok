@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lexicon_validation import build_speech_vector_index_pipeline as pipeline
 from lexicon_validation import lv_locations
+from lexicon_validation import lv_stores
 from lexicon_validation import make_embeddings
 
 
@@ -178,6 +179,57 @@ class PipelineTests(unittest.TestCase):
             with self.subTest(components=components, language=language):
                 with self.assertRaises(ValueError):
                     lv_locations.phraser_store_path(components, language)
+
+    def test_store_loaders_attach_local_materials_without_opening_source(self):
+        path = lv_locations.store_path('w2v', 'word', 2, self.workspace)
+        created = echoframe.Store(path)
+        created.close()
+        with mock.patch.object(pipeline.stores, 'load_phraser_cgn_store',
+            side_effect=AssertionError('must not open shared source')):
+            materials = lv_stores.load_phraser_store(workspace=self.workspace)
+            self.addCleanup(materials.close)
+            embeddings = lv_stores.load_echoframe_store('w2v', 'word',
+                materials=materials, workspace=self.workspace)
+            self.addCleanup(embeddings.close)
+            attached = embeddings.load_phraser_store(lv_stores.CGN_SOURCE_ID)
+            self.assertIs(attached, materials)
+            key = self.phrase.words[0].key
+            self.assertEqual(attached.load(key).label, 'left')
+            embeddings.close()
+            self.assertTrue(materials.is_open())
+            materials.close()
+
+            automatic = lv_stores.load_echoframe_store('w2v', 'word',
+                workspace=self.workspace)
+            self.addCleanup(automatic.close)
+            local = automatic.load_phraser_store(lv_stores.CGN_SOURCE_ID)
+            self.assertEqual(local.load(key).label, 'left')
+            automatic.close_phraser_stores()
+            self.assertFalse(local.is_open())
+
+    def test_store_loaders_do_not_create_missing_directories(self):
+        workspace = self.root / 'not-built'
+        with self.assertRaises(FileNotFoundError):
+            lv_stores.load_phraser_store(workspace=workspace)
+        with self.assertRaises(FileNotFoundError):
+            lv_stores.load_echoframe_store('hubert', 'cross_boundary',
+                workspace=workspace)
+        self.assertFalse(workspace.exists())
+
+    def test_store_discovery_distinguishes_conditions_and_rejects_ambiguity(self):
+        directory = self.workspace / 'echoframe_stores'
+        for name in ('w2v_word_2013', 'w2v_cross_boundary_2000',
+            'hubert_word_2013', 'hubert_cross_boundary_2000',
+            'w2v_word_2013_backup'):
+            (directory / name).mkdir(parents=True)
+        self.assertEqual(lv_locations.find_store_path('w2v', 'word',
+            self.workspace).name, 'w2v_word_2013')
+        self.assertEqual(lv_locations.find_store_path('hubert',
+            'cross_boundary', self.workspace).name, 'hubert_cross_boundary_2000')
+        (directory / 'w2v_word_2200').mkdir()
+        with self.assertRaisesRegex(ValueError, 'multiple w2v/word'):
+            lv_stores.load_echoframe_store('w2v', 'word',
+                workspace=self.workspace)
 
 
 if __name__ == '__main__':

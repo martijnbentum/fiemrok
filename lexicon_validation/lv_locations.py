@@ -43,3 +43,21 @@ def store_path(model, condition, n_types, workspace=workspace):
         raise ValueError('n_types must be a positive integer')
     name = f'{model}_{condition}_{n_types}'
     return Path(workspace) / 'echoframe_stores' / name
+
+
+def find_store_path(model, condition, workspace=workspace):
+    '''Find the single existing store for one model and condition.'''
+    if model not in ('w2v', 'hubert'):
+        raise ValueError('model must be w2v or hubert')
+    selection_path(condition, workspace)
+    directory = Path(workspace) / 'echoframe_stores'
+    prefix = f'{model}_{condition}_'
+    matches = []
+    for path in directory.glob(f'{prefix}*'):
+        if path.is_dir() and path.name[len(prefix):].isdigit():
+            matches.append(path)
+    if not matches:
+        raise FileNotFoundError(f'no {model}/{condition} store in {directory}')
+    if len(matches) > 1:
+        raise ValueError(f'multiple {model}/{condition} stores in {directory}')
+    return matches[0]

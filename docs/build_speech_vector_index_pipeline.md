@@ -92,6 +92,39 @@ fiemrok/lexicon_validation/
 pair is the existing speech-vector-search index format. No configuration,
 manifest, summary, or additional annotation export is generated.
 
+## Open stores interactively
+
+Use `lexicon_validation/lv_stores.py` to access this experiment's stores:
+
+```python
+from lexicon_validation import lv_stores
+
+materials = lv_stores.load_phraser_store()
+embeddings = lv_stores.load_echoframe_store('w2v', 'word',
+    materials=materials)
+
+# Metadata resolves through the attached local materials store.
+# embeddings.metadatas[0].phraser_object
+
+embeddings.close()
+materials.close()
+```
+
+`model` is `w2v` or `hubert`; `condition` is `word` or `cross_boundary`.
+The loader finds the corresponding named Echoframe directory automatically;
+the type count stays in the directory name but is not a loading parameter.
+There is one store per model/condition, four in total. Multiple matches
+raise an error rather than choosing one arbitrarily.
+The loaders open existing stores and leave closing them to the caller.
+Both loaders accept `components`, `language`, and `workspace`; the Phraser
+loader also accepts an explicit `path`.
+
+When `materials` is omitted from the Echoframe loader, it opens and attaches
+the named local Phraser store automatically. In that case, close both with
+`embeddings.close_phraser_stores()` followed by `embeddings.close()`.
+When you supply `materials`, close that caller-owned store separately after
+all embedding stores using it are finished. There is no global store cache.
+
 ## Embeddings and indexes
 
 Both models use version 1/checkpoint 200000, layers 3, 6, 9, 12, and a 500 ms

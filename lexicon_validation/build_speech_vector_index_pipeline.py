@@ -9,6 +9,7 @@ import model_paths
 import stores
 from . import cross_boundary_lexicon as cbl
 from . import lv_locations
+from . import lv_stores
 from . import word_lexicon
 
 
@@ -53,12 +54,7 @@ def _local_phraser_store(cgn, workspace, components, language):
     if cgn is not None:
         yield cgn
         return
-    from phraser import Store
-
-    root = lv_locations.phraser_store_path(components, language, workspace)
-    if not root.is_dir():
-        raise FileNotFoundError(f'build the local Phraser store first: {root}')
-    local_store = Store(path=root)
+    local_store = lv_stores.load_phraser_store(components, language, workspace)
     try:
         yield local_store
     finally:
@@ -150,7 +146,6 @@ def build_indexes(layers=LAYERS, collar=500, overwrite=False, cgn=None,
     overwrite: explicitly allow replacing existing vector-index files
     directory: vector output folder; defaults to workspace/svs_data
     '''
-    from echoframe import Store
     from . import build_speech_vector_index as builder
 
     build_index = builder.make_vector_search_index_for_layer
@@ -166,12 +161,9 @@ def build_indexes(layers=LAYERS, collar=500, overwrite=False, cgn=None,
             unit_type = 'word' if condition == 'word' else 'marker'
             for model, model_name in MODELS.items():
                 prefix = f'{model}_{condition}_{n_types}'
-                path = lv_locations.store_path(model, condition, n_types,
-                    workspace=workspace)
-                embedding_store = Store(path)
+                embedding_store = lv_stores.load_echoframe_store(model,
+                    condition, materials=cgn, workspace=workspace)
                 try:
-                    embedding_store.attach_phraser_store(stores.CGN_SOURCE_ID,
-                        cgn)
                     for layer in layers:
                         for pooling in ('center', 'mean'):
                             name = f'{prefix}_{layer}_{pooling}'

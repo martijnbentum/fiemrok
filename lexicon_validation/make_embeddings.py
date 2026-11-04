@@ -4,8 +4,8 @@ from echoframe import Store
 from echoframe.batch_segment_features import compute_embeddings_batch
 
 import model_paths
-import stores
 from . import lv_locations
+from . import lv_stores
 
 
 MODELS = {'w2v': (model_paths.wav2vec2_nl1_name, 'wav2vec2'),
@@ -68,7 +68,7 @@ def create_store(path, model_name, architecture, cgn):
     '''Open a CGN store and register the version 1/checkpoint 200000 model.'''
     embedding_store = Store(path)
     try:
-        embedding_store.attach_phraser_store(stores.CGN_SOURCE_ID, cgn)
+        embedding_store.attach_phraser_store(lv_stores.CGN_SOURCE_ID, cgn)
         if embedding_store.load_model_metadata(model_name) is None:
             checkpoint = model_paths.get_pretrained_model(architecture,
                 checkpoint=200_000, version=1)
