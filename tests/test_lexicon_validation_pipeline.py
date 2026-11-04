@@ -117,6 +117,13 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual({p.name for p in stores.values()},
             {'w2v_word_2', 'hubert_word_2',
             'w2v_cross_boundary_2', 'hubert_cross_boundary_2'})
+        with mock.patch.object(batch_segment_features.to_vector,
+            'iter_filename_batch_to_vector') as extract:
+            resumed = pipeline.build_embeddings(model='hubert',
+                condition='word', workspace=self.workspace, verbose=False)
+        extract.assert_not_called()
+        self.assertEqual(resumed, {('hubert', 'word'):
+            stores['hubert', 'word']})
         paths = pipeline.build_indexes(workspace=self.workspace)
         self.assertEqual(len(paths), 32)
         for (model, condition, layer, pooling), path in paths.items():
@@ -133,6 +140,64 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual({p.name for p in self.workspace.iterdir()},
             {'word_keys.pkl', 'cross_boundary_marker_keys.pkl',
             'echoframe_stores', 'svs_data', 'cgn_befgijklno_nl'})
+
+    def test_embedding_selectors_only_load_requested_datasets_and_stores(self):
+        self.prepare()
+        cases = [({'model': 'hubert', 'condition': 'word'},
+            {('hubert', 'word')}),
+            ({'model': 'w2v'},
+                {('w2v', condition) for condition in pipeline.CONDITIONS}),
+            ({'condition': 'cross_boundary'},
+                {(model, 'cross_boundary') for model in pipeline.MODELS})]
+        for selectors, expected in cases:
+            with (self.subTest(selectors=selectors),
+                mock.patch.object(pipeline, '_load_items',
+                    wraps=pipeline._load_items) as load,
+                mock.patch.object(make_embeddings, 'create_store') as create,
+                mock.patch.object(make_embeddings, 'compute_embeddings')
+                    as compute):
+                paths = pipeline.build_embeddings(workspace=self.workspace,
+                    **selectors)
+                self.assertEqual(set(paths), expected)
+                self.assertEqual({call.args[0] for call in load.call_args_list},
+                    {condition for _, condition in expected})
+                self.assertEqual(create.call_count, len(expected))
+                self.assertEqual(compute.call_count, len(expected))
+
+    def test_word_embedding_does_not_require_cross_boundary_selection(self):
+        self.prepare()
+        lv_locations.selection_path('cross_boundary', self.workspace).unlink()
+        with (mock.patch.object(make_embeddings, 'create_store'),
+            mock.patch.object(make_embeddings, 'compute_embeddings')):
+            paths = pipeline.build_embeddings(model='hubert', condition='word',
+                workspace=self.workspace)
+        self.assertEqual(set(paths), {('hubert', 'word')})
+
+    def test_embedding_selectors_reject_invalid_values_before_loading(self):
+        for selectors in ({'model': 'wav2vec2'}, {'condition': 'words'}):
+            with (self.subTest(selectors=selectors),
+                mock.patch.object(lv_stores, 'load_phraser_store') as load):
+                with self.assertRaises(ValueError):
+                    pipeline.build_embeddings(**selectors)
+                load.assert_not_called()
+
+    def test_embedding_store_type_count_mismatch_and_ambiguity_fail(self):
+        self.prepare()
+        wrong = lv_locations.store_path('hubert', 'word', 3, self.workspace)
+        wrong.mkdir(parents=True)
+        for ambiguous in (False, True):
+            if ambiguous:
+                lv_locations.store_path('hubert', 'word', 2,
+                    self.workspace).mkdir()
+            with (self.subTest(ambiguous=ambiguous),
+                mock.patch.object(make_embeddings, 'create_store') as create,
+                mock.patch.object(make_embeddings, 'compute_embeddings')
+                    as compute):
+                with self.assertRaises(ValueError):
+                    pipeline.build_embeddings(model='hubert', condition='word',
+                        workspace=self.workspace)
+                create.assert_not_called()
+                compute.assert_not_called()
 
     def test_material_stage_filters_audio_and_preserves_hierarchy(self):
         for component, language in (('a', 'nl'), ('b', 'vl'), ('o', 'nl')):

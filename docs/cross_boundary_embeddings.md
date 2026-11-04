@@ -11,7 +11,14 @@ from lexicon_validation import build_speech_vector_index_pipeline as pipeline
 pipeline.build_embeddings(gpu=True, batch_size=32)
 ```
 
-For a single dataset/model, pass selected objects explicitly:
+For a single dataset/model using the saved selection:
+
+```python
+pipeline.build_embeddings(model='hubert', condition='cross_boundary',
+    gpu=True, batch_size=32)
+```
+
+To pass selected objects explicitly instead:
 
 ```python
 from lexicon_validation import cross_boundary_lexicon as cbl

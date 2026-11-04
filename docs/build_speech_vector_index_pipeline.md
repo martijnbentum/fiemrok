@@ -148,6 +148,33 @@ context collar on each side. Echoframe stores full token frame matrices;
 indexes apply center or mean pooling. This produces 32 index conditions.
 `build_embeddings()` uses the existing batch extractor, which can skip
 already extracted token/model/layer/collar combinations after interruption.
+To create or resume just one store from its saved selection:
+
+```python
+pipeline.build_embeddings(model='hubert', condition='word', gpu=True)
+```
+
+The four convenience wrappers accept the other `build_embeddings()` options
+as keyword arguments and return the same dictionary of store paths:
+
+```python
+pipeline.build_hubert_word_embeddings(gpu=True)
+pipeline.build_hubert_cross_boundary_embeddings(gpu=True)
+pipeline.build_w2v_word_embeddings(gpu=True)
+pipeline.build_w2v_cross_boundary_embeddings(gpu=True)
+```
+
+`model` accepts `'hubert'` or `'w2v'`; `condition` accepts `'word'` or
+`'cross_boundary'`. Each defaults to `None`, meaning all values: specifying
+only a model processes both datasets, and specifying only a condition uses
+both models. Only selected datasets and stores are loaded. The returned
+dictionary maps `(model, condition)` pairs to the processed store paths.
+Missing stores are created using the saved selection's actual type count.
+An existing matching store is resumed; a different type count or multiple
+matching directories raises an error. Invalid selectors fail before opening
+materials. This check compares directory names, not selection contents;
+reuse the frozen selection when resuming.
+
 `build_indexes()` builds fresh indexes; use `overwrite=True` explicitly to
 replace existing index files. It reports missing requested embeddings
 rather than dropping selected tokens.

@@ -156,22 +156,45 @@ def _load_items(condition, cgn, workspace):
 def build_embeddings(layers=LAYERS, collar=500, gpu=False, batch_size=32,
     verbose=True, cgn=None, workspace=lv_locations.workspace,
     components=lv_locations.default_components,
-    language=lv_locations.default_language):
-    '''Extract both saved datasets into four model/condition stores.'''
+    language=lv_locations.default_language, model=None, condition=None):
+    '''Create or resume embeddings for the requested model and dataset.
+    model:     w2v or hubert; None selects both
+    condition: word or cross_boundary; None selects both
+    Returns paths keyed by the selected (model, condition) pairs.
+    '''
     from . import make_embeddings
 
+    if model is not None and model not in tuple(MODELS):
+        raise ValueError('model must be w2v or hubert')
+    if condition is not None and condition not in CONDITIONS:
+        raise ValueError('condition must be word or cross_boundary')
+    models = tuple(MODELS) if model is None else (model,)
+    conditions = CONDITIONS if condition is None else (condition,)
     with _local_phraser_store(cgn, workspace, components, language) as cgn:
         layers = tuple(layers)
         paths = {}
-        for condition in CONDITIONS:
+        for condition in conditions:
             _, items = _load_items(condition, cgn, workspace)
             n_types = len({item.label for item in items})
-            for model, model_name in MODELS.items():
+            for model in models:
+                model_name = MODELS[model]
                 path = lv_locations.store_path(model, condition, n_types,
                     workspace=workspace)
-                architecture = 'wav2vec2' if model == 'w2v' else 'hubert'
-                embedding_store = make_embeddings.create_store(path, model_name,
-                    architecture, cgn=cgn)
+                try:
+                    existing = lv_locations.find_store_path(model, condition,
+                        workspace)
+                except FileNotFoundError:
+                    existing = None
+                if existing is None:
+                    architecture = 'wav2vec2' if model == 'w2v' else 'hubert'
+                    embedding_store = make_embeddings.create_store(path,
+                        model_name, architecture, cgn=cgn)
+                else:
+                    if existing != path:
+                        raise ValueError(f'existing store {existing} does not '
+                            f'match saved selection: expected {path}')
+                    embedding_store = lv_stores.load_echoframe_store(model,
+                        condition, materials=cgn, workspace=workspace)
                 try:
                     make_embeddings.compute_embeddings(embedding_store, items,
                         condition=condition, layers=layers, collar=collar,
@@ -180,6 +203,26 @@ def build_embeddings(layers=LAYERS, collar=500, gpu=False, batch_size=32,
                     embedding_store.close()
                 paths[model, condition] = path
         return paths
+
+
+def build_hubert_word_embeddings(**kwargs):
+    '''Create or resume HuBERT word embeddings; forward extraction options.'''
+    return build_embeddings(model='hubert', condition='word', **kwargs)
+
+
+def build_hubert_cross_boundary_embeddings(**kwargs):
+    '''Create or resume HuBERT marker embeddings; forward extraction options.'''
+    return build_embeddings(model='hubert', condition='cross_boundary', **kwargs)
+
+
+def build_w2v_word_embeddings(**kwargs):
+    '''Create or resume Wav2Vec word embeddings; forward extraction options.'''
+    return build_embeddings(model='w2v', condition='word', **kwargs)
+
+
+def build_w2v_cross_boundary_embeddings(**kwargs):
+    '''Create or resume Wav2Vec marker embeddings; forward extraction options.'''
+    return build_embeddings(model='w2v', condition='cross_boundary', **kwargs)
 
 
 def build_indexes(layers=LAYERS, collar=500, overwrite=False, cgn=None,
