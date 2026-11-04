@@ -1,11 +1,11 @@
 # Word and cross-boundary embeddings
 
-The shared extraction module is now `lexicon_validation/make_embeddings.py`.
+The shared extraction module is now `lexicon_validation/embeddings.py`.
 For the complete workflow use the
-[speech-vector index pipeline](build_speech_vector_index_pipeline.md).
+[speech-vector index pipeline](lexicon_validation_pipeline.md).
 
 ```python
-from lexicon_validation import build_speech_vector_index_pipeline as pipeline
+from lexicon_validation import pipeline
 
 # Uses the existing saved word and cross-boundary selections.
 pipeline.build_embeddings(gpu=True, batch_size=32)
@@ -23,11 +23,11 @@ To pass selected objects explicitly instead:
 ```python
 from lexicon_validation import cross_boundary_lexicon as cbl
 from lexicon_validation import lv_stores
-from lexicon_validation import make_embeddings
+from lexicon_validation import embeddings
 
 cgn = lv_stores.load_phraser_store()
 markers = cbl.load_markers(cgn)
-hubert_store = make_embeddings.compute_embeddings_for_hubert(
+hubert_store = embeddings.compute_embeddings_for_hubert(
     markers, condition='cross_boundary', gpu=True, batch_size=32)
 hubert_store.close()
 cgn.close()

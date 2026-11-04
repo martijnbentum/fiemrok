@@ -2,7 +2,7 @@
 
 ```python
 from lexicon_validation import cross_boundary_lexicon as cbl
-from lexicon_validation.build_speech_vector_index_pipeline import cross_boundary_type_bounds
+from lexicon_validation.pipeline import cross_boundary_type_bounds
 
 ideal_counts, _ = cbl.inspect_lexicon_phonemes(selected_words)
 filtered_phrases = cbl.filter_phrases_for_cross_boundary_lexicon(phrases)
@@ -29,7 +29,7 @@ components `acdhm` by default. Sampling does not repeat those filters.
 Word selection lives in `word_lexicon.py`, allows any syllable
 count, and excludes one-phone words. Its saved selection supplies the
 phone-count targets above. `fiemrok_experiment` has independent rules.
-See the [pipeline](build_speech_vector_index_pipeline.md) for both datasets.
+See the [pipeline](lexicon_validation_pipeline.md) for both datasets.
 
 The plan owns the token count and tolerance. It starts from all sufficiently
 frequent types and balances deviations from the original length proportions
@@ -119,7 +119,7 @@ sampled_tokens = lexicon.sample_lexicon(result.plan, random_seed=result.seed,
 To continue after the attempt limit, preserve the final constraints too:
 
 ```python
-from lexicon_validation.cross_boundary_lexicon_sampling import SamplingFailure
+from lexicon_validation.cross_boundary_sampling import SamplingFailure
 
 try:
     sampled_tokens = lexicon.sample_lexicon(plan, min_types=min_types)
@@ -139,5 +139,5 @@ fresh selection; use `reset_selection()` before sampling an already selected
 lexicon again.
 
 Planning, reference lexicon inspection, sampling, and reporting live in
-`cross_boundary_lexicon_sampling.py`; `cbl.plan_sampling` and
+`cross_boundary_sampling.py`; `cbl.plan_sampling` and
 `cbl.inspect_lexicon_phonemes` remain convenient public entry points.

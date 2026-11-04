@@ -3,7 +3,7 @@
 ## Observations
 
 The long progress bar after `saving vector search index` belongs to
-`analyse_results.evaluate_index()`, not index saving. Evaluation searches all
+`retrieval_evaluation.evaluate_index()`, not index saving. Evaluation searches all
 246,600 tokens, requests 11 neighbours per query, excludes self by source key,
 and scores ten neighbours.
 
@@ -35,7 +35,7 @@ CPU percentages and ETA alone do not identify the bottleneck.
 
 ## Next diagnostic: separate search and Python overhead
 
-Run in IPython with the existing `index` and `analyse_results` imported as
+Run in IPython with the existing `index` and `retrieval_evaluation` imported as
 `ar`. This assumes the current FAISS backend. It reads the index, creates
 temporary variables, and restores the original FAISS thread setting. It
 does not save or overwrite mean-pooling artifacts or the `scores` and
@@ -113,5 +113,5 @@ scores = ar.evaluate_index(index, top_k=10, batch_size=512)
 
 The evaluation returns scores; the caller must save them. Yesterday's run
 snippet saved completed layers in `cgn_lexicon_w2v_mean_results.json` and
-`cgn_lexicon_hubert1_mean_results.json`. Reloading `analyse_results` only
+`cgn_lexicon_hubert1_mean_results.json`. Reloading `retrieval_evaluation` only
 updates code after the changed file has been pulled onto the server.

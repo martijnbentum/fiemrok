@@ -9,7 +9,7 @@ import lexicon_helper
 import model_paths
 import stores
 from . import cross_boundary_lexicon as cbl
-from . import cross_boundary_lexicon_sampling as sampling
+from . import cross_boundary_sampling as sampling
 from . import lv_locations
 from . import lv_stores
 from . import word_lexicon
@@ -162,7 +162,7 @@ def build_embeddings(layers=LAYERS, collar=500, gpu=False, batch_size=32,
     condition: word or cross_boundary; None selects both
     Returns paths keyed by the selected (model, condition) pairs.
     '''
-    from . import make_embeddings
+    from . import embeddings
 
     if model is not None and model not in tuple(MODELS):
         raise ValueError('model must be w2v or hubert')
@@ -187,7 +187,7 @@ def build_embeddings(layers=LAYERS, collar=500, gpu=False, batch_size=32,
                     existing = None
                 if existing is None:
                     architecture = 'wav2vec2' if model == 'w2v' else 'hubert'
-                    embedding_store = make_embeddings.create_store(path,
+                    embedding_store = embeddings.create_store(path,
                         model_name, architecture, cgn=cgn)
                 else:
                     if existing != path:
@@ -196,7 +196,7 @@ def build_embeddings(layers=LAYERS, collar=500, gpu=False, batch_size=32,
                     embedding_store = lv_stores.load_echoframe_store(model,
                         condition, materials=cgn, workspace=workspace)
                 try:
-                    make_embeddings.compute_embeddings(embedding_store, items,
+                    embeddings.compute_embeddings(embedding_store, items,
                         condition=condition, layers=layers, collar=collar,
                         gpu=gpu, batch_size=batch_size, verbose=verbose)
                 finally:
@@ -233,7 +233,7 @@ def build_indexes(layers=LAYERS, collar=500, overwrite=False, cgn=None,
     overwrite: explicitly allow replacing existing vector-index files
     directory: vector output folder; defaults to workspace/svs_data
     '''
-    from . import build_speech_vector_index as builder
+    from . import vector_indices as builder
 
     build_index = builder.make_vector_search_index_for_layer
     with _local_phraser_store(cgn, workspace, components, language) as cgn:

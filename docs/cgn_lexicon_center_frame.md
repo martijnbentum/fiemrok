@@ -1,6 +1,6 @@
 Historical workflow for the previous selection and index APIs. Its old module names,
 filenames, and reuse options are retained as historical context. For the current
-rebuild use the [pipeline](build_speech_vector_index_pipeline.md).
+rebuild use the [pipeline](lexicon_validation_pipeline.md).
 
 
 Checks on 26 October 2026 found that `svs_data/results_w2v_results.pkl`
@@ -31,7 +31,7 @@ original index names. Both query and reference vectors use the chosen method.
 Frame loading now uses Echoframe's shard-grouped batch reader. See
 [Resume HuBERT mean pooling](../docs/hubert_mean_pooling.md) for environment setup,
 saved-index reuse without metadata loading, and a resumable evaluation block.
-`analyse_results.evaluate_index()` returns per-token precision grouped by
+`retrieval_evaluation.evaluate_index()` returns per-token precision grouped by
 word type, suitable for `per_word()`, `overall_result()`, and
 `plot_precision()`. It requests 11 neighbours and excludes self-matches by
 source key before scoring ten neighbours. The existing `analyse_results()`

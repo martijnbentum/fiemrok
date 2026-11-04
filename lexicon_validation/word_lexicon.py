@@ -11,7 +11,7 @@ from time import monotonic
 from progressbar import progressbar
 
 import lexicon_helper
-from .cross_boundary_lexicon_sampling import validate_integer
+from .cross_boundary_sampling import validate_integer
 
 
 def _group_words(words, description):

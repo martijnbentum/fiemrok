@@ -63,7 +63,7 @@ useful targets for inspection; the scores alone do not explain the failures.
 
 ## Can we establish different kinds of mistakes?
 
-Not from these saved scores. `analyse_results.evaluate_index()` retains
+Not from these saved scores. `retrieval_evaluation.evaluate_index()` retains
 only label-to-token-score lists. The local `svs_data/` contains the eight
 score files, without query source keys, neighbour labels, neighbour source
 keys, distances, or phoneme alignments. Historical word-neighbour examples

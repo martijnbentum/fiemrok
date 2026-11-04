@@ -66,7 +66,7 @@ by source key. Mean pooling averages each token's stored embedding frames;
 centre pooling selects its centre frame. Both query and reference vectors
 use the chosen pooling method. Vector pooling is implemented in
 [validate_lexicon.py](../lexicon_validation/validate_lexicon.py), and scoring in
-[analyse_results.py](../lexicon_validation/analyse_results.py).
+[retrieval_evaluation.py](../lexicon_validation/retrieval_evaluation.py).
 
 
 ## Best-layer results

@@ -14,7 +14,7 @@ import phraser
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lexicon_validation import lv_locations
-from lexicon_validation import make_embeddings as cross_embeddings
+from lexicon_validation import embeddings as cross_embeddings
 import stores
 
 

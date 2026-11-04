@@ -11,8 +11,8 @@ import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from lexicon_validation import analyse_results
-from lexicon_validation import build_speech_vector_index as validate_lexicon
+from lexicon_validation import retrieval_evaluation
+from lexicon_validation import vector_indices as validate_lexicon
 
 
 def metadata(label, key):
@@ -201,20 +201,20 @@ class PrecisionTests(unittest.TestCase):
         query = metadata('rok', b'query')
         result = {'metadatas': [metadata('rok', b'other'), query,
             metadata('dak', b'wrong')]}
-        self.assertEqual(analyse_results.precision_at_k(result, query, 2), .5)
+        self.assertEqual(retrieval_evaluation.precision_at_k(result, query, 2), .5)
 
     def test_ties_can_omit_self_without_dropping_a_real_neighbour(self):
         query = metadata('rok', b'query')
         result = {'metadatas': [metadata('rok', b'first'),
             metadata('rok', b'second'), metadata('dak', b'third')]}
-        self.assertEqual(analyse_results.precision_at_k(result, query, 2), 1.)
+        self.assertEqual(retrieval_evaluation.precision_at_k(result, query, 2), 1.)
 
     def test_streamed_evaluation_groups_scores_by_word(self):
         tokens = [metadata('rok', b'a'), metadata('rok', b'b'),
             metadata('dak', b'c')]
         index = SimpleNamespace(metadatas=tokens,
             query_by_index=lambda i, top_k: {'metadatas': tokens})
-        output = analyse_results.evaluate_index(index, top_k=2, batch_size=1)
+        output = retrieval_evaluation.evaluate_index(index, top_k=2, batch_size=1)
         self.assertEqual(output, {'rok': [.5, .5], 'dak': [0.]})
 
     def test_batched_evaluation_matches_individual_queries(self):
@@ -225,9 +225,9 @@ class PrecisionTests(unittest.TestCase):
             [i.to_bytes(2, 'big')], 0) for i in range(len(vectors))]
         metadatas = svs.metadata.VectorMetadatas(tokens, 'batch_test', '.')
         index = svs.VectorIndex(vectors, metadatas)
-        individual = analyse_results.evaluate_index(index, batch_size=1)
-        batched = analyse_results.evaluate_index(index, batch_size=8)
-        oversized = analyse_results.evaluate_index(index, batch_size=100)
+        individual = retrieval_evaluation.evaluate_index(index, batch_size=1)
+        batched = retrieval_evaluation.evaluate_index(index, batch_size=8)
+        oversized = retrieval_evaluation.evaluate_index(index, batch_size=100)
         self.assertEqual(batched, individual)
         self.assertEqual(oversized, individual)
         self.assertEqual(sum(map(len, batched.values())), 37)
@@ -239,7 +239,7 @@ class PrecisionTests(unittest.TestCase):
         neighbours.insert(1, query)
         result = {'metadatas': neighbours}
         index = SimpleNamespace(metadatas=[query])
-        output = analyse_results.analyse_results({6: [result]},
+        output = retrieval_evaluation.analyse_results({6: [result]},
             {6: [index, None]}, 6)
         self.assertEqual(output, {'rok': [.4]})
 
@@ -248,7 +248,7 @@ class PrecisionTests(unittest.TestCase):
         neighbours = [metadata('dak', bytes([i])) for i in range(9)]
         neighbours.append(metadata('rok', b'tenth'))
         index = SimpleNamespace(metadatas=[query])
-        output = analyse_results.analyse_results(
+        output = retrieval_evaluation.analyse_results(
             {6: [{'metadatas': neighbours}]}, {6: [index, None]}, 6)
         self.assertEqual(output, {'rok': [.1]})
 
@@ -258,7 +258,7 @@ class PrecisionTests(unittest.TestCase):
         neighbours += [metadata('rok', bytes([i])) for i in range(9)]
         index = SimpleNamespace(metadatas=[query])
         with self.assertRaisesRegex(ValueError, '10 non-self neighbours'):
-            analyse_results.analyse_results(
+            retrieval_evaluation.analyse_results(
                 {6: [{'metadatas': neighbours}]}, {6: [index, None]}, 6)
 
 

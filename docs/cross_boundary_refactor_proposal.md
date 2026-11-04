@@ -1,7 +1,7 @@
 # Cross-boundary lexicon refactor proposal
 
 Status: reviewed proposal (2026-10-28), nothing implemented yet.
-Covers `cross_boundary_lexicon.py` and `cross_boundary_lexicon_sampling.py`.
+Covers `cross_boundary_lexicon.py` and `cross_boundary_sampling.py`.
 Goal: preserve selected occurrences, their order, successful seeds, quota
 transitions, and sampling guarantees while making ownership clearer.
 Equality changes and public API removals are separate decisions.
@@ -59,7 +59,7 @@ cross_boundary_lexicon.py           data model + phrase filters + markers
   filter_* / load_markers            public helpers
   existing sampling entry points    retained as conveniences
 
-cross_boundary_lexicon_sampling.py  planning + sampling through public APIs
+cross_boundary_sampling.py  planning + sampling through public APIs
   plan:     LengthBin (bounds only), SamplingPlan, plan_sampling,
             allocate_targets, distribution_loss, describe_distortion
   attempt:  BinState, sample_attempt, _sample_minimums, _sample_rest,

@@ -1,4 +1,4 @@
-# Build lexicon-validation speech-vector indexes
+# Lexicon validation pipeline
 
 This pipeline belongs to `lexicon_validation`, independently of
 `fiemrok_experiment`. Run from `repo/` with the workspace environment active.
@@ -6,7 +6,7 @@ CGN and the two model checkpoints must be accessible for the full rebuild.
 Use Phraser 0.2.84 or newer for its recording copy API.
 
 ```python
-from lexicon_validation import build_speech_vector_index_pipeline as pipeline
+from lexicon_validation import pipeline
 
 materials = pipeline.build_local_phraser_store(
     components='befgijklno', language='nl')
@@ -180,7 +180,7 @@ replace existing index files. It reports missing requested embeddings
 rather than dropping selected tokens.
 
 For individual operations use `word_lexicon`, `cross_boundary_lexicon`,
-`make_embeddings`, and `build_speech_vector_index`. The old module names
+`embeddings`, and `vector_indices`. The old module names
 `make_cross_boundary_embeddings` and `validate_lexicon` have been replaced.
 
 Retrieval output contents, neighbour counts, and metrics remain deferred.

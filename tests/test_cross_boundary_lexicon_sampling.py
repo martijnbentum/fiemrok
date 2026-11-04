@@ -12,7 +12,7 @@ from unittest import mock
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from lexicon_validation import cross_boundary_lexicon as cbl
-from lexicon_validation import cross_boundary_lexicon_sampling as sampling
+from lexicon_validation import cross_boundary_sampling as sampling
 from tests.test_cross_boundary_lexicon import make_phrase
 
 

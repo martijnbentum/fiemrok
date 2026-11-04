@@ -45,7 +45,7 @@ resources stay in `repo/data/`; publication figures stay with their reports in
 `repo/notes/assets/`. Shared CGN data and model checkpoints stay outside this
 workspace.
 
-The [validation rebuild](build_speech_vector_index_pipeline.md) uses
+The [validation rebuild](lexicon_validation_pipeline.md) uses
 `lexicon_validation/lv_locations.py`, the two top-level selection PKLs,
 and `echoframe_stores/`. Old migrated stores and results are not moved or
 deleted by the new pipeline. `fiemrok_experiment` remains separate.

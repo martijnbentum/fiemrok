@@ -14,10 +14,10 @@ import speech_vector_search as svs
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from lexicon_validation import build_speech_vector_index_pipeline as pipeline
+from lexicon_validation import pipeline
 from lexicon_validation import lv_locations
 from lexicon_validation import lv_stores
-from lexicon_validation import make_embeddings
+from lexicon_validation import embeddings
 
 
 class PipelineTests(unittest.TestCase):
@@ -105,7 +105,7 @@ class PipelineTests(unittest.TestCase):
             return iter(SimpleNamespace(hidden_states=[base + layer + i * 10
                 for layer in range(13)]) for i, _ in enumerate(filenames))
 
-        with (mock.patch.object(make_embeddings.model_paths,
+        with (mock.patch.object(embeddings.model_paths,
             'get_pretrained_model', return_value=Path('/unused/checkpoint')),
             mock.patch.object(echoframe.Store, 'load_model',
             return_value=object()), mock.patch.object(
@@ -153,8 +153,8 @@ class PipelineTests(unittest.TestCase):
             with (self.subTest(selectors=selectors),
                 mock.patch.object(pipeline, '_load_items',
                     wraps=pipeline._load_items) as load,
-                mock.patch.object(make_embeddings, 'create_store') as create,
-                mock.patch.object(make_embeddings, 'compute_embeddings')
+                mock.patch.object(embeddings, 'create_store') as create,
+                mock.patch.object(embeddings, 'compute_embeddings')
                     as compute):
                 paths = pipeline.build_embeddings(workspace=self.workspace,
                     **selectors)
@@ -167,8 +167,8 @@ class PipelineTests(unittest.TestCase):
     def test_word_embedding_does_not_require_cross_boundary_selection(self):
         self.prepare()
         lv_locations.selection_path('cross_boundary', self.workspace).unlink()
-        with (mock.patch.object(make_embeddings, 'create_store'),
-            mock.patch.object(make_embeddings, 'compute_embeddings')):
+        with (mock.patch.object(embeddings, 'create_store'),
+            mock.patch.object(embeddings, 'compute_embeddings')):
             paths = pipeline.build_embeddings(model='hubert', condition='word',
                 workspace=self.workspace)
         self.assertEqual(set(paths), {('hubert', 'word')})
@@ -190,8 +190,8 @@ class PipelineTests(unittest.TestCase):
                 lv_locations.store_path('hubert', 'word', 2,
                     self.workspace).mkdir()
             with (self.subTest(ambiguous=ambiguous),
-                mock.patch.object(make_embeddings, 'create_store') as create,
-                mock.patch.object(make_embeddings, 'compute_embeddings')
+                mock.patch.object(embeddings, 'create_store') as create,
+                mock.patch.object(embeddings, 'compute_embeddings')
                     as compute):
                 with self.assertRaises(ValueError):
                     pipeline.build_embeddings(model='hubert', condition='word',

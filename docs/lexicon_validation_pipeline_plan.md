@@ -1,18 +1,18 @@
 # Lexicon validation pipeline changes
 
-Implemented plan; see [usage](build_speech_vector_index_pipeline.md). All generated validation data will be rebuilt from scratch.
+Implemented plan; see [usage](lexicon_validation_pipeline.md). All generated validation data will be rebuilt from scratch.
 This assumption does not authorize deletion. fiemrok_experiment is separate
 and remains unchanged.
 
 ## Module organization
 
 - Add word_lexicon.py for validation word selection.
-- Keep cross_boundary_lexicon.py and cross_boundary_lexicon_sampling.py
+- Keep cross_boundary_lexicon.py and cross_boundary_sampling.py
   separate from word selection.
-- Rename make_cross_boundary_embeddings.py to make_embeddings.py; extend
+- Rename make_cross_boundary_embeddings.py to embeddings.py; extend
   its existing functions to support words and markers.
-- Renamed validate_lexicon.py to build_speech_vector_index.py.
-- Add build_speech_vector_index_pipeline.py as the entry point.
+- Renamed validate_lexicon.py to vector_indices.py.
+- Add pipeline.py as the entry point.
 - Add package-local lv_locations.py for validation-specific paths;
   use explicit relative imports. Keep shared source locations in the root
   module and do not alter fiemrok_experiment paths.
@@ -79,7 +79,7 @@ no shared phones, and explicit sampling failure.
 ## Embeddings and vector indexes
 
 Extend compute_embeddings(), create_store(), and the model convenience
-functions in make_embeddings.py to accept either saved selection. Generate
+functions in embeddings.py to accept either saved selection. Generate
 four fresh Echoframe stores: word/cross-boundary times Wav2Vec 2.0/HuBERT,
 with layers 3, 6, 9, 12.
 
@@ -87,7 +87,7 @@ Do not add validate_embedding_coverage() or old-cache compatibility logic.
 Use the existing batch extractor. Downstream construction must report
 missing requested embeddings rather than silently dropping selected items.
 
-In the proposed build_speech_vector_index.py, change load_metadata_layer(),
+In the proposed vector_indices.py, change load_metadata_layer(),
 make_vector_search_index_for_layer(), and make_vsi_for_layers() to process
 the requested model/layer and saved selection order. Build every index
 fresh. Use the correct word/marker unit_type in make_vector_metadata().
@@ -98,7 +98,7 @@ inputs, order, pooling, unit types, and missing requested embeddings.
 
 Provide build_local_phraser_store(), prepare_samples(), build_embeddings(),
 and build_indexes() in
-build_speech_vector_index_pipeline.py. prepare_samples() exposes both
+pipeline.py. prepare_samples() exposes both
 n_tokens=100 and min_types=None (derive the relative type-count floor).
 
 Put the two selection PKLs directly in the external
@@ -114,7 +114,7 @@ output placement and naming remain open.
 
 ## Deferred
 
-Revisit analyse_results.py, neighbour_metadata.py, and analysis/plotting
+Revisit retrieval_evaluation.py, neighbour_metadata.py, and analysis/plotting
 scripts after agreeing retrieval storage and metrics. Prefer annotation
 lookups through Echoframe keys. Exclude only the query token itself.
 Thirty saved neighbours and precision@10 remain undecided.

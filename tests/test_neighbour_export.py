@@ -10,7 +10,7 @@ import speech_vector_search as svs
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from lexicon_validation import analyse_results
+from lexicon_validation import retrieval_evaluation
 
 
 class NeighbourExportTests(unittest.TestCase):
@@ -35,7 +35,7 @@ class NeighbourExportTests(unittest.TestCase):
                             name, directory)
                         svs.VectorIndex(vectors, metadata).save()
                     threads = faiss.omp_get_max_threads()
-                    paths = analyse_results.export_neighbours(model_name,
+                    paths = retrieval_evaluation.export_neighbours(model_name,
                         layer, pooling, directory=directory, batch_size=8)
                     self.assertEqual(faiss.omp_get_max_threads(), threads)
                     self.assertEqual(set(paths), {'word', 'cross_boundary'})
@@ -64,7 +64,7 @@ class NeighbourExportTests(unittest.TestCase):
             ('hubert', 3.0, 'mean'), ('hubert', 9, 'unknown')]
         for args in cases:
             with self.subTest(args=args), self.assertRaises(ValueError):
-                analyse_results.export_neighbours(*args)
+                retrieval_evaluation.export_neighbours(*args)
 
 
 if __name__ == '__main__':

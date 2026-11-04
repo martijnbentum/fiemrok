@@ -8,10 +8,10 @@ import pickle
 from progressbar import progressbar
 
 import lexicon_helper
-from . import cross_boundary_lexicon_sampling as sampling
+from . import cross_boundary_sampling as sampling
 from . import lv_locations as locations
-from .cross_boundary_lexicon_sampling import SamplingPlan, plan_sampling
-from .cross_boundary_lexicon_sampling import inspect_lexicon_phonemes
+from .cross_boundary_sampling import SamplingPlan, plan_sampling
+from .cross_boundary_sampling import inspect_lexicon_phonemes
 
 
 def load_markers(store, keys_path=locations.cross_boundary_marker_keys):

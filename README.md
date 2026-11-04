@@ -36,7 +36,7 @@ and codebook modules live in `phone_analysis/`.
 ```python
 from fiemrok_experiment import fiemrok
 from fiemrok_experiment import select_lexicon
-from lexicon_validation import build_speech_vector_index
+from lexicon_validation import vector_indices
 from lexicon_validation import cross_boundary_lexicon
 from phone_analysis import phone_model_outputs, codebooks
 ```
@@ -56,7 +56,7 @@ loading under the new module names.
 
 ## CGN lexicon evaluation
 
-Use the [speech-vector index pipeline](docs/build_speech_vector_index_pipeline.md)
+Use the [lexicon validation pipeline](docs/lexicon_validation_pipeline.md)
 to select words and cross-boundary items, extract both models, and build
 center/mean indexes. The experiments have independent selection rules and
 outputs. The new validation pipeline rebuilds generated data from saved

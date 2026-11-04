@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from lexicon_validation import cross_boundary_lexicon_sampling as sampling
+from lexicon_validation import cross_boundary_sampling as sampling
 from lexicon_validation import word_lexicon as wl
 
 

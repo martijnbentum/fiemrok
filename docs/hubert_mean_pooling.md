@@ -2,7 +2,7 @@
 
 Historical workflow for the previous selection and index APIs. Its old module names,
 filenames, and reuse options are retained as historical context. For the current
-rebuild use the [pipeline](build_speech_vector_index_pipeline.md).
+rebuild use the [pipeline](lexicon_validation_pipeline.md).
 
 
 Run from the remote `repo/` directory with its environment activated and the
@@ -32,7 +32,7 @@ from pathlib import Path
 
 import faiss
 
-from lexicon_validation import analyse_results as ar
+from lexicon_validation import retrieval_evaluation as ar
 from lexicon_validation import validate_lexicon as vl
 
 faiss.omp_set_num_threads(1)

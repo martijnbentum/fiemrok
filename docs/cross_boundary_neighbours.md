@@ -2,10 +2,10 @@
 
 Historical workflow for the previous selection and index APIs. Its old module names,
 filenames, and reuse options are retained as historical context. For the current
-rebuild use the [pipeline](build_speech_vector_index_pipeline.md).
+rebuild use the [pipeline](lexicon_validation_pipeline.md).
 
 
-The existing `validate_lexicon.py` and `analyse_results.py` functions support
+The existing `validate_lexicon.py` and `retrieval_evaluation.py` functions support
 both datasets. The index helpers have optional arguments; existing word
 calls keep their stores, names, pooling, and `unit_type='word'` defaults.
 
@@ -33,7 +33,7 @@ import json
 
 import faiss
 
-from lexicon_validation import analyse_results as ar
+from lexicon_validation import retrieval_evaluation as ar
 import locations
 import stores
 from lexicon_validation import validate_lexicon as vl
