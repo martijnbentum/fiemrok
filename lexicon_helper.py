@@ -85,6 +85,46 @@ def remove_overlap(words):
     return [word for word in words if not word.overlap]
 
 
+def filter_neighbour_overlap(audio, n_neighbours=5):
+    '''Keep words whose same-speaker neighbourhood has no speech overlap.
+    Check the word itself and up to n_neighbours preceding and following
+    words from its speaker, ordered by time across phrase boundaries.
+    Overlap means positive shared time with a word from another speaker;
+    touching boundaries are allowed. Words within one speaker do not overlap.
+    Return words in the original audio.words order without changing the audio.
+    '''
+    if (isinstance(n_neighbours, bool)
+        or not isinstance(n_neighbours, Integral) or n_neighbours < 0):
+        raise ValueError('n_neighbours must be a nonnegative integer')
+    words = list(audio.words)
+    if len(audio.speakers) <= 1: return words
+    ordered = sorted(range(len(words)),
+        key=lambda index: (words[index].start, words[index].end))
+    overlapping = set()
+    by_speaker = {}
+    active = []
+    for index in ordered:
+        word = words[index]
+        speaker = word.speaker_key
+        by_speaker.setdefault(speaker, []).append(index)
+        active = [other for other in active if words[other].end > word.start]
+        for other in active:
+            if (words[other].speaker_key != speaker
+                and words[other].start < word.end):
+                overlapping.update((index, other))
+        active.append(index)
+    excluded = set()
+    for indices in by_speaker.values():
+        counts = [0]
+        for index in indices:
+            counts.append(counts[-1] + (index in overlapping))
+        for position, index in enumerate(indices):
+            start = max(0, position - n_neighbours)
+            end = min(len(indices), position + n_neighbours + 1)
+            if counts[end] > counts[start]: excluded.add(index)
+    return [word for index, word in enumerate(words) if index not in excluded]
+
+
 def filter_on_n_syllables(words, n_syllables=1):
     if n_syllables is None: return words
     return [word for word in words if len(word.syllables) == n_syllables]
