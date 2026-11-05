@@ -7,6 +7,7 @@ are zero-based over all tokens; equal similarities rank by token index.
 
 from contextlib import contextmanager
 from hashlib import sha256
+from itertools import islice
 from numbers import Integral
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ from time import monotonic
 
 import h5py
 import numpy as np
+from progressbar import progressbar
 from speech_vector_search.util_math import l2_normalize_rows
 
 from . import lv_locations
@@ -33,7 +35,8 @@ def _positive_integer(value, name):
 def _fingerprint(values):
     digest = sha256()
     for value in values:
-        value = value.encode('utf-8') if isinstance(value, str) else bytes(value)
+        if isinstance(value, str): value = value.encode('utf-8')
+        else: value = bytes(value)
         digest.update(len(value).to_bytes(8, 'big'))
         digest.update(value)
     return digest.hexdigest()
@@ -112,10 +115,12 @@ def _shared_mapping(filename, metadatas, identity, create=False):
             pass
     with np.load(filename, allow_pickle=False) as saved:
         if any(str(saved[key]) != identity[key] for key in fingerprints):
-            raise ValueError('shared mapping does not match index identity/order')
+            message = 'shared mapping does not match index identity/order'
+            raise ValueError(message)
         if any(not np.array_equal(saved[key], value)
             for key, value in expected.items()):
-            raise ValueError('shared mapping does not match index type grouping')
+            message = 'shared mapping does not match index type grouping'
+            raise ValueError(message)
     return expected
 
 
@@ -185,11 +190,15 @@ def write_neighbours(index, filename, mapping_path, selected_keys,
     '''
     _positive_integer(top_k, 'top_k')
     _positive_integer(batch_size, 'batch_size')
+    if not index.metadatas.name.endswith(('_center', '_mean')):
+        message = 'index name must end in _center or _mean'
+        raise ValueError(message)
     filename, mapping_path = Path(filename), Path(mapping_path)
     if filename.exists() and not overwrite: raise FileExistsError(filename)
     lv_locations.store_path(model, condition, 1, workspace)
     n_tokens = len(index.metadatas)
-    if n_tokens <= top_k: raise ValueError('index needs more entries than top_k')
+    if n_tokens <= top_k:
+        raise ValueError('index needs more entries than top_k')
     if n_tokens > np.iinfo('uint32').max:
         raise ValueError('token count exceeds uint32 capacity')
     if len(index.vectors) != n_tokens:
@@ -219,7 +228,7 @@ def write_neighbours(index, filename, mapping_path, selected_keys,
     return filename
 
 
-class NeighbourResults:
+class Result:
     '''Disk-backed query results; row i belongs to vector-index token i.
 
     index: optional existing SVS index; otherwise load only its metadata
@@ -240,21 +249,32 @@ class NeighbourResults:
             if index is None:
                 from speech_vector_search.metadata import VectorMetadatas
 
-                path = (self.filename.parent / attrs['index_directory']).resolve()
+                path = self.filename.parent / attrs['index_directory']
+                path = path.resolve()
                 self.metadatas = VectorMetadatas.load_json(
                     path / f'{attrs["index_name"]}.json')
             else:
                 self.metadatas = index.metadatas
                 if self.metadatas.name != attrs['index_name']:
-                    raise ValueError('results belong to a different vector index')
+                    message = 'results belong to a different vector index'
+                    raise ValueError(message)
             identity = _identity(self.metadatas)
             if any(attrs[key] != value for key, value in identity.items()):
-                raise ValueError('results do not match vector index identity/order')
+                message = 'results do not match vector index identity/order'
+                raise ValueError(message)
             if mapping_path is None:
                 mapping_path = self.filename.parent / attrs['mapping_path']
             self._mapping = _shared_mapping(mapping_path, self.metadatas,
                 identity)
             self._validate_arrays()
+            self._tokens = {}
+            self._types = {}
+            self._queries = {}
+            self._type_labels = {self.metadatas[int(indices[0])].label: i
+                for i, indices in enumerate(self._mapping['type_indices'])}
+            self._description = (f'model={self.model!r} '
+                f'condition={self.condition!r} layer={self.layer} '
+                f'pooling={self.pooling!r} tokens={len(self)}')
         except BaseException:
             self._file.close()
             raise
@@ -276,15 +296,90 @@ class NeighbourResults:
     def __len__(self):
         return len(self.metadatas)
 
-    def _token_index(self, token_index):
-        if (isinstance(token_index, bool) or not isinstance(token_index, Integral)
-            or not 0 <= token_index < len(self)):
-            raise IndexError('token_index outside vector index')
+    def __repr__(self):
+        if not self._file.id.valid: return '<Result closed>'
+        return f'<Result {self._description}>'
+
+    def _check_open(self):
+        '''Raise when the result file has been closed.'''
         if not self._file.id.valid: raise ValueError('results are closed')
+
+    def _token_index(self, token_index):
+        valid_integer = (isinstance(token_index, Integral)
+            and not isinstance(token_index, bool))
+        if not valid_integer or not 0 <= token_index < len(self):
+            raise IndexError('token_index outside vector index')
+        self._check_open()
         return int(token_index)
 
     def __getitem__(self, token_index):
-        return QueryResult(self, self._token_index(token_index))
+        token_index = self._token_index(token_index)
+        if token_index not in self._queries:
+            self._queries[token_index] = Query(self, token_index)
+        return self._queries[token_index]
+
+    def __iter__(self):
+        for token_index in range(len(self)):
+            yield self[token_index]
+
+    def collect_queries(self):
+        '''Cache all queries and matches with a progress bar; returns None.
+
+        Reads numeric results only; annotation stores remain unopened.
+        '''
+        self._check_open()
+        for token_index in progressbar(range(len(self))):
+            self[token_index].neighbours
+
+    @property
+    def attributes(self):
+        '''General file metadata, without annotation or vector loading.'''
+        self._check_open()
+        return dict(self._file.attrs)
+
+    @property
+    def model(self):
+        return self.attributes['model']
+
+    @property
+    def condition(self):
+        return self.attributes['condition']
+
+    @property
+    def layer(self):
+        from echoframe.key_helper import unpack_echoframe_key
+
+        return unpack_echoframe_key(self.source_key(0))['layer']
+
+    @property
+    def pooling(self):
+        return self.attributes['index_name'].rsplit('_', 1)[1]
+
+    @property
+    def types(self):
+        '''Types in first-token order; objects are shared within this result.'''
+        self._check_open()
+        return tuple(self.type(label) for label in self._type_labels)
+
+    def type(self, label):
+        '''Look up a type by its orthographic or phoneme-sequence label.'''
+        self._check_open()
+        if label not in self._type_labels:
+            expected = ', '.join(repr(x) for x in islice(self._type_labels, 3))
+            if len(self._type_labels) > 3: expected += ', ...'
+            message = f'label not in lexicon: {label!r}; expected: {expected}'
+            raise ValueError(message)
+        type_index = self._type_labels[label]
+        if type_index not in self._types:
+            self._types[type_index] = Type(self, type_index)
+        return self._types[type_index]
+
+    def token(self, token_index):
+        '''Return the shared token object for one vector-index position.'''
+        token_index = self._token_index(token_index)
+        if token_index not in self._tokens:
+            self._tokens[token_index] = Token(self, token_index)
+        return self._tokens[token_index]
 
     def read(self, start, stop):
         '''Read a contiguous query batch without opening annotation stores.'''
@@ -295,7 +390,7 @@ class NeighbourResults:
         return {name: self._file[name][start:stop] for name in ARRAY_DTYPES}
 
     def _annotation_store(self):
-        if not self._file.id.valid: raise ValueError('results are closed')
+        self._check_open()
         if self._store is None:
             from . import lv_stores
 
@@ -335,6 +430,12 @@ class NeighbourResults:
                     self._store = None
         finally:
             self._file.close()
+            for query in self._queries.values():
+                query._same = None
+                query._neighbours = None
+            self._queries.clear()
+            self._tokens.clear()
+            self._types.clear()
 
     def __enter__(self):
         return self
@@ -343,20 +444,65 @@ class NeighbourResults:
         self.close()
 
 
-class QueryResult:
-    '''One query view; same-type columns follow same_type_indices, not rank.'''
+class Query:
+    '''One query with neighbours and same-type matches in global rank order.
 
-    def __init__(self, results, token_index):
-        self.results = results
+    The raw same_type_* arrays retain their on-disk token order. Match ranks
+    are zero-based over all dataset tokens, including the query itself.
+    '''
+
+    def __init__(self, result, token_index):
+        self.result = result
         self.token_index = token_index
+        self._same = None
+        self._neighbours = None
+
+    def __repr__(self):
+        if not self.result._file.id.valid:
+            return f'<Query index={self.token_index} closed>'
+        metadatas = self.result.metadatas
+        label = metadatas[self.token_index].label
+        description = f'index={self.token_index} label={label!r}'
+        if self._neighbours is not None and len(self._neighbours) >= 10:
+            correct = sum(metadatas[match._token_index].label == label
+                for match in self._neighbours[:10])
+            description += f' precision@10={correct / 10:.1f}'
+        return f'<Query {description}>'
 
     @property
-    def label(self):
-        return self.results.metadatas[self.token_index].label
+    def token(self):
+        return self.result.token(self.token_index)
+
+    @property
+    def same(self):
+        self.result._check_open()
+        if self._same is None:
+            indices = self.same_type_indices
+            ranks = self.same_type_ranks
+            similarities = self.same_type_similarities
+            order = np.argsort(ranks, kind='stable')
+            self._same = tuple(Match(self, indices[i], similarities[i],
+                ranks[i]) for i in order)
+        return self._same
+
+    @property
+    def neighbours(self):
+        self.result._check_open()
+        if self._neighbours is None:
+            same = {match._token_index: match for match in self.same}
+            self_rank = same[self.token_index].rank
+            indices = self.neighbour_indices
+            similarities = self.neighbour_similarities
+            # Removing self shifts only positions at or beyond its global rank.
+            self._neighbours = tuple(same[int(index)] if int(index) in same
+                else Match(self, index, similarities[position],
+                    position + int(position >= self_rank))
+                for position, index in enumerate(indices))
+        return self._neighbours
 
     def _array(self, name):
-        self.results._token_index(self.token_index)
-        return self.results._file[name][self.token_index]
+        self.result._check_open()
+        return self.result._file[name][self.token_index]
 
     @property
     def neighbour_indices(self):
@@ -368,8 +514,8 @@ class QueryResult:
 
     @property
     def same_type_indices(self):
-        self.results._token_index(self.token_index)
-        mapping = self.results._mapping
+        self.result._check_open()
+        mapping = self.result._mapping
         return mapping['type_indices'][mapping['token_types'][
             self.token_index]].copy()
 
@@ -381,14 +527,118 @@ class QueryResult:
     def same_type_similarities(self):
         return self._array('same_type_similarities')
 
+    def precision(self, n=10):
+        '''Return the fraction of the first n neighbours matching this type.'''
+        _positive_integer(n, 'n')
+        neighbours = self.neighbours
+        if n > len(neighbours):
+            raise ValueError('n exceeds saved neighbour count')
+        metadatas = self.result.metadatas
+        label = metadatas[self.token_index].label
+        return sum(metadatas[match._token_index].label == label
+            for match in neighbours[:n]) / n
+
+
+class Token:
+    '''A token identity shared by queries, matches and its parent Type.'''
+
+    def __init__(self, result, token_index):
+        self.result = result
+        self.index = token_index
+
+    def __repr__(self):
+        if not self.result._file.id.valid:
+            return f'<Token index={self.index} closed>'
+        return f'<Token index={self.index} label={self.label!r}>'
+
+    @property
+    def label(self):
+        self.result._check_open()
+        return self.result.metadatas[self.index].label
+
+    @property
+    def type(self):
+        return self.result.type(self.label)
+
+    @property
+    def source_key(self):
+        '''Echoframe key; no annotation store is opened.'''
+        return self.result.source_key(self.index)
+
+    @property
+    def phraser_key(self):
+        '''Phraser key decoded from the source key, without opening stores.'''
+        from echoframe.key_helper import unpack_echoframe_key
+
+        return unpack_echoframe_key(self.source_key)['phraser_key']
+
     @property
     def metadata(self):
-        return self.results.metadata(self.token_index)
+        '''Look up Echoframe metadata lazily, with Phraser attached.'''
+        return self.result.metadata(self.index)
 
-    def precision_at_k(self, top_k=10):
-        _positive_integer(top_k, 'top_k')
-        neighbours = self.neighbour_indices
-        if top_k > len(neighbours):
-            raise ValueError('top_k exceeds saved neighbour count')
-        return sum(self.results.metadatas[int(i)].label == self.label
-            for i in neighbours[:top_k]) / top_k
+    def context(self, n_phone_context=10, n_word_context=3):
+        return self.result.context(self.index, n_phone_context, n_word_context)
+
+
+class Type:
+    '''A label and its tokens in stable vector-index order, without ranks.'''
+
+    def __init__(self, result, type_index):
+        self.result = result
+        self.index = type_index
+        self._tokens = None
+
+    def __repr__(self):
+        if not self.result._file.id.valid:
+            return f'<Type index={self.index} closed>'
+        return f'<Type label={self.label!r} tokens={len(self)}>'
+
+    @property
+    def label(self):
+        self.result._check_open()
+        index = int(self.result._mapping['type_indices'][self.index, 0])
+        return self.result.metadatas[index].label
+
+    def __len__(self):
+        self.result._check_open()
+        return self.result._mapping['type_indices'].shape[1]
+
+    @property
+    def tokens(self):
+        self.result._check_open()
+        if self._tokens is None:
+            self._tokens = tuple(self.result.token(int(index))
+                for index in self.result._mapping['type_indices'][self.index])
+        return self._tokens
+
+
+class Match:
+    '''A query-relative token with a global, zero-based rank including self.'''
+
+    def __init__(self, query, token_index, similarity, rank):
+        self.query = query
+        self._token_index = int(token_index)
+        self._similarity = float(similarity)
+        self._rank = int(rank)
+
+    def __repr__(self):
+        if not self.query.result._file.id.valid:
+            return f'<Match index={self._token_index} closed>'
+        label = self.query.result.metadatas[self._token_index].label
+        return (f'<Match index={self._token_index} label={label!r} '
+            f'rank={self._rank} similarity={self._similarity:.4f}>')
+
+    @property
+    def token(self):
+        return self.query.result.token(self._token_index)
+
+    @property
+    def similarity(self):
+        self.query.result._check_open()
+        return self._similarity
+
+    @property
+    def rank(self):
+        self.query.result._check_open()
+        return self._rank

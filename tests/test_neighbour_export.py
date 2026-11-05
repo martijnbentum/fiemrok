@@ -39,6 +39,32 @@ def save_index(workspace, model='hubert', condition='word', layer=3,
 
 
 class NeighbourExportTests(unittest.TestCase):
+    def test_query_repr_shows_precision_only_for_cached_neighbours(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory).resolve()
+            save_index(workspace)
+            paths = retrieval_evaluation.export_neighbours('hubert', 3,
+                'center', workspace=workspace)
+            with neighbour_results.Result(paths['word']) as result:
+                query = result[0]
+                self.assertEqual(repr(query), "<Query index=0 label='type-0'>")
+                expected = query.precision(10)
+                self.assertEqual(query.precision(), expected)
+                self.assertEqual(query.precision(n=10), expected)
+                for n in [0, -1, True, 1.5, 31]:
+                    with self.assertRaises(ValueError):
+                        query.precision(n=n)
+                self.assertIsNotNone(query._same)
+                self.assertIsNotNone(query._neighbours)
+                self.assertEqual(result._tokens, {})
+                with mock.patch.object(neighbour_results.Query, '_array',
+                    side_effect=AssertionError('must use cached matches')):
+                    self.assertEqual(query.precision(), expected)
+                    self.assertEqual(repr(query), '<Query index=0 '
+                        f"label='type-0' precision@10={expected:.1f}>")
+                self.assertEqual(result._tokens, {})
+                self.assertIsNone(result._store)
+
     def test_each_condition_exports_compact_results_from_current_pipeline_index(self):
         cases = [('hubert', 'hubert', 'word', 3, 'center'),
             ('hubert', 'hubert', 'cross_boundary', 6, 'mean'),
@@ -65,11 +91,11 @@ class NeighbourExportTests(unittest.TestCase):
                     with mock.patch(
                         'lexicon_validation.lv_stores.load_echoframe_store',
                         side_effect=AssertionError('numeric reads need no store')):
-                        with neighbour_results.NeighbourResults(path) as results:
+                        with neighbour_results.Result(path) as results:
                             self.assertEqual(len(results), 36)
                             for i in range(len(results)):
                                 query = results[i]
-                                self.assertEqual(query.label,
+                                self.assertEqual(query.token.label,
                                     index.metadatas[i].label)
                                 self.assertEqual(len(query.neighbour_indices), 30)
                                 self.assertNotIn(i, query.neighbour_indices)
@@ -81,7 +107,7 @@ class NeighbourExportTests(unittest.TestCase):
                                 np.testing.assert_array_equal(
                                     query.neighbour_indices, neighbours)
                                 expected = [j for j, md in enumerate(index.metadatas)
-                                    if md.label == query.label]
+                                    if md.label == query.token.label]
                                 np.testing.assert_array_equal(
                                     query.same_type_indices, expected)
                                 self.assertEqual(len(query.same_type_ranks), 12)
@@ -101,10 +127,10 @@ class NeighbourExportTests(unittest.TestCase):
             store = mock.Mock()
             metadata = SimpleNamespace(phraser_object=object())
             store.load_metadata.return_value = metadata
-            with neighbour_results.NeighbourResults(paths['word'],
+            with neighbour_results.Result(paths['word'],
                 store=store) as results:
                 self.assertEqual(len(results[0].neighbour_indices), 5)
-                self.assertIs(results[7].metadata, metadata)
+                self.assertIs(results[7].token.metadata, metadata)
                 store.load_metadata.assert_called_once_with(results.source_key(7))
             store.close.assert_not_called()
 
@@ -122,7 +148,7 @@ class NeighbourExportTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), before)
             retrieval_evaluation.export_neighbours('hubert', 3, 'center',
                 overwrite=True, **options)
-            with neighbour_results.NeighbourResults(path) as results:
+            with neighbour_results.Result(path) as results:
                 self.assertEqual(len(results), 36)
 
     def test_multiple_matching_indexes_fail_before_loading_or_exporting(self):

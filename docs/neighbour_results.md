@@ -5,31 +5,95 @@ index with the validation pipeline:
 
 ```python
 from lexicon_validation.retrieval_evaluation import export_neighbours
-from lexicon_validation.neighbour_results import NeighbourResults
+from lexicon_validation.neighbour_results import Result
 
 paths = export_neighbours('hubert', 3, 'center', condition='word')
 
-with NeighbourResults(paths['word']) as results:
+with Result(paths['word']) as results:
+    results.model, results.condition, results.layer, results.pooling
+    results.attributes  # general file metadata
     query = results[42]
-    query.label
-    query.neighbour_indices
-    query.neighbour_similarities
-    query.same_type_indices
-    query.same_type_ranks
-    query.same_type_similarities
-    query.precision_at_k(10)
+    assert query is results[42]  # same cached Query
+    query.token.label
+    query.token.type.label
+    query.token.type.tokens  # stable token order, independent of the query
+
+    neighbour = query.neighbours[0]
+    neighbour.token.label
+    neighbour.similarity
+    neighbour.rank  # global, zero-based, including self in the population
+
+    query.same  # all same-type matches, including self, in global rank order
+    query.precision(10)
 
     # Annotation stores open only when annotations are requested.
-    query.metadata.phraser_object
-    results.metadata(int(query.neighbour_indices[0])).phraser_object
-    results.context(42, n_phone_context=10, n_word_context=3)
+    query.token.metadata.phraser_object
+    neighbour.token.metadata.phraser_object
+    query.token.context(n_phone_context=10, n_word_context=3)
 
     batch = results.read(0, 64)  # Four numeric arrays, no annotation lookups.
 ```
 
+The interaction API uses five ordinary classes, without dataclasses:
+
+| Class | Responsibility |
+| --- | --- |
+| `Result` | Owns one file, general metadata, token/type lookups, and query access. |
+| `Query` | References its result and query token; exposes `neighbours` and `same`. |
+| `Token` | Stable identity, parent type, source keys, and lazy annotation access. |
+| `Type` | Label and tokens in vector-index order. |
+| `Match` | Query-relative token, similarity, and global rank. |
+
+`query.neighbours` and `query.same` are tuples of `Match` objects, ordered
+by ascending global rank. Neighbours exclude self; same-type matches include
+self. The reader derives neighbour ranks from their saved positions and the
+saved self rank, so ties do not require self to rank first. The position in
+either tuple is not necessarily the match's global rank.
+
+Create query, token, type, and match views through `Result`; their constructors
+are internal. Use `results.token(i)` for a token and `results.type(label)`
+for a type;
+`results.types` returns all types in first-token order. Token and type objects
+are created on demand and shared within a result. Overlapping neighbour and
+same-type entries within a query share the same match object. Token identity
+is scoped to one result, even when another file describes the same selection.
+Keep these views inside the result's context manager; accessing their data
+after closing it raises `ValueError`.
+
+Queries are also created lazily and cached within a result. Use `results[i]`
+for indexed access, `for query in results` for iteration, and `len(results)`
+for the token count. Negative indices and slices are unsupported. Repeated
+query access reuses its cached matches.
+
+Use `results.collect_queries()` to load every query and its `same` and
+`neighbours` matches with a progress bar. It returns nothing; access the cached
+queries through `results[i]` or by iterating over `results`. This opens no annotation stores. Repeating
+it reuses existing objects.
+At 150,000 tokens, 100 tokens per type, and 30 neighbours, fully collecting
+one result retains about 15–19.5 million matches (roughly 4–5 GB, plus metadata
+and other objects). Closing the result clears its query, match, token, and
+type caches; externally retained views still reject data access after close.
+
+Object reprs show a compact description without disk reads, annotation
+lookups, or cache population. A query shows `precision@10` only after its
+neighbours have been cached and at least ten are available. Closed objects
+show their closed status instead of raising an exception.
+
+`query.precision(n=10)` uses the cached neighbours, loading and caching matches
+on its first call if needed. Subsequent calls perform no array reads or token
+creation.
+
+For numerical work, `query.neighbour_indices`, `neighbour_similarities`,
+`same_type_indices`, `same_type_ranks`, and `same_type_similarities` remain
+available. These arrays and `results.read()` retain the stored order:
+same-type columns use token order, while `query.same` uses rank order. Sorting
+the object view does not modify the file.
+
 `model_name` accepts `hubert`, `w2v`, or `wav2vec2`; on disk the model names
 are `hubert` and `w2v`. Layers are 3, 6, 9, 12; pooling is `center` or `mean`;
 conditions are `word` and `cross_boundary`. The default condition is `word`.
+Index names must end in `_center` or `_mean`; the writer rejects other names
+before creating result or mapping files.
 Use `workspace=...` for a different local validation workspace and
 `directory=...` for a different vector-index directory. Existing results are
 refused unless `overwrite=True` is passed. Existing shared mappings must

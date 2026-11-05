@@ -4,6 +4,7 @@ odfpy
 TextGrid
 ipython
 h5py>=3.0
+progressbar2
 
 # Additional pip-installable repositories requested for this environment.
 git+https://github.com/martijnbentum/to_vector.git

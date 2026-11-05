@@ -149,9 +149,10 @@ class PipelineTests(unittest.TestCase):
                 outputs = retrieval_evaluation.export_neighbours('hubert', 3,
                     'mean', condition=condition, top_k=1,
                     workspace=self.workspace)
-                with neighbour_results.NeighbourResults(
+                with neighbour_results.Result(
                     outputs[condition]) as results:
-                    self.assertEqual(results[0].metadata.phraser_object.key,
+                    token = results[0].token
+                    self.assertEqual(token.metadata.phraser_object.key,
                         selected[condition][0])
                     context = results.context(0)
                     self.assertTrue(context['phone']['target'])
