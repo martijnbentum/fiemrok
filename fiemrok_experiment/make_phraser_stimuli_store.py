@@ -1,4 +1,4 @@
-from phraser import textgrid_loader as tl
+from phraser.textgrids import loader as tl
 
 import locations
 import stores
