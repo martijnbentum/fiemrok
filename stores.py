@@ -1,5 +1,5 @@
 import echoframe
-from phraser import store
+from phraser import Store
 import locations
 
 CGN_SOURCE_ID = 'cgn'
@@ -28,13 +28,13 @@ def load_echoframe_sonority_store(path=locations.echoframe_sonority_store_root):
 def load_phraser_cgn_store(path = locations.cgn_lmdb):
     global cgn
     if cgn: return cgn
-    cgn = store.Store(path)
+    cgn = Store(path)
     return cgn
 
 def load_phraser_stimuli_store(path = locations.phraser_stimuli_store_root):
     global stimuli
     if stimuli: return stimuli
-    stimuli = store.Store(path)
+    stimuli = Store(path)
     return stimuli
 
 def _attach_cgn(echoframe_store):
