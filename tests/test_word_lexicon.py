@@ -58,8 +58,10 @@ class WordSelectionTests(unittest.TestCase):
         self.store.refresh_query_roots()
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            keys = wl.select_words(self.store, **kwargs)
-        return keys, output.getvalue()
+            lexicon = wl.select_words(self.store, **kwargs)
+        self.assertIsInstance(lexicon, phraser.Lexicon)
+        self.assertEqual(lexicon.n_tokens, len(lexicon.token_keys))
+        return lexicon.token_keys, output.getvalue()
 
     def labels(self, keys):
         return Counter(word.label for word in self.store.load_many(keys))

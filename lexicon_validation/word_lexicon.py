@@ -11,7 +11,7 @@ from .cross_boundary_sampling import validate_integer
 
 def select_words(store, n_tokens=100, random_seed=0, min_duration_ms=100,
     max_duration_ms=1500):
-    '''Return ordered keys of exactly n_tokens words per eligible type.
+    '''Return a Phraser Lexicon retaining n_tokens words per eligible type.
     store:            open local Phraser material store
     n_tokens:         minimum eligible occurrences and sample size per type
     random_seed:      local seed for the per-type draw
@@ -20,7 +20,7 @@ def select_words(store, n_tokens=100, random_seed=0, min_duration_ms=100,
 
     Words need at least 2 phones, no recorded timing concern, and the
     store's within_range duration flag (per-type fences assessed over the
-    whole source store). Keys follow label order, then key order. Print
+    whole source store). Token keys follow label order, then key order. Print
     Phraser's report of token and type losses per filtering stage.
     '''
     validate_integer(n_tokens, 'n_tokens', minimum=1)
@@ -32,11 +32,9 @@ def select_words(store, n_tokens=100, random_seed=0, min_duration_ms=100,
         max_duration_ms=max_duration_ms, min_phones=2,
         exclude_timing_uncertain=True)
     print(lexicon.report, flush=True)
-    keys = []
-    for entry in lexicon.values(): keys.extend(entry.keys)
-    print(f'Sampled {len(lexicon):,} types; {len(keys):,} tokens '
+    print(f'Sampled {len(lexicon):,} types; {lexicon.n_tokens:,} tokens '
         f'({n_tokens} per type); {monotonic() - started:.1f}s', flush=True)
-    return keys
+    return lexicon
 
 
 def save_selected_word_keys(keys, path):

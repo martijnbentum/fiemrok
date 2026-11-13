@@ -87,14 +87,15 @@ def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
     '''
     started = monotonic()
     with _local_phraser_store(cgn, workspace, components, language) as cgn:
-        word_keys = word_lexicon.select_words(cgn, n_tokens=n_tokens,
+        words = word_lexicon.select_words(cgn, n_tokens=n_tokens,
             random_seed=random_seed)
-        if not word_keys:
+        if not words:
             raise ValueError('no word types have enough eligible tokens')
-        selected_words = cgn.load_many(word_keys)
+        word_keys = words.token_keys
+        selected_words = words.load_tokens(cgn)
         print('Inspecting sampled word pronunciations...', flush=True)
         targets, _ = cbl.inspect_lexicon_phonemes(selected_words)
-        n_word_types = sum(targets.values())
+        n_word_types = len(words)
         lower, upper = cross_boundary_type_bounds(n_word_types, min_types)
         print(f'Cross-boundary goal: {n_word_types:,} types; '
             f'allowed {lower:,}-{upper:,}; reduce only when necessary.',
