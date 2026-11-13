@@ -51,13 +51,25 @@ outside CGN components `a,c,d,h,m`. Component and variant filtering occurs
 only when building that store, and is not repeated during sampling.
 Duration must be within 100-1500 ms, inclusive. Words are selected with
 Phraser's `build_word_lexicon`: they need at least two phones, the store's
-`within_range` duration flag and no recorded timing concern. The duration
+`within_range` duration flag, no recorded timing concern, and no overlap
+with another speaker's speech. The duration
 flag holds per-type fences assessed over the whole source store, not only
 the local material. Cross-boundary sequences have no such flag and keep
 per-type fences Q1 - 5 * IQR and Q3 + 5 * IQR, calculated after absolute
 duration filtering. Frequency eligibility and sampling happen afterward.
 Each accepted type supplies exactly `n_tokens` occurrences; the default is
 100.
+
+`word_lexicon.select_words(store)` returns a Phraser `Lexicon`. By default
+it reports recording-loading time and scan progress at recording boundaries,
+roughly every five seconds, including elapsed time and estimated time remaining.
+The final filter table shows tokens and types retained and lost, plus types
+newly below the token quota. Eligible counts precede the per-type sampling cap;
+the sampled total is reported separately. Use `verbose=False` for a quiet call.
+The inventory retains all eligible keys for types meeting `n_tokens`.
+The pipeline then calls `.sample(n_tokens=n_tokens, random_seed=random_seed)`
+to freeze its exact per-type selection. Sampling returns a new lexicon and
+drops types with too few retained keys; `.token_keys` gives its ordered keys.
 
 Words may have any syllable count.
 Their type labels are orthographic. Cross-boundary types are phoneme

@@ -87,10 +87,11 @@ def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
     '''
     started = monotonic()
     with _local_phraser_store(cgn, workspace, components, language) as cgn:
-        words = word_lexicon.select_words(cgn, n_tokens=n_tokens,
-            random_seed=random_seed)
+        words = word_lexicon.select_words(cgn, n_tokens=n_tokens)
+        words = words.sample(n_tokens=n_tokens, random_seed=random_seed)
         if not words:
             raise ValueError('no word types have enough eligible tokens')
+        print(words.sampling_report, flush=True)
         word_keys = words.token_keys
         selected_words = words.load_tokens(cgn)
         print('Inspecting sampled word pronunciations...', flush=True)

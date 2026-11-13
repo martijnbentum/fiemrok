@@ -52,13 +52,17 @@ class WordSelectionTests(unittest.TestCase):
         phrase.add_child(word)
         self.phrases.append(phrase)
 
-    def select(self, **kwargs):
+    def select(self, sample=True, **kwargs):
         if self.phrases: self.store.save_phrase_trees(self.phrases)
         self.phrases = []
         self.store.refresh_query_roots()
         output = io.StringIO()
+        random_seed = kwargs.pop('random_seed', 0)
         with contextlib.redirect_stdout(output):
             lexicon = wl.select_words(self.store, **kwargs)
+            if sample:
+                lexicon = lexicon.sample(n_tokens=kwargs.get('n_tokens', 100),
+                    random_seed=random_seed)
         self.assertIsInstance(lexicon, phraser.Lexicon)
         self.assertEqual(lexicon.n_tokens, len(lexicon.token_keys))
         return lexicon.token_keys, output.getvalue()
@@ -79,15 +83,30 @@ class WordSelectionTests(unittest.TestCase):
         for _ in range(2): self.add_word('uncertain')
         keys, report = self.select(n_tokens=3)
         self.assertEqual(self.labels(keys), {'keep': 3})
-        self.assertIn('At least 2 phones: 15 (removed 3); 5 types '
-            '(removed 1; 1 fell below 3 tokens per type)', report)
-        self.assertIn('Duration 100–1500 ms: 14 (removed 1)', report)
-        self.assertIn('Duration flag assessed: 13 (removed 1)', report)
-        self.assertIn('Duration flag within_range: 12 (removed 1)', report)
-        self.assertIn('Recorded timing uncertain: 11 (removed 1)', report)
-        self.assertIn('At least 3 tokens per type: 3 (removed 8); 1 types',
-            report)
-        self.assertIn('Sampled 1 types; 3 tokens (3 per type)', report)
+        expected = {'At least 2 phones': ['15', '3', '5', '1', '1'],
+            'Duration 100–1500 ms': ['14', '1', '5', '0', '1'],
+            'Duration flag assessed': ['13', '1', '5', '0', '1'],
+            'Duration flag within_range': ['12', '1', '5', '0', '1'],
+            'Recorded timing uncertain': ['11', '1', '5', '0', '1'],
+            'At least 3 tokens per type': ['3', '8', '1', '4', '0']}
+        for condition, counts in expected.items():
+            row = next(line for line in report.splitlines()
+                if line.startswith(condition))
+            self.assertEqual(row[len(condition):].split(), counts)
+        self.assertIn('Below quota: types newly below 3 tokens', report)
+        self.assertIn('Eligible inventory: 1 types; 3 tokens', report)
+
+    def test_inventory_retains_all_eligible_tokens_before_sampling(self):
+        for _ in range(5): self.add_word('word')
+        keys, report = self.select(sample=False, n_tokens=3)
+        self.assertEqual(len(keys), 5)
+        self.assertIn('Eligible inventory: 1 types; 5 tokens', report)
+
+    def test_verbose_false_suppresses_progress_and_report(self):
+        self.add_word('word')
+        keys, output = self.select(n_tokens=1, verbose=False)
+        self.assertEqual(len(keys), 1)
+        self.assertEqual(output, '')
 
     def test_exactly_n_tokens_per_type_in_label_then_key_order(self):
         for label in ('b', 'a'):

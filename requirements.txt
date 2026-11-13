@@ -8,7 +8,7 @@ progressbar2
 
 # Additional pip-installable repositories requested for this environment.
 git+https://github.com/martijnbentum/to_vector.git
-# Phraser 0.3.8+ supplies retained-token access for validation word lexicons.
+# Phraser 0.3.9+ supplies lexicon sampling, overlap filtering and progress.
 git+https://github.com/martijnbentum/phraser.git
 # Use Echoframe 0.1.191+ for efficient shard-grouped batch reads.
 git+https://github.com/martijnbentum/echoframe.git
