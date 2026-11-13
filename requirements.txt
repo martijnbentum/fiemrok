@@ -8,7 +8,7 @@ progressbar2
 
 # Additional pip-installable repositories requested for this environment.
 git+https://github.com/martijnbentum/to_vector.git
-# Phraser 0.2.84+ supplies the recording material-copy API.
+# Phraser 0.3.7+ supplies material copying and flag-based word lexicons.
 git+https://github.com/martijnbentum/phraser.git
 # Use Echoframe 0.1.191+ for efficient shard-grouped batch reads.
 git+https://github.com/martijnbentum/echoframe.git

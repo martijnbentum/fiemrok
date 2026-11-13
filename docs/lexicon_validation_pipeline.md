@@ -49,12 +49,17 @@ An explicit `cgn=...` supplies a caller-owned Phraser Store instead.
 With the defaults, the local material store contains Netherlandic Dutch
 outside CGN components `a,c,d,h,m`. Component and variant filtering occurs
 only when building that store, and is not repeated during sampling.
-Duration must be within 100-1500 ms, inclusive. Per-type duration fences are
-Q1 - 5 * IQR and Q3 + 5 * IQR, calculated after absolute duration filtering.
-Frequency eligibility and sampling happen afterward. Each accepted type
-supplies exactly `n_tokens` occurrences; the default is 100.
+Duration must be within 100-1500 ms, inclusive. Words are selected with
+Phraser's `build_word_lexicon`: they need at least two phones, the store's
+`within_range` duration flag and no recorded timing concern. The duration
+flag holds per-type fences assessed over the whole source store, not only
+the local material. Cross-boundary sequences have no such flag and keep
+per-type fences Q1 - 5 * IQR and Q3 + 5 * IQR, calculated after absolute
+duration filtering. Frequency eligibility and sampling happen afterward.
+Each accepted type supplies exactly `n_tokens` occurrences; the default is
+100.
 
-Words may have any syllable count but must contain at least two phones.
+Words may have any syllable count.
 Their type labels are orthographic. Cross-boundary types are phoneme
 sequences and follow the selected word types' phone-count distribution,
 using the modal pronunciation of each word type. Cross-boundary selection
@@ -74,10 +79,12 @@ Selected cross-boundary items cannot share source phone occurrences.
 
 There is no word-type cap: all types meeting the eligibility rules are kept.
 Progress output announces word/phrase loading, reports elapsed times, and
-shows starting and retained type/token counts at each filtering step. Word
-reports additionally show types newly falling below the token quota after
-each filter. IQR removal and frequency rejection are reported separately,
-followed by sampling counts and the cross-boundary distribution diagnostics.
+shows starting and retained type/token counts at each filtering step. The
+word report is Phraser's lexicon report: token and type losses per stage,
+including types newly falling below the token quota. Unassessed and
+out-of-range duration flags are separate stages. Cross-boundary IQR removal
+and frequency rejection are reported separately, followed by sampling
+counts and the cross-boundary distribution diagnostics.
 
 The defaults retain existing quota tolerance and search settings. Override
 `tolerance`, `max_attempts`, or `tries_per_round` on `prepare_samples()` when

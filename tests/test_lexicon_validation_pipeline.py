@@ -43,6 +43,7 @@ class PipelineTests(unittest.TestCase):
         for start, label, phones in ((1000, 'left', ('x', 'a')),
             (1200, 'right', ('n', 'x'))):
             word = phraser.Word(label, start, start + 200, **identity)
+            word.duration_outlier = 'within_range'
             syllable = phraser.Syllable(label, start, start + 200, **identity)
             phrase.add_child(word)
             word.add_child(syllable)
@@ -56,6 +57,7 @@ class PipelineTests(unittest.TestCase):
         for start, label, phones in ((2000, 'left', ('x', 'b')),
             (2200, 'right', ('m', 'x'))):
             word = phraser.Word(label, start, start + 200, **identity)
+            word.duration_outlier = 'within_range'
             syllable = phraser.Syllable(label, start, start + 200, **identity)
             second.add_child(word)
             word.add_child(syllable)
@@ -316,6 +318,17 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'no recordings match'):
             pipeline.build_local_phraser_store(components='a', language='vl',
                 source_store=self.cgn, workspace=self.workspace)
+        self.assertFalse(root.exists())
+
+    def test_material_stage_rejects_malformed_cgn_paths(self):
+        self.cgn.create(phraser.Audio, filename='/cgn/unknown/sample.wav',
+            duration=1000, save=True)
+        self.cgn.refresh_query_roots()
+        workspace = self.root / 'invalid_materials'
+        root = lv_locations.phraser_store_path(workspace=workspace)
+        with self.assertRaisesRegex(ValueError, 'unrecognized CGN'):
+            pipeline.build_local_phraser_store(source_store=self.cgn,
+                workspace=workspace)
         self.assertFalse(root.exists())
 
     def test_default_sampling_requires_local_store_without_fallback(self):

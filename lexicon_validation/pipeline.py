@@ -5,7 +5,6 @@ from pathlib import Path
 import pickle
 from time import monotonic
 
-import lexicon_helper
 import model_paths
 import stores
 from . import cross_boundary_lexicon as cbl
@@ -31,6 +30,7 @@ def build_local_phraser_store(components=lv_locations.default_components,
     Returns an open local Store; the caller closes it.
     '''
     from phraser import copy_audio_materials
+    from phraser.sampling import cgn
 
     components = ''.join(sorted(set(components)))
     root = lv_locations.phraser_store_path(components, language, workspace)
@@ -38,12 +38,9 @@ def build_local_phraser_store(components=lv_locations.default_components,
     print(f'Selecting source recordings: components={components}, '
         f'language={language}', flush=True)
     if source_store is None: source_store = stores.load_phraser_cgn_store()
-    audio_keys = []
-    for audio in source_store.audios.all():
-        component = lexicon_helper.filename_to_component(audio.filename)
-        variant = lexicon_helper.filename_to_dutch_variant(audio.filename)
-        if component in components and variant == language:
-            audio_keys.append(audio.key)
+    audios = cgn.select_audios(store=source_store, components=components,
+        variant=language)
+    audio_keys = [audio.key for audio in audios]
     if not audio_keys:
         raise ValueError('no recordings match the components and language')
     print(f'Selected {len(audio_keys):,} recordings for {root}', flush=True)
@@ -80,7 +77,7 @@ def cross_boundary_type_bounds(n_word_types, min_types=None):
 
 def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
     tolerance=10, max_attempts=100, tries_per_round=3, cgn=None,
-    words=None, phrases=None, workspace=lv_locations.workspace,
+    phrases=None, workspace=lv_locations.workspace,
     components=lv_locations.default_components,
     language=lv_locations.default_language):
     '''Select both datasets and save their ordered Phraser keys.
@@ -90,16 +87,11 @@ def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
     '''
     started = monotonic()
     with _local_phraser_store(cgn, workspace, components, language) as cgn:
-        print('Loading word objects from local materials...', flush=True)
-        loading_started = monotonic()
-        words = list(cgn.words.all() if words is None else words)
-        print(f'Loaded {len(words):,} word tokens in '
-            f'{monotonic() - loading_started:.1f}s', flush=True)
-        eligible = word_lexicon.filter_word_tokens(words, n_tokens=n_tokens)
-        selected_words = word_lexicon.select_words(eligible, n_tokens=n_tokens,
+        word_keys = word_lexicon.select_words(cgn, n_tokens=n_tokens,
             random_seed=random_seed)
-        if not selected_words:
+        if not word_keys:
             raise ValueError('no word types have enough eligible tokens')
+        selected_words = cgn.load_many(word_keys)
         print('Inspecting sampled word pronunciations...', flush=True)
         targets, _ = cbl.inspect_lexicon_phonemes(selected_words)
         n_word_types = sum(targets.values())
@@ -133,7 +125,6 @@ def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
             flush=True)
         marker_path = lv_locations.selection_path('cross_boundary', workspace)
         markers = lexicon.make_markers(cgn, save=True, keys_path=marker_path)
-        word_keys = [word.key for word in selected_words]
         word_lexicon.save_selected_word_keys(word_keys,
             lv_locations.selection_path('word', workspace))
         print(f'Saved {len(word_keys)} word tokens and {len(markers)} markers')

@@ -8,140 +8,138 @@ import unittest
 from collections import Counter
 from types import SimpleNamespace
 
+import phraser
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from lexicon_validation import cross_boundary_sampling as sampling
 from lexicon_validation import word_lexicon as wl
 
 
-def word(key, label='word', duration=200, variant='nl', component='b',
-    pronunciation=('a', 'b')):
-    phones = [SimpleNamespace(label=label, start=i * 10)
-        for i, label in enumerate(pronunciation)]
-    filename = f'/cgn/comp-{component}/{variant}/a.wav'
-    return SimpleNamespace(key=key.to_bytes(4, 'big'), label=label,
-        duration=duration, phones=phones, syllables=[object(), object()],
-        audio=SimpleNamespace(filename=filename))
-
-
 class WordSelectionTests(unittest.TestCase):
-    def test_filter_report_separates_stage_losses_from_quota(self):
-        tokens = [word(i, label='single', pronunciation=('a',))
-            for i in range(5)]
-        tokens += [word(10 + i, label='duration',
-            duration=99 if i == 0 else 200) for i in range(5)]
-        tokens += [word(20 + i, label='iqr',
-            duration=1000 if i == 0 else 200) for i in range(5)]
-        tokens += [word(30 + i, label='keep') for i in range(5)]
-        tokens += [word(40 + i, label='already scarce') for i in range(4)]
-        output = io.StringIO()
-        with contextlib.redirect_stdout(output):
-            result = wl.filter_word_tokens(iter(tokens), n_tokens=5)
-        self.assertEqual(Counter(w.label for w in result), {'keep': 5})
-        report = output.getvalue()
-        self.assertIn('Starting word material: 5 types; 24 tokens', report)
-        stages = [line for line in report.splitlines() if ': types ' in line]
-        self.assertEqual(len(stages), 4)
-        self.assertIn('At least 2 phones: types 5 -> 4 (lost 1); '
-            'tokens 24 -> 19 (lost 5)', stages[0])
-        self.assertIn('Duration 100-1500 ms: types 4 -> 4 (lost 0); '
-            'tokens 19 -> 18 (lost 1)', stages[1])
-        self.assertIn('Per-type 5 x IQR: types 4 -> 4 (lost 0); '
-            'tokens 18 -> 17 (lost 1)', stages[2])
-        self.assertIn('Frequency >= 5: types 4 -> 1 (lost 3); '
-            'tokens 17 -> 5 (lost 12)', stages[3])
-        self.assertTrue(all('types falling below 5 tokens: 1' in line
-            for line in stages[:3]))
-        self.assertIn('types falling below 5 tokens: 0', stages[3])
-
-    def test_filter_reads_each_tokens_phones_once(self):
-        class CountingWord:
-            def __init__(self, token):
-                self.token = token
-                self.phone_reads = 0
-
-            def __getattr__(self, name):
-                return getattr(self.token, name)
-
-            @property
-            def phones(self):
-                self.phone_reads += 1
-                return self.token.phones
-
-        tokens = [CountingWord(word(i)) for i in range(10)]
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = pathlib.Path(directory.name)
         with contextlib.redirect_stdout(io.StringIO()):
-            selected = wl.filter_word_tokens(tokens, n_tokens=2)
-        self.assertEqual(len(selected), 10)
-        self.assertEqual([w.phone_reads for w in tokens], [1] * 10)
+            self.store = phraser.Store(path=self.root / 'store')
+        self.addCleanup(self.store.close)
+        self.audio = self.store.create(phraser.Audio,
+            filename='/cgn/comp-b/nl/a.wav', duration=100000, save=True)
+        self.speaker = self.store.create(phraser.Speaker, name='speaker',
+            dataset='test', save=True)
+        self.start = 0
+        self.phrases = []
 
-    def test_sampling_report_keeps_every_eligible_type(self):
-        tokens = [word(i, label=str(i // 5)) for i in range(20)]
+    def add_word(self, label, duration=200, phones=('a', 'b'),
+        flag='within_range', timing_uncertain=False):
+        '''Queue a phrase holding one word with the given properties.'''
+        identity = dict(audio_id=self.audio.identifier,
+            speaker_id=self.speaker.identifier, store=self.store)
+        start, end = self.start, self.start + duration
+        self.start = end + 100
+        phrase = phraser.Phrase(label, start, end, **identity)
+        word = phraser.Word(label, start, end, **identity)
+        syllable = phraser.Syllable(label, start, end, **identity)
+        step = duration // len(phones)
+        for index, phone in enumerate(phones):
+            phone_start = start + index * step
+            syllable.add_child(phraser.Phone(phone, phone_start,
+                phone_start + step, **identity))
+        word.duration_outlier = flag
+        word.timing_uncertain = timing_uncertain
+        word.add_child(syllable)
+        phrase.add_child(word)
+        self.phrases.append(phrase)
+
+    def select(self, **kwargs):
+        if self.phrases: self.store.save_phrase_trees(self.phrases)
+        self.phrases = []
+        self.store.refresh_query_roots()
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            selected = wl.select_words(tokens, n_tokens=3)
-        self.assertEqual(Counter(w.label for w in selected),
-            {str(i): 3 for i in range(4)})
-        self.assertIn('all 4 eligible types', output.getvalue())
-        self.assertIn('Sampled 4 types; 12 tokens (3 per type)',
-            output.getvalue())
+            keys = wl.select_words(self.store, **kwargs)
+        return keys, output.getvalue()
 
-    def test_word_filters_allow_multisyllabic_words(self):
-        keep = [word(1), word(2, label='I')]
-        reject = [word(11, pronunciation=('a',)),
-            word(12, duration=99), word(13, duration=1501)]
-        actual = wl.filter_word_tokens(keep + reject, n_tokens=1)
-        self.assertEqual({w.key for w in actual}, {w.key for w in keep})
+    def labels(self, keys):
+        return Counter(word.label for word in self.store.load_many(keys))
 
-    def test_corpus_filters_are_not_reapplied_to_local_material(self):
-        tokens = [word(1, variant='vl')]
-        tokens += [word(20 + i, component=c) for i, c in enumerate('acdhm')]
-        self.assertEqual(wl.filter_word_tokens(tokens, n_tokens=1), tokens)
-        # Selection does not depend on corpus-layout paths in the local store.
-        tokens[0].audio.filename = 'local-recording.wav'
-        self.assertEqual(wl.filter_word_tokens(tokens, n_tokens=1), tokens)
+    def test_each_filter_removes_tokens_before_the_type_quota(self):
+        for _ in range(3): self.add_word('keep')
+        for _ in range(3): self.add_word('single', phones=('a',))
+        self.add_word('short', duration=99)
+        for _ in range(2): self.add_word('short')
+        self.add_word('outlier', flag='long')
+        for _ in range(2): self.add_word('outlier')
+        self.add_word('unassessed', flag='unset')
+        for _ in range(2): self.add_word('unassessed')
+        self.add_word('uncertain', timing_uncertain=True)
+        for _ in range(2): self.add_word('uncertain')
+        keys, report = self.select(n_tokens=3)
+        self.assertEqual(self.labels(keys), {'keep': 3})
+        self.assertIn('At least 2 phones: 15 (removed 3); 5 types '
+            '(removed 1; 1 fell below 3 tokens per type)', report)
+        self.assertIn('Duration 100–1500 ms: 14 (removed 1)', report)
+        self.assertIn('Duration flag assessed: 13 (removed 1)', report)
+        self.assertIn('Duration flag within_range: 12 (removed 1)', report)
+        self.assertIn('Recorded timing uncertain: 11 (removed 1)', report)
+        self.assertIn('At least 3 tokens per type: 3 (removed 8); 1 types',
+            report)
+        self.assertIn('Sampled 1 types; 3 tokens (3 per type)', report)
+
+    def test_exactly_n_tokens_per_type_in_label_then_key_order(self):
+        for label in ('b', 'a'):
+            for _ in range(5): self.add_word(label)
+        keys, _ = self.select(n_tokens=3)
+        self.assertEqual(self.labels(keys), {'a': 3, 'b': 3})
+        words = self.store.load_many(keys)
+        order = [(word.label, word.key) for word in words]
+        self.assertEqual(order, sorted(order))
 
     def test_duration_bounds_are_inclusive(self):
-        tokens = [word(1, duration=100), word(2, duration=1500)]
-        self.assertEqual(wl.filter_word_tokens(tokens, n_tokens=2), tokens)
+        self.add_word('word', duration=100)
+        self.add_word('word', duration=1500)
+        keys, _ = self.select(n_tokens=2)
+        self.assertEqual(len(keys), 2)
 
-    def test_iqr_filter_is_per_type_and_precedes_frequency(self):
-        good = [word(i, duration=200) for i in range(10)]
-        high = word(10, duration=1000)
-        other_type = [word(20 + i, label='other', duration=1000)
-            for i in range(10)]
-        actual = wl.filter_word_tokens(good + [high] + other_type, n_tokens=10)
-        self.assertEqual(Counter(w.label for w in actual),
-            {'word': 10, 'other': 10})
-        self.assertNotIn(high.key, [w.key for w in actual])
-        self.assertEqual(wl.filter_word_tokens(good + [high], n_tokens=11), [])
-
-    def test_select_is_order_independent_and_does_not_change_global_rng(self):
-        tokens = [word(i, label=str(i % 2)) for i in range(20)]
+    def test_selection_is_seeded_and_leaves_global_rng_alone(self):
+        for _ in range(10): self.add_word('word')
         state = random.getstate()
-        first = wl.select_words(tokens, n_tokens=3, random_seed=23)
-        second = wl.select_words(reversed(tokens), n_tokens=3, random_seed=23)
-        self.assertEqual([w.key for w in first], [w.key for w in second])
-        self.assertEqual(Counter(w.label for w in first), {'0': 3, '1': 3})
+        first, _ = self.select(n_tokens=3, random_seed=23)
+        second, _ = self.select(n_tokens=3, random_seed=23)
+        self.assertEqual(first, second)
         self.assertEqual(random.getstate(), state)
 
-    def test_sample_quota_is_not_silently_reduced(self):
-        with self.assertRaisesRegex(ValueError, 'fewer than 2'):
-            wl.select_words([word(1)], n_tokens=2)
+    def test_unassessed_store_is_rejected(self):
+        for _ in range(3): self.add_word('word', flag='unset')
+        with self.assertRaisesRegex(ValueError, 'not assessed'):
+            self.select(n_tokens=1)
+
+    def test_invalid_quota(self):
         for n in (0, -1, True, 1.5):
             with self.subTest(n=n), self.assertRaises(ValueError):
-                wl.filter_word_tokens([], n_tokens=n)
+                wl.select_words(self.store, n_tokens=n)
 
     def test_key_round_trip_preserves_order(self):
         keys = [b'b', b'a', b'c']
-        with tempfile.TemporaryDirectory() as directory:
-            path = pathlib.Path(directory) / 'word_keys.pkl'
-            wl.save_selected_word_keys(iter(keys), path)
-            self.assertEqual(wl.load_selected_word_keys(path), keys)
+        path = self.root / 'word_keys.pkl'
+        wl.save_selected_word_keys(iter(keys), path)
+        self.assertEqual(wl.load_selected_word_keys(path), keys)
 
+
+
+def pronounced_word(key, label='word', pronunciation=('a', 'b')):
+    phones = [SimpleNamespace(label=label, start=i * 10)
+        for i, label in enumerate(pronunciation)]
+    return SimpleNamespace(key=key.to_bytes(4, 'big'), label=label,
+        phones=phones)
+
+
+class PhoneTargetTests(unittest.TestCase):
     def test_phone_count_targets_come_from_selected_words(self):
-        words = [word(1, pronunciation=('b', 'a')),
-            word(2, pronunciation=('a', 'b', 'c')),
-            word(3, label='second', pronunciation=('d', 'e', 'f'))]
+        words = [pronounced_word(1, pronunciation=('b', 'a')),
+            pronounced_word(2, pronunciation=('a', 'b', 'c')),
+            pronounced_word(3, label='second', pronunciation=('d', 'e', 'f'))]
         lengths, phones = sampling.inspect_lexicon_phonemes(words)
         # Tied word pronunciations use lexical order, independent of input.
         self.assertEqual(lengths, {3: 2})
