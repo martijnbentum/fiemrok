@@ -24,7 +24,7 @@ def build_local_phraser_store(components=lv_locations.default_components,
     language=lv_locations.default_language, source_store=None,
     workspace=lv_locations.workspace):
     '''Copy eligible recordings into a new local material store.
-    components:   included CGN component letters, e.g. 'befgijklno'
+    components:   included CGN component letters, e.g. 'abefghijklno'
     language:     CGN variant directory, nl or vl
     source_store: source Phraser Store; defaults to the shared CGN store
     Returns an open local Store; the caller closes it.

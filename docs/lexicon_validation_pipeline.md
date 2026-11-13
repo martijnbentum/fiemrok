@@ -9,7 +9,7 @@ Use Phraser 0.2.84 or newer for its recording copy API.
 from lexicon_validation import pipeline
 
 materials = pipeline.build_local_phraser_store(
-    components='befgijklno', language='nl')
+    components='abefghijklno', language='nl')
 materials.close()
 pipeline.prepare_samples(n_tokens=100, random_seed=0)
 pipeline.build_embeddings(gpu=True, batch_size=32)
@@ -47,7 +47,7 @@ An explicit `cgn=...` supplies a caller-owned Phraser Store instead.
 ## Selection
 
 With the defaults, the local material store contains Netherlandic Dutch
-outside CGN components `a,c,d,h,m`. Component and variant filtering occurs
+outside CGN components `c,d,m`. Component and variant filtering occurs
 only when building that store, and is not repeated during sampling.
 Duration must be within 100-1500 ms, inclusive. Words are selected with
 Phraser's `build_word_lexicon`: they need at least two phones, the store's
@@ -112,7 +112,7 @@ workspace next to `repo/`:
 
 ```text
 fiemrok/lexicon_validation/
-  cgn_befgijklno_nl/             # local Phraser materials, default population
+  cgn_abefghijklno_nl/             # local Phraser materials, default population
   word_keys.pkl
   cross_boundary_marker_keys.pkl
   echoframe_stores/

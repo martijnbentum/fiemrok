@@ -143,7 +143,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(len(list((self.workspace / 'svs_data').glob('*'))), 64)
         self.assertEqual({p.name for p in self.workspace.iterdir()},
             {'word_keys.pkl', 'cross_boundary_marker_keys.pkl',
-            'echoframe_stores', 'svs_data', 'cgn_befgijklno_nl'})
+            'echoframe_stores', 'svs_data', 'cgn_abefghijklno_nl'})
         for condition in pipeline.CONDITIONS:
             with self.subTest(retrieval=condition), mock.patch(
                 'stores.load_phraser_cgn_store',
@@ -292,6 +292,19 @@ class PipelineTests(unittest.TestCase):
         for item in [self.phrase.audio, self.phrase.speaker,
             *self.phrase.items]:
             self.assertEqual(goal.DB.load(item.key), self.cgn.DB.load(item.key))
+
+    def test_default_material_stage_excludes_only_cdm(self):
+        for component in 'acdhm':
+            self.cgn.create(phraser.Audio,
+                filename=f'/cgn/comp-{component}/nl/extra.wav',
+                duration=1000, save=True)
+        self.cgn.refresh_query_roots()
+        goal = pipeline.build_local_phraser_store(source_store=self.cgn,
+            workspace=self.root / 'new_population')
+        self.addCleanup(goal.close)
+        components = {Path(audio.filename).parts[-3]
+            for audio in goal.audios.all()}
+        self.assertEqual(components, {'comp-a', 'comp-b', 'comp-h'})
 
     def test_material_stage_language_is_parameterized(self):
         audio = self.cgn.create(phraser.Audio,

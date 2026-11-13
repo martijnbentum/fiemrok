@@ -9,7 +9,7 @@ word_keys = workspace / 'word_keys.pkl'
 cross_boundary_marker_keys = workspace / 'cross_boundary_marker_keys.pkl'
 echoframe_stores = workspace / 'echoframe_stores'
 svs_data = workspace / 'svs_data'
-default_components = 'befgijklno'
+default_components = 'abefghijklno'
 default_language = 'nl'
 
 
