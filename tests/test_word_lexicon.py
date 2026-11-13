@@ -102,6 +102,14 @@ class WordSelectionTests(unittest.TestCase):
         self.assertEqual(len(keys), 5)
         self.assertIn('Eligible inventory: 1 types; 5 tokens', report)
 
+    def test_default_inventory_keeps_types_below_sampling_quota(self):
+        self.add_word('rare')
+        for _ in range(3): self.add_word('common')
+        keys, report = self.select(sample=False)
+        self.assertEqual(self.labels(keys), {'rare': 1, 'common': 3})
+        self.assertNotIn('tokens per type', report)
+        self.assertNotIn('Below quota', report)
+
     def test_verbose_false_suppresses_progress_and_report(self):
         self.add_word('word')
         keys, output = self.select(n_tokens=1, verbose=False)

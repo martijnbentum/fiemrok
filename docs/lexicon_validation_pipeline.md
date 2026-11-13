@@ -66,8 +66,10 @@ roughly every five seconds, including elapsed time and estimated time remaining.
 The final filter table shows tokens and types retained and lost, plus types
 newly below the token quota. Eligible counts precede the per-type sampling cap;
 the sampled total is reported separately. Use `verbose=False` for a quiet call.
-The inventory retains all eligible keys for types meeting `n_tokens`.
-The pipeline then calls `.sample(n_tokens=n_tokens, random_seed=random_seed)`
+The inventory retains all eligible keys and has no type-frequency minimum
+by default (`n_tokens=None`). Pass `n_tokens` explicitly to filter rare types
+during building. The pipeline supplies its quota explicitly, then calls
+`.sample(n_tokens=n_tokens, random_seed=random_seed)`
 to freeze its exact per-type selection. Sampling returns a new lexicon and
 drops types with too few retained keys; `.token_keys` gives its ordered keys.
 

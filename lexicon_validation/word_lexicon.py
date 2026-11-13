@@ -9,11 +9,11 @@ import phraser
 from .cross_boundary_sampling import validate_integer
 
 
-def select_words(store, n_tokens=100, min_duration_ms=100,
+def select_words(store, n_tokens=None, min_duration_ms=100,
     max_duration_ms=1500, verbose=True, exclude_overlap=True):
     '''Build an eligible word inventory; sample it separately with .sample().
     store:            open local Phraser material store
-    n_tokens:         minimum eligible occurrences per type
+    n_tokens:         optional minimum eligible occurrences; None keeps all types
     min_duration_ms:  inclusive absolute duration minimum
     max_duration_ms:  inclusive absolute duration maximum
     verbose:          print loading, scan progress and the final report
@@ -24,7 +24,8 @@ def select_words(store, n_tokens=100, min_duration_ms=100,
     whole source store). Token keys follow label order, then key order. Print
     Phraser's report of token and type losses per filtering stage.
     '''
-    validate_integer(n_tokens, 'n_tokens', minimum=1)
+    if n_tokens is not None:
+        validate_integer(n_tokens, 'n_tokens', minimum=1)
     if verbose:
         print('Building the word lexicon from local materials...', flush=True)
     started = monotonic()
