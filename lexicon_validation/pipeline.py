@@ -81,9 +81,9 @@ def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
     components=lv_locations.default_components,
     language=lv_locations.default_language, word_inventory=None):
     '''Select both datasets and save their ordered Phraser keys.
-    n_tokens:   exact number of selected occurrences per type
-    min_types:  optional stricter floor; defaults to 90% of word types
-    workspace: validation output directory, containing both key files
+    n_tokens:       exact number of selected occurrences per type
+    min_types:      optional stricter floor; defaults to 90% of word types
+    workspace:      validation output directory, containing both key files
     word_inventory: saved Word Lexicon path; None builds an inventory
     '''
     started = monotonic()
