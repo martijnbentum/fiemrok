@@ -49,8 +49,10 @@ class PipelineTests(unittest.TestCase):
             word.add_child(syllable)
             for index, phone in enumerate(phones):
                 phone_start = start + index * 100
-                syllable.add_child(phraser.Phone(phone, phone_start,
-                    phone_start + 100, **identity))
+                item = phraser.Phone(phone, phone_start,
+                    phone_start + 100, **identity)
+                item.duration_outlier = 'within_range'
+                syllable.add_child(item)
         self.cgn.save_many(phrase.items)
         self.phrase = phrase
         second = phraser.Phrase('second phrase', 2000, 2400, **identity)
@@ -63,8 +65,10 @@ class PipelineTests(unittest.TestCase):
             word.add_child(syllable)
             for index, phone in enumerate(phones):
                 phone_start = start + index * 100
-                syllable.add_child(phraser.Phone(phone, phone_start,
-                    phone_start + 100, **identity))
+                item = phraser.Phone(phone, phone_start,
+                    phone_start + 100, **identity)
+                item.duration_outlier = 'within_range'
+                syllable.add_child(item)
         self.cgn.save_many(second.items)
         self.cgn.refresh_query_roots()
         local = pipeline.build_local_phraser_store(source_store=self.cgn,
@@ -100,6 +104,26 @@ class PipelineTests(unittest.TestCase):
             self.workspace).exists())
         self.assertFalse(lv_locations.selection_path('cross_boundary',
             self.workspace).exists())
+
+    def test_saved_word_inventory_is_sampled_without_rebuilding(self):
+        inventory = phraser.build_word_lexicon(store=self.cgn, min_phones=2)
+        path = self.root / 'words.pkl'
+        inventory.save(path)
+        with mock.patch.object(pipeline.word_lexicon, 'select_words',
+            side_effect=AssertionError('inventory rebuilt')):
+            selected = pipeline.prepare_samples(n_tokens=1,
+                max_attempts=1, tolerance=0, workspace=self.workspace,
+                word_inventory=path)
+        self.assertEqual(selected['word'], inventory.sample(1).token_keys)
+        self.assertEqual(len(selected['cross_boundary']), 2)
+
+    def test_saved_non_word_inventory_is_rejected(self):
+        inventory = phraser.build_phone_lexicon(store=self.cgn)
+        path = self.root / 'phones.pkl'
+        inventory.save(path)
+        with self.assertRaisesRegex(ValueError, 'Word Lexicon'):
+            pipeline.prepare_samples(n_tokens=1, workspace=self.workspace,
+                word_inventory=path)
 
     def test_saved_samples_build_four_stores_and_all_32_indexes(self):
         selected = self.prepare()

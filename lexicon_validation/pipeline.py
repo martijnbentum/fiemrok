@@ -79,15 +79,16 @@ def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
     tolerance=10, max_attempts=100, tries_per_round=3, cgn=None,
     phrases=None, workspace=lv_locations.workspace,
     components=lv_locations.default_components,
-    language=lv_locations.default_language):
+    language=lv_locations.default_language, word_inventory=None):
     '''Select both datasets and save their ordered Phraser keys.
     n_tokens:   exact number of selected occurrences per type
     min_types:  optional stricter floor; defaults to 90% of word types
     workspace: validation output directory, containing both key files
+    word_inventory: saved Word Lexicon path; None builds an inventory
     '''
     started = monotonic()
     with _local_phraser_store(cgn, workspace, components, language) as cgn:
-        words = word_lexicon.select_words(cgn, n_tokens=n_tokens)
+        words = _load_word_inventory(cgn, n_tokens, word_inventory)
         words = words.sample(n_tokens=n_tokens, random_seed=random_seed)
         if not words:
             raise ValueError('no word types have enough eligible tokens')
@@ -133,6 +134,20 @@ def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
         print(f'Sampling finished in {monotonic() - started:.1f}s', flush=True)
         return {'word': word_keys,
             'cross_boundary': [marker.key for marker in markers]}
+
+
+def _load_word_inventory(store, n_tokens, path):
+    '''Build an inventory or reuse a saved Word inventory without rescanning.'''
+    if path is None:
+        return word_lexicon.select_words(store, n_tokens=n_tokens)
+    from phraser import Lexicon, Word
+
+    words = Lexicon.load(path)
+    if words.segment_class is not Word:
+        raise ValueError('word_inventory must contain a Word Lexicon')
+    print(f'Loaded word inventory: {len(words):,} types; '
+        f'{words.n_tokens:,} retained tokens from {path}', flush=True)
+    return words
 
 
 def _load_items(condition, cgn, workspace):

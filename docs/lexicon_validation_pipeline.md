@@ -3,7 +3,7 @@
 This pipeline belongs to `lexicon_validation`, independently of
 `fiemrok_experiment`. Run from `repo/` with the workspace environment active.
 CGN and the two model checkpoints must be accessible for the full rebuild.
-Use Phraser 0.2.84 or newer for its recording copy API.
+Use Phraser 0.3.13 or newer for saved Lexicon support.
 
 ```python
 from lexicon_validation import pipeline
@@ -23,7 +23,7 @@ It saves ordered Phraser keys, which both models and every layer/pooling
 condition then use. To choose another validation workspace, pass the same
 `workspace=...` to all four calls. For a different material population, pass
 the same `components` and `language` to every stage. The defaults include
-components `b,e,f,g,i,j,k,l,n,o` and variant `nl`.
+components `a,b,e,f,g,h,i,j,k,l,n,o` and variant `nl`.
 
 ## Local Phraser materials
 
@@ -54,9 +54,10 @@ Phraser's `build_word_lexicon`: they need at least two phones, the store's
 `within_range` duration flag, no recorded timing concern, and no overlap
 with another speaker's speech. The duration
 flag holds per-type fences assessed over the whole source store, not only
-the local material. Cross-boundary sequences have no such flag and keep
-per-type fences Q1 - 5 * IQR and Q3 + 5 * IQR, calculated after absolute
-duration filtering. Frequency eligibility and sampling happen afterward.
+the local material. Cross-boundary sequences require every constituent
+phone's duration flag to be `within_range`, and exclude their target span
+when it overlaps another speaker's speech. No per-type cross-boundary IQR
+filter is applied. Frequency eligibility and sampling happen afterward.
 Each accepted type supplies exactly `n_tokens` occurrences; the default is
 100.
 
@@ -72,6 +73,18 @@ during building. The pipeline supplies its quota explicitly, then calls
 `.sample(n_tokens=n_tokens, random_seed=random_seed)`
 to freeze its exact per-type selection. Sampling returns a new lexicon and
 drops types with too few retained keys; `.token_keys` gives its ordered keys.
+
+To reuse a previously built inventory without rescanning words:
+
+```python
+pipeline.prepare_samples(n_tokens=31, random_seed=0,
+    word_inventory='../lexicon_validation/word_lexicon.pkl')
+```
+
+The inventory must be a saved Phraser Word Lexicon for these materials.
+Its eligibility rules and retained keys are reused; sampling still drops
+types with too few retained occurrences. The complete inventory file is
+left unchanged.
 
 Words may have any syllable count.
 Their type labels are orthographic. Cross-boundary types are phoneme
@@ -96,8 +109,9 @@ Progress output announces word/phrase loading, reports elapsed times, and
 shows starting and retained type/token counts at each filtering step. The
 word report is Phraser's lexicon report: token and type losses per stage,
 including types newly falling below the token quota. Unassessed and
-out-of-range duration flags are separate stages. Cross-boundary IQR removal
-and frequency rejection are reported separately, followed by sampling
+out-of-range duration flags are separate stages. Cross-boundary phone-flag
+and speech-overlap losses and frequency rejection are reported separately,
+followed by sampling
 counts and the cross-boundary distribution diagnostics.
 
 The defaults retain existing quota tolerance and search settings. Override

@@ -5,6 +5,7 @@ from collections import Counter
 from contextlib import redirect_stdout
 from io import StringIO
 from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -18,14 +19,20 @@ def make_phrase(words, component='b', start=1000, variant='nl'):
     phones = []
     phrase_words = []
     for word_index, labels in enumerate(words):
-        word = SimpleNamespace(key=word_index)
+        word = SimpleNamespace(key=word_index, label=' '.join(labels),
+            start=start + len(phones) * 100, audio_id=b'audio',
+            speaker_id=b'speaker')
         phrase_words.append(word)
         for label in labels:
             phone_start = start + len(phones) * 100
             phone = SimpleNamespace(label=label, start=phone_start,
-                end=phone_start + 100, word=word)
+                end=phone_start + 100, word=word,
+                duration_outlier='within_range')
             phones.append(phone)
-    return SimpleNamespace(phones=phones, words=phrase_words, audio=audio)
+        word.end = start + len(phones) * 100
+    audio.words = phrase_words
+    return SimpleNamespace(phones=phones, words=phrase_words, audio=audio,
+        audio_id=b'audio', speaker_id=b'speaker')
 
 
 def find_sequence(ps, start, end):
@@ -225,6 +232,8 @@ class LexiconTests(unittest.TestCase):
         too_long.phrase_sequences[0].sequences[0].phoneme_sequence = 'd e'
         retained.phrase_sequences += infrequent.phrase_sequences
         retained.phrase_sequences += too_long.phrase_sequences
+        outlier = retained.phrase_sequences[10].sequences[0].phones[0]
+        outlier.duration_outlier = 'long'
         expected = [ps.sequences[0] for ps in retained.phrase_sequences[:10]]
         output = StringIO()
         with redirect_stdout(output):
@@ -234,7 +243,8 @@ class LexiconTests(unittest.TestCase):
         self.assertIn('Absolute duration (100-1500 ms): 2 types, '
             '13 tokens retained; whole types removed: 1; tokens removed: 2',
             report)
-        self.assertIn('Per-type duration IQR: 2 types, 12 tokens retained; '
+        self.assertIn('Phone duration flags within_range: 2 types, '
+            '12 tokens retained; '
             'whole types removed: 0; tokens removed: 1', report)
         self.assertIn('Frequency (>= 10/type): 1 types, 10 tokens retained; '
             'whole types removed: 1; tokens removed: 2', report)
@@ -251,7 +261,7 @@ class LexiconTests(unittest.TestCase):
         report = output.getvalue()
         self.assertIn('0 types, 0 tokens before duration filtering', report)
         self.assertEqual(report.count(
-            'whole types removed: 0; tokens removed: 0'), 3)
+            'whole types removed: 0; tokens removed: 0'), 4)
 
     def test_duration_limits_are_inclusive_and_precede_frequency(self):
         lexicon = self.make_duration_lexicon([99, 100, 1500, 1501])
@@ -273,19 +283,50 @@ class LexiconTests(unittest.TestCase):
         self.assertEqual([t.end - t.start for t in tokens], [200])
         self.assertEqual(lexicon.sequence_counts, {'a n': 3})
 
-    def test_per_type_iqr_filter_precedes_frequency(self):
+    def test_within_range_phones_do_not_receive_another_iqr_filter(self):
         lexicon = self.make_duration_lexicon([200] * 10 + [1400])
         candidates = lexicon.collect_candidate_tokens(10)
-        self.assertEqual(len(candidates['a n']), 10)
-        self.assertEqual({s.end - s.start for s in candidates['a n']}, {200})
-        self.assertEqual(lexicon.collect_candidate_tokens(11), {})
+        self.assertEqual(len(candidates['a n']), 11)
+        self.assertEqual({s.end - s.start for s in candidates['a n']},
+            {200, 1400})
+        self.assertEqual(len(lexicon.collect_candidate_tokens(11)['a n']), 11)
 
-    def test_iqr_multiplier_is_configurable(self):
-        lexicon = self.make_duration_lexicon([100, 150, 200, 250, 700])
-        self.assertEqual(len(lexicon.collect_candidate_tokens(1)['a n']), 5)
-        lexicon = self.make_duration_lexicon([100, 150, 200, 250, 700],
-            iqr_multiplier=1.5)
-        self.assertEqual(len(lexicon.collect_candidate_tokens(1)['a n']), 4)
+    def test_each_phone_must_be_positively_assessed_within_range(self):
+        for state in ('unset', 'short', 'long'):
+            for position in (0, 1):
+                with self.subTest(state=state, position=position):
+                    lexicon = self.make_duration_lexicon([200, 200])
+                    sequence = lexicon.phrase_sequences[0].sequences[0]
+                    sequence.phones[position].duration_outlier = state
+                    self.assertEqual(lexicon.collect_candidate_tokens(2), {})
+                    retained = lexicon.collect_candidate_tokens(1)['a n']
+                    self.assertEqual(len(retained), 1)
+
+    def test_overlap_uses_exact_target_span_and_other_speaker_speech(self):
+        for start, end, speaker, label, kept in (
+            (1100, 1300, b'other', 'speech', False),
+            (1050, 1100, b'other', 'speech', True),
+            (1300, 1350, b'other', 'speech', True),
+            (1000, 1050, b'other', 'speech', True),
+            (1100, 1300, b'speaker', 'speech', True),
+            (1100, 1300, b'other', '<p:>', True)):
+            with self.subTest(start=start, end=end, speaker=speaker,
+                label=label):
+                phrase = make_phrase([['edge', 'a'], ['n', 'edge']])
+                other = SimpleNamespace(start=start, end=end, label=label,
+                    audio_id=phrase.audio_id, speaker_id=speaker)
+                phrase.audio.words.append(other)
+                lexicon = cbl.CrossBoundaryLexicon([phrase])
+                candidates = lexicon.collect_candidate_tokens(1)
+                self.assertEqual('a n' in candidates, kept)
+
+    def test_overlap_timeline_is_built_once_per_recording(self):
+        phrase = make_phrase([['edge', 'a', 'b'], ['n', 'm', 'edge']])
+        lexicon = cbl.CrossBoundaryLexicon([phrase])
+        with patch.object(cbl.overlap, '_WordTimeline',
+            wraps=cbl.overlap._WordTimeline) as timeline:
+            lexicon.collect_candidate_tokens(1)
+        self.assertEqual(timeline.call_count, 1)
 
     def test_candidate_order_is_independent_of_phrase_order(self):
         lexicon = self.make_duration_lexicon([200, 220, 240, 260])

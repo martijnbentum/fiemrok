@@ -5,6 +5,7 @@ from numbers import Real
 from pathlib import Path
 import pickle
 
+from phraser import overlap
 from progressbar import progressbar
 
 import lexicon_helper
@@ -24,8 +25,7 @@ def load_markers(store, keys_path=locations.cross_boundary_marker_keys):
 class CrossBoundaryLexicon:
     '''Hold phrase sequences and aggregate counts by phoneme string.'''
 
-    def __init__(self, phrases, min_duration_ms=100, max_duration_ms=1500,
-        iqr_multiplier=5):
+    def __init__(self, phrases, min_duration_ms=100, max_duration_ms=1500):
         for name, value in (('min_duration_ms', min_duration_ms),
             ('max_duration_ms', max_duration_ms)):
             if (isinstance(value, bool) or not isinstance(value, Real)
@@ -35,8 +35,6 @@ class CrossBoundaryLexicon:
             raise ValueError('min_duration_ms must not exceed max_duration_ms')
         self.min_duration_ms = min_duration_ms
         self.max_duration_ms = max_duration_ms
-        lexicon_helper.filter_outlier_tokens_from_type([], iqr_multiplier)
-        self.iqr_multiplier = iqr_multiplier
         self.successful_seed = None
         self.sampling_result = None
         ps = PhraseSequences
@@ -132,8 +130,8 @@ class CrossBoundaryLexicon:
     def collect_candidate_tokens(self, tokens_per_type):
         '''Group tokens by phoneme string, keeping sufficiently frequent types.
         Exclude one-phone sequences, which cannot cross a word boundary.
-        Apply absolute and per-type IQR duration filters before frequency.
-        Frequency is a preliminary filter; tokens may still overlap.
+        Require within_range phones and exclude other-speaker speech.
+        Frequency is preliminary; candidates can still share source phones.
         '''
         tokens_by_type = {}
         starting_types = set()
@@ -160,24 +158,19 @@ class CrossBoundaryLexicon:
             duration_tokens)
         del starting_types
 
-        filtered = {}
-        print(f'Filtering per-type durations at {self.iqr_multiplier:g} * IQR',
-            flush=True)
-        for label in progressbar(sorted(tokens_by_type)):
-            tokens = lexicon_helper.filter_outlier_tokens_from_type(
-                tokens_by_type[label], iqr_multiplier=self.iqr_multiplier)
-            if tokens: filtered[label] = tokens
-        iqr_types = len(filtered)
-        iqr_tokens = sum(map(len, filtered.values()))
-        _report_candidate_filter('Per-type duration IQR', duration_types,
-            duration_tokens, iqr_types, iqr_tokens)
-        del tokens_by_type
+        _filter_candidate_groups(tokens_by_type, _within_range_phones,
+            'Phone duration flags within_range')
+        speech = _CandidateSpeechOverlap()
+        _filter_candidate_groups(tokens_by_type, speech.is_clear,
+            'Exclude overlapping speech')
+        filtered_types = len(tokens_by_type)
+        filtered_tokens = sum(map(len, tokens_by_type.values()))
 
         print(f'Keeping types with at least {tokens_per_type:,} tokens',
             flush=True)
         candidates = {}
-        for label in progressbar(list(filtered)):
-            tokens = filtered[label]
+        for label in progressbar(list(tokens_by_type)):
+            tokens = tokens_by_type[label]
             if len(tokens) >= tokens_per_type:
                 candidates[label] = sorted(tokens, key=lambda sequence: (
                     sequence.audio.filename,
@@ -186,10 +179,43 @@ class CrossBoundaryLexicon:
         frequency_types = len(candidates)
         frequency_tokens = sum(map(len, candidates.values()))
         _report_candidate_filter(f'Frequency (>= {tokens_per_type:,}/type)',
-            iqr_types, iqr_tokens, frequency_types, frequency_tokens)
+            filtered_types, filtered_tokens, frequency_types, frequency_tokens)
         print('Frequency losses are whole types below the token quota; '
             'duration token losses can leave their type eligible.', flush=True)
         return candidates
+
+
+def _within_range_phones(sequence):
+    '''Require a positive duration assessment on every constituent phone.'''
+    for phone in sequence.phones:
+        if phone.duration_outlier != 'within_range': return False
+    return True
+
+
+def _filter_candidate_groups(groups, keep, stage):
+    '''Filter tokens in place and report sequential token and type losses.'''
+    before_types = len(groups)
+    before_tokens = sum(map(len, groups.values()))
+    for label in progressbar(list(groups)):
+        tokens = [token for token in groups[label] if keep(token)]
+        if tokens: groups[label] = tokens
+        else: del groups[label]
+    _report_candidate_filter(stage, before_types, before_tokens, len(groups),
+        sum(map(len, groups.values())))
+
+
+class _CandidateSpeechOverlap:
+    '''Index all speakers' words once per recording for exact-span checks.'''
+
+    def __init__(self):
+        self.timelines = {}
+
+    def is_clear(self, sequence):
+        audio = sequence.audio
+        key = getattr(audio, 'key', id(audio))
+        if key not in self.timelines:
+            self.timelines[key] = overlap._WordTimeline(audio.words)
+        return not self.timelines[key].matching_words(sequence)
 
 
 def _report_candidate_filter(stage, before_types, before_tokens, after_types,
@@ -288,6 +314,14 @@ class CrossBoundarySequence:
     @property
     def audio(self):
         return self.phrase.audio
+
+    @property
+    def audio_id(self):
+        return self.phrase.audio_id
+
+    @property
+    def speaker_id(self):
+        return self.phrase.speaker_id
 
     @property
     def words(self):

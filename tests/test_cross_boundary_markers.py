@@ -37,8 +37,10 @@ class MarkerTests(unittest.TestCase):
             word.add_child(syllable)
             for i, label in enumerate(labels):
                 phone_start = start + i * 100
-                syllable.add_child(phraser.Phone(label, phone_start,
-                    phone_start + 100, **identity))
+                phone = phraser.Phone(label, phone_start,
+                    phone_start + 100, **identity)
+                phone.duration_outlier = 'within_range'
+                syllable.add_child(phone)
         self.store.save_many(phrase.items)
         self.phrase = phrase
         self.source_keys = [item.key for item in phrase.items]
