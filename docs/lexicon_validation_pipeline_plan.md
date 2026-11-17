@@ -42,7 +42,7 @@ load_selected_word_keys() in word_lexicon.py.
 Population filtering happens only in the material-store stage. Require at
 least two phones; allow any syllable count; apply inclusive 100-1500 ms bounds; group by orthographic
 label; apply per-type 5 * IQR duration filtering; check frequency; sample
-exactly n_tokens=100 per type, configurable. Save ordered Phraser keys.
+exactly n_tokens=31 per type, configurable. Save ordered Phraser keys.
 Use stable candidate ordering and a local random generator. No additional
 annotated-overlap filter is introduced.
 
@@ -62,7 +62,7 @@ Change inspect_lexicon_phonemes() to accept newly selected word objects,
 not an old layer-6 store. Retain modal pronunciation per word type with
 deterministic tie-breaking.
 
-Expose n_tokens=100 through plan_sampling(). The pipeline uses min_types=None
+Expose n_tokens=31 through plan_sampling(). The pipeline uses min_types=None
 to derive a floor of ceil(0.9 * word_type_count) and passes it to the sampler.
 Start at the word-type goal, never request more, and reduce only after
 failed rounds (or an insufficient frequency ceiling). Keep a successful
@@ -99,7 +99,7 @@ inputs, order, pooling, unit types, and missing requested embeddings.
 Provide build_local_phraser_store(), prepare_samples(), build_embeddings(),
 and build_indexes() in
 pipeline.py. prepare_samples() exposes both
-n_tokens=100 and min_types=None (derive the relative type-count floor).
+n_tokens=31 and min_types=None (derive the relative type-count floor).
 
 Put the two selection PKLs directly in the external
 fiemrok/lexicon_validation workspace. Put the four Echoframe stores under

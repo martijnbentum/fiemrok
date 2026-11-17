@@ -129,7 +129,7 @@ class PipelineTests(unittest.TestCase):
         selected = self.prepare()
 
         def inference(filenames, **kwargs):
-            base = np.arange(100 * 8, dtype=np.float32).reshape(1, 100, 8)
+            base = np.arange(200 * 8, dtype=np.float32).reshape(1, 200, 8)
             return iter(SimpleNamespace(hidden_states=[base + layer + i * 10
                 for layer in range(13)]) for i, _ in enumerate(filenames))
 
@@ -160,6 +160,9 @@ class PipelineTests(unittest.TestCase):
                 keys = [key_helper.unpack_echoframe_key(
                     md.source_echoframe_keys[0])['phraser_key']
                     for md in index.metadatas]
+                self.assertEqual({key_helper.unpack_echoframe_key(
+                    md.source_echoframe_keys[0])['collar']
+                    for md in index.metadatas}, {2000})
                 self.assertEqual(keys, selected[condition])
                 self.assertEqual(index.metadatas.unit_type,
                     'word' if condition == 'word' else 'marker')

@@ -8,7 +8,7 @@ ideal_counts, _ = cbl.inspect_lexicon_phonemes(selected_words)
 filtered_phrases = cbl.filter_phrases_for_cross_boundary_lexicon(phrases)
 lexicon = cbl.CrossBoundaryLexicon(filtered_phrases,
     min_duration_ms=100, max_duration_ms=1500)
-plan = cbl.plan_sampling(lexicon, ideal_counts, n_tokens=100,
+plan = cbl.plan_sampling(lexicon, ideal_counts, n_tokens=31,
     tolerance=10)
 print(plan)
 min_types, _ = cross_boundary_type_bounds(sum(ideal_counts.values()))

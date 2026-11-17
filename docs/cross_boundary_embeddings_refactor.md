@@ -27,8 +27,8 @@ Keep computation near the top and the two setup functions at the bottom.
 - `compute_embeddings(embedding_store, ...)` accepts an open, configured store.
 - Obtain CGN through that store, load the saved markers, infer the sole
   registered model, and call EchoFrame's batch function.
-- Preserve full-frame extraction, layers 3/6/9/12, 500 ms collar per side,
-  batch controls, and resume behavior. A 2000 ms collar remains configurable.
+- Preserve full-frame extraction, layers 3/6/9/12, 2000 ms collar per side,
+  batch controls, and resume behavior. The collar remains configurable.
 - Let the caller own the store's lifetime; omit redundant input branches.
 - Keep real-store integration tests for exact frame matrices, marker links,
   reload, missing layers, and skipped inference on completed requests.

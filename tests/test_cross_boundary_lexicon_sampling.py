@@ -52,7 +52,7 @@ class PlanningTests(unittest.TestCase):
         plan = sampling.SamplingPlan({2: 5, 3: 5, 4: 5}, {2: 20, 3: 20, 4: 2})
         self.assertEqual(plan.targets, {2: 6, 3: 7, 4: 2})
         self.assertEqual(plan.proposed_total, 15)
-        self.assertEqual(plan.tokens_per_type, 100)
+        self.assertEqual(plan.tokens_per_type, 31)
         self.assertIn('distribution shifted:', str(plan))
 
     def test_full_total_can_require_moving_beyond_original_upper_bounds(self):

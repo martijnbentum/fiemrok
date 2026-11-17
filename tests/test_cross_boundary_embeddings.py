@@ -137,18 +137,18 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
                 self.assertEqual(inference.call_args.kwargs['batch_size'], 2)
                 self.assertTrue(inference.call_args.kwargs['gpu'])
                 np.testing.assert_allclose(inference.call_args.kwargs['starts'],
-                    [0.6, 1.1])
+                    [0, 0])
                 np.testing.assert_allclose(inference.call_args.kwargs['ends'],
-                    [1.8, 2.35])
+                    [3.3, 3.85])
                 self.assertEqual(len(store.metadatas), 8)
                 store = self.reopen(store)
                 for index, marker in enumerate(self.markers):
-                    stop = 34 if index == 0 else 37
+                    start, stop = (55, 64) if index == 0 else (80, 92)
                     for layer in (3, 6, 9, 12):
                         embedding = store.phraser_key_to_embedding(marker.key,
-                            name, layer, collar=500)
+                            name, layer, collar=2000)
                         np.testing.assert_array_equal(embedding.data,
-                            outputs[index].hidden_states[layer][0, 25:stop, :])
+                            outputs[index].hidden_states[layer][0, start:stop, :])
                         self.assertEqual(embedding.shape[1], 768)
                         self.assertEqual(embedding.phraser_object.key,
                             marker.key)
@@ -179,13 +179,13 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
                 condition='cross_boundary', layers=(3, 6), verbose=False)
             self.assertEqual(len(store.metadatas), 4)
             cross_embeddings.compute_embeddings(store, self.markers,
-                condition='cross_boundary', layers=(3,), collar=2000,
+                condition='cross_boundary', layers=(3,), collar=500,
                 verbose=False)
         self.assertEqual(inference.call_count, 3)
         self.assertEqual(len(store.metadatas), 6)
-        np.testing.assert_allclose(inference.call_args.kwargs['starts'], [0, 0])
+        np.testing.assert_allclose(inference.call_args.kwargs['starts'], [0.6, 1.1])
         np.testing.assert_allclose(inference.call_args.kwargs['ends'],
-            [3.3, 3.85])
+            [1.8, 2.35])
 
     def test_failed_inference_leaves_caller_owned_store_open(self):
         with mock.patch.object(self.wav2vec_store, 'load_model',
@@ -212,10 +212,10 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
         self.addCleanup(store.close)
         self.assertEqual(store.root.name, 'w2v_word_2')
         np.testing.assert_allclose(inference.call_args.kwargs['starts'],
-            [1.1, 0.6])
+            [0, 0])
         for word in words:
             embedding = store.phraser_key_to_embedding(word.key,
-                'wav2vec2_nl1_checkpoint-200000', 6, collar=500)
+                'wav2vec2_nl1_checkpoint-200000', 6, collar=2000)
             self.assertEqual(embedding.object_class, 'Word')
             self.assertEqual(embedding.phraser_object.key, word.key)
             self.assertEqual(set(embedding.metadata.tags), {'cgn', 'word'})

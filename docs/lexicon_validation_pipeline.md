@@ -11,7 +11,7 @@ from lexicon_validation import pipeline
 materials = pipeline.build_local_phraser_store(
     components='abefghijklno', language='nl')
 materials.close()
-pipeline.prepare_samples(n_tokens=100, random_seed=0)
+pipeline.prepare_samples(n_tokens=31, random_seed=0)
 pipeline.build_embeddings(gpu=True, batch_size=32)
 pipeline.build_indexes()
 ```
@@ -59,7 +59,7 @@ phone's duration flag to be `within_range`, and exclude their target span
 when it overlaps another speaker's speech. No per-type cross-boundary IQR
 filter is applied. Frequency eligibility and sampling happen afterward.
 Each accepted type supplies exactly `n_tokens` occurrences; the default is
-100.
+31.
 
 `word_lexicon.select_words(store)` returns a Phraser `Lexicon`. By default
 it reports recording-loading time and scan progress at recording boundaries,
@@ -178,7 +178,7 @@ all embedding stores using it are finished. There is no global store cache.
 
 ## Embeddings and indexes
 
-Both models use version 1/checkpoint 200000, layers 3, 6, 9, 12, and a 500 ms
+Both models use version 1/checkpoint 200000, layers 3, 6, 9, 12, and a 2000 ms
 context collar on each side. Echoframe stores full token frame matrices;
 indexes apply center or mean pooling. This produces 32 index conditions.
 `build_embeddings()` uses the existing batch extractor, which can skip

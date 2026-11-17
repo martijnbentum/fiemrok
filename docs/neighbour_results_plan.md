@@ -23,9 +23,9 @@ Agreed contents:
 - Keep same-speaker and same-recording neighbours eligible.
 - No separate config, manifest, summary, or annotation-export files.
 
-The default same-type width is 100 because selection defaults to 100 tokens
+The default same-type width is 31 because selection defaults to 31 tokens
 per type. Derive the width from the actual uniform sample quota; do not
-hard-code 100 or relax the quota. Default nearest-neighbour count is 30 and
+hard-code 31 or relax the quota. Default nearest-neighbour count is 30 and
 is independent of the per-type sample quota.
 
 ## Feature 1: identity and shared type mapping

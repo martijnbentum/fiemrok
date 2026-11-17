@@ -14,7 +14,7 @@ from . import lv_locations, lv_stores
 import model_paths
 
 
-def collared_window(word, max_offset, base_collar_ms=500, stride=0.02):
+def collared_window(word, max_offset, base_collar_ms=2000, stride=0.02):
     '''Return a symmetric audio window aligned to the reference frame grid.'''
     if type(max_offset) is not int or max_offset < 0:
         raise ValueError('max_offset must be a non-negative integer')
@@ -90,7 +90,7 @@ def select_query_frames(outputs, word, nucleus, window_start, max_offset,
 
 
 def evaluate_word(word, model, nucleus=None, layer=6, max_offset=100,
-    base_collar_ms=500, stride=0.02, field=0.025):
+    base_collar_ms=2000, stride=0.02, field=0.025):
     '''Compute one token's query frames; retrieval and storage are shared.
 
     The reference is the middle fully contained word frame, unless a nucleus
@@ -109,7 +109,7 @@ def evaluate_word(word, model, nucleus=None, layer=6, max_offset=100,
 
 
 def evaluate_words(words, vector_index, model, output_path, nuclei=None,
-    max_offset=100, base_collar_ms=500, stride=0.02, field=0.025,
+    max_offset=100, base_collar_ms=2000, stride=0.02, field=0.025,
     top_k=30, *, workspace=lv_locations.workspace,
     batch_size=32, overwrite=False, compression='lzf'):
     '''Stream contextual queries to the shared HDF5 result format.

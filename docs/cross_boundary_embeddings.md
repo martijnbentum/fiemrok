@@ -40,7 +40,7 @@ accepts a caller-owned store, selected items, and condition, and leaves that
 store open. `create_store` requires the local Phraser store as its `cgn`
 argument. Model wrappers attach the store owning their supplied items.
 
-Defaults are layers 3, 6, 9, 12, a 500 ms collar on each side, and batch size
+Defaults are layers 3, 6, 9, 12, a 2000 ms collar on each side, and batch size
 32. Both models use version 1/checkpoint 200000 from `model_paths.py`.
 Full frame matrices within the selected token are stored without pooling;
 context frames are excluded. Metadata links to the word or marker's own

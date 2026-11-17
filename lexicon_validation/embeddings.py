@@ -45,7 +45,7 @@ def _compute_for_model(items, model, condition, n_types, workspace, **kwargs):
 
 
 def compute_embeddings(embedding_store, items, condition='word',
-    layers=(3, 6, 9, 12), collar=500, gpu=False, batch_size=32, verbose=True,
+    layers=(3, 6, 9, 12), collar=2000, gpu=False, batch_size=32, verbose=True,
     model_name=None):
     '''Compute selected items with context on each side in milliseconds.
     items:           words or markers in saved selection order

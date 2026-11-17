@@ -15,7 +15,7 @@ def load_metadata(store):
 
 
 def load_metadata_layer(store, layer, selected_keys=None, model_name=None,
-    collar=500):
+    collar=2000):
     '''Return hidden states in saved selection order for one model/layer.'''
     records = [md for md in load_metadata(store)
         if md.layer == layer and md.output_type == 'hidden_state'
@@ -71,7 +71,7 @@ def make_vector_search_index(vectors, vector_metadata):
 
 def make_vector_search_index_for_layer(store, layer, name, selected_keys,
     model_name, save=True, overwrite=False, pooling='center',
-    directory=lv_locations.svs_data, unit_type='word', collar=500):
+    directory=lv_locations.svs_data, unit_type='word', collar=2000):
     '''Build a fresh index for the ordered selection and requested condition.
     selected_keys: ordered Phraser word or marker keys
     model_name:    registered model checkpoint name
@@ -100,7 +100,7 @@ def make_vector_search_index_for_layer(store, layer, name, selected_keys,
 
 def make_vsi_for_layers(layers, embedding_store, selected_keys, model_name,
     name_prefix='', save=True, overwrite=False, pooling='center',
-    directory=lv_locations.svs_data, unit_type='word', collar=500):
+    directory=lv_locations.svs_data, unit_type='word', collar=2000):
     '''Build one pooled index per layer; caller owns the embedding store.'''
     selected_keys = list(selected_keys)
     indexes = {}

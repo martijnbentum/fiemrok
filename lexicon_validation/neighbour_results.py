@@ -240,7 +240,7 @@ def write_neighbours(index, filename, mapping_path, selected_keys,
 def write_frame_offsets(index, filename, mapping_path, selected_keys, queries,
     max_offset=100, top_k=30, batch_size=32, overwrite=False, compression='lzf',
     model='hubert', condition='word', workspace=lv_locations.workspace,
-    stride=0.02, field=0.025, base_collar_ms=500):
+    stride=0.02, field=0.025, base_collar_ms=2000):
     '''Stream one token's contextual frame queries at a time into HDF5.
 
     queries yields dictionaries in saved token order: key, records,

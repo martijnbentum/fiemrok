@@ -75,7 +75,7 @@ def cross_boundary_type_bounds(n_word_types, min_types=None):
     return lower, n_word_types
 
 
-def prepare_samples(n_tokens=100, min_types=None, random_seed=0,
+def prepare_samples(n_tokens=31, min_types=None, random_seed=0,
     tolerance=10, max_attempts=100, tries_per_round=3, cgn=None,
     phrases=None, workspace=lv_locations.workspace,
     components=lv_locations.default_components,
@@ -161,7 +161,7 @@ def _load_items(condition, cgn, workspace):
     return keys, items
 
 
-def build_embeddings(layers=LAYERS, collar=500, gpu=False, batch_size=32,
+def build_embeddings(layers=LAYERS, collar=2000, gpu=False, batch_size=32,
     verbose=True, cgn=None, workspace=lv_locations.workspace,
     components=lv_locations.default_components,
     language=lv_locations.default_language, model=None, condition=None):
@@ -233,7 +233,7 @@ def build_w2v_cross_boundary_embeddings(**kwargs):
     return build_embeddings(model='w2v', condition='cross_boundary', **kwargs)
 
 
-def build_indexes(layers=LAYERS, collar=500, overwrite=False, cgn=None,
+def build_indexes(layers=LAYERS, collar=2000, overwrite=False, cgn=None,
     workspace=lv_locations.workspace, directory=None,
     components=lv_locations.default_components,
     language=lv_locations.default_language, model=None, condition=None,

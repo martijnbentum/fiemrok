@@ -69,10 +69,12 @@ Use `results.collect_queries()` to load every query and its `same` and
 `neighbours` matches with a progress bar. It returns nothing; access the cached
 queries through `results[i]` or by iterating over `results`. This opens no annotation stores. Repeating
 it reuses existing objects.
-At 150,000 tokens, 100 tokens per type, and 30 neighbours, fully collecting
-one result retains about 15–19.5 million matches (roughly 4–5 GB, plus metadata
-and other objects). Closing the result clears its query, match, token, and
-type caches; externally retained views still reject data access after close.
+At 150,000 tokens, 31 tokens per type, and 30 neighbours, fully collecting
+one result retains 4.65–9.15 million matches, depending on overlap between
+neighbours and same-type matches. Python objects require substantial extra
+memory beyond the numeric arrays. Closing the result clears its query,
+match, token, and type caches; externally retained views still reject data
+access after close.
 
 Object reprs show a compact description without disk reads, annotation
 lookups, or cache population. A query shows `precision@10` only after its
@@ -127,8 +129,8 @@ file stores four arrays:
 | --- | --- | --- |
 | neighbour_indices | (n_tokens, 30) | uint32 |
 | neighbour_similarities | (n_tokens, 30) | float32 |
-| same_type_ranks | (n_tokens, 100) | uint32 |
-| same_type_similarities | (n_tokens, 100) | float32 |
+| same_type_ranks | (n_tokens, 31) | uint32 |
+| same_type_similarities | (n_tokens, 31) | float32 |
 
 Every token index refers to a row in the searched vector index. Query index
 is implicit: row `i` contains query `i`. The writer checks index order against
@@ -181,9 +183,10 @@ and sort buffers use additional memory. Decrease `batch_size` to reduce score
 memory. This is an exhaustive computation, not approximate ranking.
 
 At 150,000 tokens in every condition, the four uncompressed arrays total
-156 MB per condition or 4.992 GB across all 32. Each shared mapping adds
-roughly 1.2 MB of uncompressed numeric indices (membership lists plus the
-token-to-type lookup). HDF5 chunks use lossless LZF compression by default;
+73.2 MB per condition or 2.3424 GB across all 32, with 31 tokens per type.
+Each shared mapping adds roughly 1.2 MB of uncompressed numeric indices
+(membership lists plus the token-to-type lookup). HDF5 chunks use lossless
+LZF compression by default;
 `compression=None` disables it. Temporary outputs are published only after
 successful completion.
 

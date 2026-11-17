@@ -20,7 +20,7 @@ def metadata(label, key):
 
 
 class SelectionTests(unittest.TestCase):
-    def token(self, key, layer=6, model='hubert', collar=500,
+    def token(self, key, layer=6, model='hubert', collar=2000,
         output_type='hidden_state'):
         return SimpleNamespace(phraser_key=key, echoframe_key=b'e' + key,
             label=key.hex(), layer=layer, model_name=model, collar=collar,
@@ -55,7 +55,7 @@ class FreshIndexTests(unittest.TestCase):
         store = mock.Mock()
         store.metadatas = [SimpleNamespace(phraser_key=k,
             echoframe_key=b'e' + k, label=k.hex(), layer=6,
-            model_name='hubert', collar=500, output_type='hidden_state')
+            model_name='hubert', collar=2000, output_type='hidden_state')
             for k in (b'a', b'b')]
         payloads = {b'ea': np.array([3., 4.]),
             b'eb': np.array([4., 3.])}

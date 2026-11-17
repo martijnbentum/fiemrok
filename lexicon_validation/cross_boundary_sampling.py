@@ -38,7 +38,7 @@ class LengthBin:
 class SamplingPlan:
     '''Token count, tolerance, ideal distribution, and current quotas.'''
 
-    def __init__(self, ideal_targets, eligible, tokens_per_type=100,
+    def __init__(self, ideal_targets, eligible, tokens_per_type=31,
         tolerance=10, targets=None):
         validate_integer(tokens_per_type, 'tokens_per_type', minimum=1)
         self.tolerance = tolerance
@@ -216,7 +216,7 @@ def inspect_lexicon_phonemes(words):
     return n_types_by_phone_count, phone_counts
 
 
-def plan_sampling(lexicon, sequence_types_by_phone_count, n_tokens=100,
+def plan_sampling(lexicon, sequence_types_by_phone_count, n_tokens=31,
     tolerance=10):
     '''Plan from all frequent types, with no fixed capacity discount.
     lexicon:                       lexicon containing candidate tokens
