@@ -72,6 +72,23 @@ def _index_condition(model, condition, layer, pooling):
         raise ValueError('pooling must be center or mean')
 
 
+def parse_index_name(name):
+    '''Parse a pipeline index basename into its model and dataset settings.'''
+    try:
+        dataset, n_types, layer, pooling = name.rsplit('_', 3)
+        model, condition = dataset.split('_', 1)
+        if not n_types.isdigit() or int(n_types) < 1:
+            raise ValueError('n_types must be a positive integer')
+        layer = int(layer)
+        _index_condition(model, condition, layer, pooling)
+    except ValueError as error:
+        raise ValueError(f'invalid index name {name!r}: expected '
+            '{model}_{condition}_{n_types}_{layer}_{pooling}; '
+            f'{error}') from None
+    return dict(model=model, condition=condition, n_types=int(n_types),
+        layer=layer, pooling=pooling)
+
+
 def find_index_path(model, condition, layer, pooling, directory=svs_data):
     '''Find the single current pipeline vector index for one condition.'''
     _index_condition(model, condition, layer, pooling)

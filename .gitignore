@@ -5,15 +5,6 @@ AGENTS.md
 *.json
 phrases_cgn/
 test_store/
-test_*
-!tests/test_cross_boundary_lexicon.py
-!tests/test_cross_boundary_lexicon_sampling.py
-!tests/test_cross_boundary_markers.py
-!tests/test_cross_boundary_embeddings.py
-!tests/test_validate_lexicon.py
-!tests/test_neighbour_metadata.py
-!tests/test_neighbour_export.py
-!tests/test_neighbour_results.py
 lexicon100_2466_cgn/
 data/*.pkl
 data/*.npy
@@ -32,6 +23,3 @@ lexicon100_phones_cgn/
 lexicon100_phones_cgn_hubert/
 lexicon100_syllables_cgn_hubert/
 svs_experiment_data/
-!tests/test_workspace_restructure.py
-!tests/test_word_lexicon.py
-!tests/test_lexicon_validation_pipeline.py

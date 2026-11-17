@@ -2,20 +2,48 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from unittest import mock
+import pickle
+import tempfile
 
 import numpy as np
 import frame
+from echoframe.key_helper import pack_hidden_state_key
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from lexicon_validation import frame_offset_evaluation as validation
+from lexicon_validation import lv_locations
+
+
+class IndexNameTests(unittest.TestCase):
+    def test_pipeline_names_parse_including_cross_boundary(self):
+        for model in ('hubert', 'w2v'):
+            for condition in ('word', 'cross_boundary'):
+                for pooling in ('center', 'mean'):
+                    for layer in (3, 6, 9, 12):
+                        name = f'{model}_{condition}_5000_{layer}_{pooling}'
+                        with self.subTest(name=name):
+                            self.assertEqual(lv_locations.parse_index_name(name),
+                                dict(model=model, condition=condition, n_types=5000,
+                                    layer=layer, pooling=pooling))
+
+    def test_invalid_names_explain_the_expected_pattern(self):
+        for name in ('missing', 'hubert_word_many_9_mean',
+            'hubert_word_0_9_mean', 'hubert_word_-2_9_mean',
+            'hubert_word_2_nine_mean', 'hubert_word_2_8_mean',
+            'unknown_word_2_9_mean', 'hubert_unknown_2_9_mean',
+            'hubert_word_2_9_max'):
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(ValueError, 'invalid index name.*expected'):
+                    lv_locations.parse_index_name(name)
 
 
 class FrameOffsetValidationTests(unittest.TestCase):
     def setUp(self):
         self.word = SimpleNamespace(start_seconds=1.0,
             end_seconds=2.0, audio=SimpleNamespace(duration=4000,
-                filename='audio.wav'))
+                filename='audio.wav'), key=b'w' * 22, label='word')
         self.nucleus = SimpleNamespace(start_seconds=1.4,
             end_seconds=1.5)
 
@@ -81,6 +109,78 @@ class FrameOffsetValidationTests(unittest.TestCase):
     def test_negative_max_offset_is_rejected(self):
         with self.assertRaises(ValueError):
             validation.collared_window(self.word, -1)
+
+    def test_word_center_is_used_without_nucleus(self):
+        outputs = SimpleNamespace(hidden_states=(np.zeros((1, 200, 2)),))
+        rows = validation.select_query_frames(outputs, self.word, None,
+            0.0, 0, layer=0)
+        self.assertEqual(rows[0]['center_index'], 74)
+
+    def test_padding_and_frames_crossing_recording_end_are_invalid(self):
+        outputs = SimpleNamespace(hidden_states=(np.zeros((1, 250, 2)),))
+        rows = validation.select_query_frames(outputs, self.word, None,
+            -0.5, 130, layer=0)
+        outside = [row for row in rows if row['invalid_reason'] ==
+            'outside_recording']
+        self.assertTrue(outside)
+        self.assertTrue(all(row['vector'] is None for row in outside))
+        self.assertFalse(rows[0]['valid'])
+        self.assertFalse(rows[-1]['valid'])
+
+    def test_evaluate_word_defaults_to_201_offsets_and_word_center(self):
+        outputs = SimpleNamespace(hidden_states=tuple(
+            np.zeros((1, 400, 2)) for _ in range(7)))
+        with mock.patch.object(validation, 'compute_contextual_embedding',
+            return_value=outputs):
+            query = validation.evaluate_word(self.word, 'model')
+        self.assertEqual(query['key'], self.word.key)
+        self.assertEqual(query['reference_kind'], 'word')
+        self.assertEqual([r['offset'] for r in query['records']],
+            list(range(-100, 101)))
+        self.assertEqual(query['records'][100]['query_index'],
+            query['records'][100]['center_index'])
+        self.assertIsNone(query['records'][0]['vector'])
+
+    def test_unequal_supplied_nuclei_are_rejected_before_writing(self):
+        with self.assertRaisesRegex(ValueError, 'equal lengths'):
+            validation.evaluate_words([self.word], None, None, 'unused.h5',
+                nuclei=[])
+
+    def test_validation_index_loader_uses_explicit_condition(self):
+        with (mock.patch.object(validation.lv_locations, 'find_index_path',
+            return_value=Path('/tmp/lv/hubert_word_2_6_mean.npy')) as find,
+            mock.patch.object(validation.svs.VectorIndex, 'load') as load):
+            validation.load_index('hubert', 6, 'mean', 'word', workspace='/tmp/lv')
+        find.assert_called_once_with('hubert', 'word', 6, 'mean',
+            Path('/tmp/lv/svs_data'))
+        load.assert_called_once_with('/tmp/lv', 'hubert_word_2_6_mean')
+
+    def test_selection_uses_local_materials_in_saved_order_and_closes(self):
+        keys = [self.word.key, b'x' * 22]
+        index = SimpleNamespace(metadatas=[SimpleNamespace(
+            source_echoframe_keys=[pack_hidden_state_key(1, 6, key, 500)])
+            for key in keys])
+        materials = mock.Mock()
+        items = [self.word, SimpleNamespace(key=keys[1])]
+        materials.load_many.return_value = items
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'word_keys.pkl').write_bytes(pickle.dumps(keys))
+            with (mock.patch.object(validation, 'load_index', return_value=index),
+                mock.patch.object(validation.lv_stores, 'load_phraser_store',
+                    return_value=materials) as local,
+                mock.patch.object(validation, 'load_model', return_value='model'),
+                mock.patch.object(validation, 'evaluate_words') as evaluate):
+                validation.evaluate_selection('hubert', 6, 'center', 'word',
+                    'results.h5', workspace=directory)
+                local.assert_called_once_with(workspace=directory)
+                materials.load_many.assert_called_once_with(keys)
+                evaluate.assert_called_once_with(items, index, 'model',
+                    'results.h5', workspace=directory)
+                materials.close.assert_called_once()
+                index.metadatas.reverse()
+                with self.assertRaisesRegex(ValueError, 'selection order'):
+                    validation.evaluate_selection('hubert', 6, 'center', 'word',
+                        'results.h5', workspace=directory)
 
 
 if __name__ == '__main__':
