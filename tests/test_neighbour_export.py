@@ -57,7 +57,7 @@ class NeighbourExportTests(unittest.TestCase):
                 self.assertIsNotNone(query._same)
                 self.assertIsNotNone(query._neighbours)
                 self.assertEqual(result._tokens, {})
-                with mock.patch.object(neighbour_results.Query, '_array',
+                with mock.patch.object(neighbour_results.Query, '_read_query_array',
                     side_effect=AssertionError('must use cached matches')):
                     self.assertEqual(query.precision(), expected)
                     self.assertEqual(repr(query), '<Query index=0 '
@@ -130,8 +130,8 @@ class NeighbourExportTests(unittest.TestCase):
             with neighbour_results.Result(paths['word'],
                 store=store) as results:
                 self.assertEqual(len(results[0].neighbour_indices), 5)
-                self.assertIs(results[7].token.metadata, metadata)
-                store.load_metadata.assert_called_once_with(results.source_key(7))
+                self.assertIs(results[7].token.echoframe_metadata, metadata)
+                store.load_metadata.assert_called_once_with(results.echoframe_key(7))
             store.close.assert_not_called()
 
     def test_existing_result_requires_explicit_overwrite(self):

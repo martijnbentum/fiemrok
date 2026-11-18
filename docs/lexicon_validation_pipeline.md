@@ -40,8 +40,9 @@ Audio object's language description. An existing destination raises
 `FileExistsError`, including an empty directory. No matching recordings
 raises `ValueError` before a destination is created.
 
-All later stages default to this local store and close their own handles.
-They never fall back to the shared source when local materials are missing.
+All later stages default to this local store and reuse handles managed by
+`lv_stores`. They leave store cleanup to `lv_stores.close_stores()` and never
+fall back to the shared source when local materials are missing.
 An explicit `cgn=...` supplies a caller-owned Phraser Store instead.
 
 ## Selection
@@ -157,8 +158,7 @@ embeddings = lv_stores.load_echoframe_store('w2v', 'word',
 # Metadata resolves through the attached local materials store.
 # embeddings.metadatas[0].phraser_object
 
-embeddings.close()
-materials.close()
+lv_stores.close_stores()
 ```
 
 `model` is `w2v` or `hubert`; `condition` is `word` or `cross_boundary`.
@@ -166,15 +166,21 @@ The loader finds the corresponding named Echoframe directory automatically;
 the type count stays in the directory name but is not a loading parameter.
 There is one store per model/condition, four in total. Multiple matches
 raise an error rather than choosing one arbitrarily.
-The loaders open existing stores and leave closing them to the caller.
+The loaders open existing stores and reuse one handle per resolved path
+within the process. Pipeline stages and results leave those handles open;
+call `lv_stores.close_stores()` after all users have finished.
 Both loaders accept `components`, `language`, and `workspace`; the Phraser
 loader also accepts an explicit `path`.
 
-When `materials` is omitted from the Echoframe loader, it opens and attaches
-the named local Phraser store automatically. In that case, close both with
-`embeddings.close_phraser_stores()` followed by `embeddings.close()`.
-When you supply `materials`, close that caller-owned store separately after
-all embedding stores using it are finished. There is no global store cache.
+When `materials` is omitted from the Echoframe loader, it loads and attaches
+the shared named local Phraser store automatically. Supplied Phraser handles
+are registered for reuse; external handles remain caller-owned. Passing a
+handle already loaded through `lv_stores` preserves module ownership.
+`close_stores()` closes module-owned Echoframe handles first, then module-owned
+Phraser handles, leaving external materials open.
+Validation attachments use `set_back_reference=False`: Echoframe can resolve
+Phraser annotations without assigning a reverse `phraser_store.echoframe_store`
+link. Pass an explicit Echoframe store to Phraser embedding lookups.
 
 ## Embeddings and indexes
 

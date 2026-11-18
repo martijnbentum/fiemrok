@@ -1,5 +1,7 @@
 # CGN retrieval for word-aligned and across-word segments
 
+Updated results for the 31-token, 2000 ms selection are in [the 17 November 2026 plot](cgn_lexicon_plot_2026-11-17.md).
+
 ![Word-aligned and across-word retrieval](assets/lexicon_cross_boundary_by_dataset.png)
 
 Panels show the two datasets; colour identifies the model. Solid lines show

@@ -12,6 +12,7 @@ import speech_vector_search as svs
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from lexicon_validation import neighbour_computation as nc
 from lexicon_validation import neighbour_results as nr
 
 
@@ -61,8 +62,37 @@ class ResultTests(unittest.TestCase):
     def write(self, **kwargs):
         options = dict(top_k=3, batch_size=2, workspace=self.workspace)
         options.update(kwargs)
-        return nr.write_neighbours(self.index, self.filename, self.mapping,
+        return nc.write_neighbours(self.index, self.filename, self.mapping,
             self.selected, **options)
+
+    def test_initialization_failures_close_file_and_preserve_caller_store(self):
+        cases = (
+            ('format_version', 99, ValueError),
+            ('index_name', 'different_index', ValueError),
+            ('selection_fingerprint', 'wrong_order', ValueError),
+            ('mapping_path', 'missing_mapping.npz', FileNotFoundError),
+            ('neighbour_indices', None, KeyError),
+            ('model', None, KeyError),
+        )
+        for field, value, error in cases:
+            with self.subTest(field=field):
+                self.write(overwrite=True)
+                with h5py.File(self.filename, 'r+') as output:
+                    if field == 'neighbour_indices':
+                        del output[field]
+                    elif value is None:
+                        del output.attrs[field]
+                    else:
+                        output.attrs[field] = value
+                store = mock.Mock()
+                handle = h5py.File(self.filename, 'r')
+                self.addCleanup(handle.close)
+                with (mock.patch.object(nr.h5py, 'File', return_value=handle),
+                    self.assertRaises(error)):
+                    nr.Result(self.filename, index=self.index, store=store)
+                self.assertFalse(handle.id.valid)
+                store.close.assert_not_called()
+                store.close_phraser_stores.assert_not_called()
 
     def test_round_trip_matches_exhaustive_ranking_including_ties_and_self(self):
         self.assertEqual(self.write(), self.filename)
@@ -137,7 +167,7 @@ class ResultTests(unittest.TestCase):
                 [0, 2, 4])
             self.assertIs(token.type.tokens[1], token)
             self.assertEqual(token.phraser_key, self.selected[2])
-            self.assertEqual(token.source_key,
+            self.assertEqual(token.echoframe_key,
                 self.index.metadatas[2].source_echoframe_keys[0])
             self.assertEqual([q.token.index for q in result], list(range(6)))
             with self.assertRaisesRegex(ValueError,
@@ -156,7 +186,7 @@ class ResultTests(unittest.TestCase):
             self.assertEqual(list(result._queries), [2])
             self.assertIsNone(query._same)
             self.assertIsNone(query._neighbours)
-            self.assertIs(result[2].same, result[2].same)
+            self.assertIs(result[2].ranked_same_type_matches, result[2].ranked_same_type_matches)
             self.assertIs(result[2].neighbours, result[2].neighbours)
             queries = tuple(result)
             self.assertEqual([q.token_index for q in queries], list(range(6)))
@@ -183,12 +213,12 @@ class ResultTests(unittest.TestCase):
                 self.assertIsNotNone(q._same)
                 self.assertIsNotNone(q._neighbours)
             self.assertEqual(result._tokens, {})
-            with mock.patch.object(nr.Query, '_array',
+            with mock.patch.object(nr.Query, '_read_query_array',
                 side_effect=AssertionError('matches should be cached')):
                 self.assertIsNone(result.collect_queries())
                 for original, cached in zip(queries, result):
                     self.assertIs(original, cached)
-                    self.assertIs(original.same, cached.same)
+                    self.assertIs(original.ranked_same_type_matches, cached.ranked_same_type_matches)
                     self.assertIs(original.neighbours, cached.neighbours)
             store.load_metadata.assert_not_called()
         self.assertIsNone(query._same)
@@ -234,27 +264,27 @@ class ResultTests(unittest.TestCase):
                 expected = reference(self.index, query.token_index, 3)
                 neighbours, scores, indices, ranks, similarities = expected
                 self.assertIsInstance(query.neighbours, tuple)
-                self.assertIsInstance(query.same, tuple)
+                self.assertIsInstance(query.ranked_same_type_matches, tuple)
                 self.assertEqual([m.token.index for m in query.neighbours],
                     list(neighbours))
                 np.testing.assert_allclose(
                     [m.similarity for m in query.neighbours], scores)
-                self.assertEqual([m.token.index for m in query.same],
+                self.assertEqual([m.token.index for m in query.ranked_same_type_matches],
                     [indices[i] for i in np.argsort(ranks)])
-                self.assertEqual([m.rank for m in query.same], sorted(ranks))
-                np.testing.assert_allclose([m.similarity for m in query.same],
+                self.assertEqual([m.rank for m in query.ranked_same_type_matches], sorted(ranks))
+                np.testing.assert_allclose([m.similarity for m in query.ranked_same_type_matches],
                     similarities[np.argsort(ranks)])
                 vector = self.index.vectors[query.token_index]
                 all_scores = self.index.vectors @ vector
                 order = sorted(range(6), key=lambda i: (-all_scores[i], i))
                 self.assertEqual([m.rank for m in query.neighbours],
                     [order.index(int(i)) for i in neighbours])
-                for match in query.neighbours + query.same:
+                for match in query.neighbours + query.ranked_same_type_matches:
                     self.assertIsInstance(match, nr.Match)
                     self.assertIs(match.query, query)
                     self.assertIs(match.token, result.token(match.token.index))
                 for match in query.neighbours:
-                    same = [m for m in query.same if m.token is match.token]
+                    same = [m for m in query.ranked_same_type_matches if m.token is match.token]
                     if same: self.assertIs(match, same[0])
             # Query 2 ties with token 0, so its first neighbour has rank zero.
             self.assertEqual(result[2].neighbours[0].rank, 0)
@@ -266,8 +296,8 @@ class ResultTests(unittest.TestCase):
         with nr.Result(self.filename, index=self.index) as result:
             query = result[5]
             self.assertEqual([m.rank for m in query.neighbours], [0, 1, 2])
-            self.assertEqual([m.rank for m in query.same], [1, 3, 5])
-            self.assertEqual(query.same[-1].token.index, 5)
+            self.assertEqual([m.rank for m in query.ranked_same_type_matches], [1, 3, 5])
+            self.assertEqual(query.ranked_same_type_matches[-1].token.index, 5)
 
     def test_general_metadata_and_cached_views_respect_result_lifetime(self):
         self.write()
@@ -283,13 +313,13 @@ class ResultTests(unittest.TestCase):
             token = query.token
             type_ = token.type
             type_.tokens
-            match = query.same[0]
+            match = query.ranked_same_type_matches[0]
             query.neighbours
-        for lookup in [lambda: query.same, lambda: query.neighbours,
-            lambda: query.token, lambda: token.label, lambda: token.source_key,
+        for lookup in [lambda: query.ranked_same_type_matches, lambda: query.neighbours,
+            lambda: query.token, lambda: token.label, lambda: token.echoframe_key,
             lambda: type_.tokens, lambda: type_.label, lambda: len(type_),
             lambda: result.type('huis'), lambda: query.same_type_indices,
-            lambda: query.neighbour_indices, lambda: token.metadata,
+            lambda: query.neighbour_indices, lambda: token.echoframe_metadata,
             lambda: match.token,
             lambda: match.rank, lambda: match.similarity,
             lambda: result.types, lambda: result.attributes]:
@@ -302,12 +332,12 @@ class ResultTests(unittest.TestCase):
         store = mock.Mock()
         with nr.Result(self.filename, index=self.index, store=store) as result:
             query = result[0]
-            query.same
+            query.ranked_same_type_matches
             query.neighbours
             query.token.phraser_key
             store.load_metadata.assert_not_called()
-            self.assertIs(query.token.metadata, store.load_metadata.return_value)
-            store.load_metadata.assert_called_once_with(query.token.source_key)
+            self.assertIs(query.token.echoframe_metadata, store.load_metadata.return_value)
+            store.load_metadata.assert_called_once_with(query.token.echoframe_key)
             with mock.patch.object(result, 'context', return_value={}) as context:
                 self.assertEqual(query.token.context(4, 1), {})
                 context.assert_called_once_with(0, 4, 1)
@@ -334,7 +364,7 @@ class ResultTests(unittest.TestCase):
         before = self.mapping.read_bytes()
         other, keys = make_index(self.index_directory, model_id=2, layer=6)
         other_path = self.filename.with_name('layer06_center.h5')
-        nr.write_neighbours(other, other_path, self.mapping, keys, top_k=3,
+        nc.write_neighbours(other, other_path, self.mapping, keys, top_k=3,
             batch_size=2, workspace=self.workspace)
         self.assertEqual(before, self.mapping.read_bytes())
         with nr.Result(other_path, index=other) as results:
@@ -368,7 +398,7 @@ class ResultTests(unittest.TestCase):
                     **options)
                 other_path = self.filename.with_name('other.h5')
                 with self.assertRaises(ValueError):
-                    nr.write_neighbours(other, other_path, self.mapping, keys,
+                    nc.write_neighbours(other, other_path, self.mapping, keys,
                         top_k=3, workspace=self.workspace)
                 self.assertFalse(other_path.exists())
 
@@ -377,7 +407,7 @@ class ResultTests(unittest.TestCase):
             [self.selected[0]] * len(self.selected)]:
             with self.subTest(keys=keys):
                 with self.assertRaises(ValueError):
-                    nr.write_neighbours(self.index, self.filename, self.mapping,
+                    nc.write_neighbours(self.index, self.filename, self.mapping,
                         keys, top_k=3, workspace=self.workspace)
                 self.assertFalse(self.filename.exists())
 
@@ -385,7 +415,7 @@ class ResultTests(unittest.TestCase):
         index, keys = make_index(self.index_directory,
             labels=['huis', 'boom', 'huis', 'huis', 'huis', 'boom'])
         with self.assertRaises(ValueError):
-            nr.write_neighbours(index, self.filename, self.mapping, keys,
+            nc.write_neighbours(index, self.filename, self.mapping, keys,
                 top_k=3, workspace=self.workspace)
         self.assertFalse(self.filename.exists())
 
@@ -426,12 +456,13 @@ class ResultTests(unittest.TestCase):
         with nr.Result(self.filename, index=self.index) as results:
             self.assertEqual(len(results), 6)
 
-    def test_nonfinite_vectors_do_not_publish_or_replace_results(self):
+    def test_scoring_failure_does_not_publish_or_replace_results(self):
         self.write()
         original = self.filename.read_bytes()
-        self.index.vectors[0, 0] = np.nan
-        with self.assertRaises(ValueError):
-            self.write(overwrite=True)
+        with mock.patch.object(self.index, 'cosine_batches',
+            side_effect=ValueError('scoring failed')):
+            with self.assertRaisesRegex(ValueError, 'scoring failed'):
+                self.write(overwrite=True)
         self.assertEqual(self.filename.read_bytes(), original)
         self.assertEqual(list(self.filename.parent.glob('*.tmp')), [])
 
@@ -451,13 +482,66 @@ class ResultTests(unittest.TestCase):
         with nr.Result(self.filename, index=self.index,
             store=store) as results:
             store.load_metadata.assert_not_called()
-            self.assertIs(results[4].token.metadata, metadata)
+            self.assertIs(results[4].token.echoframe_metadata, metadata)
             store.load_metadata.assert_called_once_with(
                 self.index.metadatas[4].source_echoframe_keys[0])
         store.close.assert_not_called()
         store.close_phraser_stores.assert_not_called()
 
-    def test_owned_store_opens_lazily_and_closes_with_attached_materials(self):
+    def test_phraser_access_reuses_attached_store_and_metadata(self):
+        self.write()
+        store = mock.Mock()
+        annotation = object()
+        metadata = SimpleNamespace(phraser_object=annotation)
+        store.load_metadata.return_value = metadata
+        materials = store.load_phraser_store.return_value
+        with (mock.patch.object(nr.lv_stores, 'load_phraser_store') as loader,
+            nr.Result(self.filename, index=self.index, store=store) as results):
+            self.assertIs(results.phraser_store, materials)
+            self.assertIs(results.phraser_store, materials)
+            self.assertIs(results[0].token.echoframe_metadata, metadata)
+            self.assertIs(results[0].token.phraser_metadata, annotation)
+            self.assertIs(results.phraser_metadata(1), annotation)
+            store.load_phraser_store.assert_has_calls(
+                [mock.call('cgn'), mock.call('cgn')])
+            loader.assert_not_called()
+        store.close.assert_not_called()
+        store.close_phraser_stores.assert_not_called()
+        for accessor in (lambda: results.phraser_store,
+            lambda: results.phraser_metadata(0)):
+            with self.assertRaisesRegex(ValueError, 'closed'):
+                accessor()
+
+    def test_missing_phraser_annotation_is_reported(self):
+        self.write()
+        store = mock.Mock()
+        store.load_metadata.return_value = SimpleNamespace(phraser_object=None)
+        with nr.Result(self.filename, index=self.index, store=store) as results:
+            with self.assertRaisesRegex(ValueError, 'Phraser annotation not found'):
+                results[0].token.phraser_metadata
+
+    def test_two_results_share_stores_and_closing_one_keeps_the_other_usable(self):
+        self.write()
+        stores = nr.lv_stores
+        locations = stores.lv_locations
+        materials_path = locations.phraser_store_path(workspace=self.workspace)
+        stores.PhraserStore(path=materials_path).close()
+        embedding_path = locations.store_path('hubert', 'word', 2, self.workspace)
+        stores.EchoframeStore(embedding_path).close()
+        self.addCleanup(stores.close_stores)
+        with (nr.Result(self.filename, index=self.index) as first,
+            nr.Result(self.filename, index=self.index) as second):
+            self.assertIs(first.echoframe_store, second.echoframe_store)
+            materials = first.phraser_store
+            self.assertIs(materials, second.phraser_store)
+            first.close()
+            self.assertTrue(second.phraser_store.is_open())
+            self.assertEqual(len(second[0].neighbours), 3)
+        self.assertTrue(materials.is_open())
+        stores.close_stores()
+        self.assertFalse(materials.is_open())
+
+    def test_shared_store_opens_lazily_and_stays_open_after_result_closes(self):
         self.write()
         store = mock.Mock()
         store.load_metadata.return_value = SimpleNamespace(phraser_object=None)
@@ -465,12 +549,12 @@ class ResultTests(unittest.TestCase):
             return_value=store) as loader:
             with nr.Result(self.filename, index=self.index) as results:
                 loader.assert_not_called()
-                results.metadata(0)
+                results.echoframe_metadata(0)
                 loader.assert_called_once()
-                results.metadata(1)
+                results.echoframe_metadata(1)
                 loader.assert_called_once()
-            store.close.assert_called_once()
-            store.close_phraser_stores.assert_called_once()
+            store.close.assert_not_called()
+            store.close_phraser_stores.assert_not_called()
 
     def test_missing_metadata_raises_and_context_reuses_existing_helper(self):
         self.write()
@@ -479,7 +563,7 @@ class ResultTests(unittest.TestCase):
         with nr.Result(self.filename, index=self.index,
             store=store) as results:
             with self.assertRaises(ValueError):
-                results.metadata(0)
+                results.echoframe_metadata(0)
             with mock.patch(
                 'lexicon_validation.neighbour_metadata.echoframe_key_to_metadata',
                 return_value={'context': True}) as context:

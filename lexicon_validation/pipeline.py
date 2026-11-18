@@ -49,15 +49,12 @@ def build_local_phraser_store(components=lv_locations.default_components,
 
 @contextmanager
 def _local_phraser_store(cgn, workspace, components, language):
-    '''Use a caller-owned store or open and close the named local store.'''
+    '''Use caller-owned materials or borrow the shared local material store.'''
     if cgn is not None:
         yield cgn
         return
     local_store = lv_stores.load_phraser_store(components, language, workspace)
-    try:
-        yield local_store
-    finally:
-        local_store.close()
+    yield local_store
 
 
 def cross_boundary_type_bounds(n_word_types, min_types=None):
@@ -195,20 +192,18 @@ def build_embeddings(layers=LAYERS, collar=2000, gpu=False, batch_size=32,
                     existing = None
                 if existing is None:
                     architecture = 'wav2vec2' if model == 'w2v' else 'hubert'
-                    embedding_store = embeddings.create_store(path,
+                    created = embeddings.create_store(path,
                         model_name, architecture, cgn=cgn)
+                    created.close()
                 else:
                     if existing != path:
                         raise ValueError(f'existing store {existing} does not '
                             f'match saved selection: expected {path}')
-                    embedding_store = lv_stores.load_echoframe_store(model,
-                        condition, materials=cgn, workspace=workspace)
-                try:
-                    embeddings.compute_embeddings(embedding_store, items,
-                        condition=condition, layers=layers, collar=collar,
-                        gpu=gpu, batch_size=batch_size, verbose=verbose)
-                finally:
-                    embedding_store.close()
+                embedding_store = lv_stores.load_echoframe_store(model,
+                    condition, materials=cgn, workspace=workspace)
+                embeddings.compute_embeddings(embedding_store, items,
+                    condition=condition, layers=layers, collar=collar,
+                    gpu=gpu, batch_size=batch_size, verbose=verbose)
                 paths[model, condition] = path
         return paths
 
@@ -273,19 +268,16 @@ def build_indexes(layers=LAYERS, collar=2000, overwrite=False, cgn=None,
                 prefix = f'{model}_{condition}_{n_types}'
                 embedding_store = lv_stores.load_echoframe_store(model,
                     condition, materials=cgn, workspace=workspace)
-                try:
-                    for layer in layers:
-                        for pooling in poolings:
-                            name = f'{prefix}_{layer}_{pooling}'
-                            index, _ = build_index(embedding_store, layer,
-                                name, selected_keys=keys,
-                                model_name=model_name, directory=directory,
-                                pooling=pooling, unit_type=unit_type,
-                                collar=collar,
-                                overwrite=overwrite)
-                            paths[model, condition, layer, pooling] = (
-                                directory / f'{name}.npy')
-                            del index
-                finally:
-                    embedding_store.close()
+                for layer in layers:
+                    for pooling in poolings:
+                        name = f'{prefix}_{layer}_{pooling}'
+                        index, _ = build_index(embedding_store, layer,
+                            name, selected_keys=keys,
+                            model_name=model_name, directory=directory,
+                            pooling=pooling, unit_type=unit_type,
+                            collar=collar,
+                            overwrite=overwrite)
+                        paths[model, condition, layer, pooling] = (
+                            directory / f'{name}.npy')
+                        del index
         return paths

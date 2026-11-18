@@ -1,9 +1,16 @@
 # Compact neighbour results
 
+`neighbour_computation.py` computes neighbours and same-type ranks and writes
+them to HDF5 through `write_neighbours` and `write_frame_offsets`.
+`neighbour_results.py` provides the reader classes: `Result`, `FrameOffsetQueries`,
+`Query`, `Match`, `Token`, and `Type`. The evaluation entry points below call
+the computation module.
+
 Export one dataset/model/layer/pooling condition after building its vector
 index with the validation pipeline:
 
 ```python
+from lexicon_validation import lv_stores
 from lexicon_validation.retrieval_evaluation import export_neighbours
 from lexicon_validation.neighbour_results import Result
 
@@ -23,15 +30,20 @@ with Result(paths['word']) as results:
     neighbour.similarity
     neighbour.rank  # global, zero-based, including self in the population
 
-    query.same  # all same-type matches, including self, in global rank order
+    query.ranked_same_type_matches  # all same-type matches, including self, in global rank order
     query.precision(10)
 
     # Annotation stores open only when annotations are requested.
-    query.token.metadata.phraser_object
-    neighbour.token.metadata.phraser_object
+    results.phraser_store  # same local store attached to Echoframe
+    query.token.echoframe_metadata
+    query.token.phraser_metadata
+    neighbour.token.phraser_metadata
     query.token.context(n_phone_context=10, n_word_context=3)
 
     batch = results.read(0, 64)  # Four numeric arrays, no annotation lookups.
+
+# After all results and other users have finished accessing shared stores:
+lv_stores.close_stores()
 ```
 
 The interaction API uses five ordinary classes, without dataclasses:
@@ -39,12 +51,12 @@ The interaction API uses five ordinary classes, without dataclasses:
 | Class | Responsibility |
 | --- | --- |
 | `Result` | Owns one file, general metadata, token/type lookups, and query access. |
-| `Query` | References its result and query token; exposes `neighbours` and `same`. |
+| `Query` | References its result and query token; exposes `neighbours` and `ranked_same_type_matches`. |
 | `Token` | Stable identity, parent type, source keys, and lazy annotation access. |
 | `Type` | Label and tokens in vector-index order. |
 | `Match` | Query-relative token, similarity, and global rank. |
 
-`query.neighbours` and `query.same` are tuples of `Match` objects, ordered
+`query.neighbours` and `query.ranked_same_type_matches` are tuples of `Match` objects, ordered
 by ascending global rank. Neighbours exclude self; same-type matches include
 self. The reader derives neighbour ranks from their saved positions and the
 saved self rank, so ties do not require self to rank first. The position in
@@ -65,10 +77,13 @@ for indexed access, `for query in results` for iteration, and `len(results)`
 for the token count. Negative indices and slices are unsupported. Repeated
 query access reuses its cached matches.
 
-Use `results.collect_queries()` to load every query and its `same` and
+Use `results.collect_queries()` to load every query and its `ranked_same_type_matches` and
 `neighbours` matches with a progress bar. It returns nothing; access the cached
 queries through `results[i]` or by iterating over `results`. This opens no annotation stores. Repeating
 it reuses existing objects.
+The result kind and frame offsets are cached when the file is opened.
+For frame-offset results, `results.offsets` returns the same read-only NumPy
+array on every access; query and offset lookups do not reread it from HDF5.
 At 150,000 tokens, 31 tokens per type, and 30 neighbours, fully collecting
 one result retains 4.65–9.15 million matches, depending on overlap between
 neighbours and same-type matches. Python objects require substantial extra
@@ -82,13 +97,14 @@ neighbours have been cached and at least ten are available. Closed objects
 show their closed status instead of raising an exception.
 
 `query.precision(n=10)` uses the cached neighbours, loading and caching matches
-on its first call if needed. Subsequent calls perform no array reads or token
-creation.
+on its first call if needed. Frame-offset query status is loaded lazily once,
+while the saved neighbour count is cached during result validation. Subsequent
+calls perform no HDF5 reads or token creation, including for invalid queries.
 
 For numerical work, `query.neighbour_indices`, `neighbour_similarities`,
 `same_type_indices`, `same_type_ranks`, and `same_type_similarities` remain
 available. These arrays and `results.read()` retain the stored order:
-same-type columns use token order, while `query.same` uses rank order. Sorting
+same-type columns use token order, while `query.ranked_same_type_matches` uses rank order. Sorting
 the object view does not modify the file.
 
 `model_name` accepts `hubert`, `w2v`, or `wav2vec2`; on disk the model names
@@ -149,8 +165,9 @@ but does not load vector arrays or open annotation stores. When metadata is
 requested, the reader opens the existing local Echoframe/Phraser stores via
 `lv_stores`. Alternatively pass `store=...` to use a caller-owned Echoframe
 handle with Phraser attached, and `index=...` to reuse an already-open SVS
-index. The results object closes stores it opens; caller-owned stores remain
-open. Keep query views inside the results object's context manager.
+index. Closing a result closes only its HDF5 file. Module-owned stores are shared
+across results and remain open until `lv_stores.close_stores()` is called.
+Caller-owned stores remain the caller’s responsibility. Keep query views inside the results object's context manager.
 
 ## Rank and similarity conventions
 

@@ -9,6 +9,7 @@ import numpy as np
 from echoframe.key_helper import pack_hidden_state_key
 import speech_vector_search as svs
 
+from lexicon_validation import neighbour_computation as nc
 from lexicon_validation import neighbour_results as nr
 from lexicon_validation import frame_offset_evaluation as evaluation
 
@@ -49,7 +50,7 @@ class FrameOffsetResultsTests(unittest.TestCase):
         options = dict(max_offset=1, top_k=3, batch_size=2,
             workspace=self.workspace, model='hubert')
         options.update(kwargs)
-        return nr.write_frame_offsets(self.index, self.filename, self.mapping,
+        return nc.write_frame_offsets(self.index, self.filename, self.mapping,
             self.keys, self.queries(options['max_offset']), **options)
 
     def test_round_trip_matches_exhaustive_ranks_for_external_queries(self):
@@ -87,12 +88,84 @@ class FrameOffsetResultsTests(unittest.TestCase):
                         self.index.metadatas[token_index].label for j in expected)
                     self.assertEqual(query.precision(3), matches / 3)
                     self.assertAlmostEqual(query.query_time, record['query_time'])
-                    self.assertEqual(len(query.same), 3)
+                    self.assertEqual(len(query.ranked_same_type_matches), 3)
             self.assertIs(result[2].offset(-1), result[2].offset(-1))
             with self.assertRaises(ValueError): result[0].offset(-2)
             with self.assertRaises(ValueError): result[0].offset(True)
             with self.assertRaises(ValueError): result[0].offset(.5)
             self.assertIsNone(result._store)
+
+    def test_frame_queries_reuse_cached_kind_and_offsets_without_hdf5_reads(self):
+        self.write()
+        offset_reads = []
+        attribute_reads = []
+        read_dataset = h5py.Dataset.__getitem__
+        read_attribute = h5py.AttributeManager.__getitem__
+
+        def track_dataset(dataset, key):
+            if dataset.name == '/offsets': offset_reads.append(key)
+            return read_dataset(dataset, key)
+
+        def track_attribute(attributes, key):
+            attribute_reads.append(key)
+            return read_attribute(attributes, key)
+
+        with (mock.patch.object(h5py.Dataset, '__getitem__', track_dataset),
+            mock.patch.object(h5py.AttributeManager, '__getitem__', track_attribute),
+            nr.Result(self.filename, index=self.index) as result):
+            self.assertEqual(len(offset_reads), 1)
+            attributes_after_loading = len(attribute_reads)
+            offsets = result.offsets
+            self.assertIs(result.offsets, offsets)
+            self.assertFalse(offsets.flags.writeable)
+            with self.assertRaises(ValueError): offsets[0] = -99
+            result.collect_queries()
+            for token_index in range(len(result)):
+                for offset in offsets:
+                    query = result[token_index].offset(offset)
+                    self.assertEqual(query.offset, offset)
+                    self.assertEqual(result.result_kind, 'frame_offsets')
+                    query.neighbours
+            self.assertEqual(len(offset_reads), 1)
+            self.assertEqual(len(attribute_reads), attributes_after_loading)
+        for accessor in (lambda: result.offsets, lambda: result.result_kind):
+            with self.assertRaisesRegex(ValueError, 'closed'):
+                accessor()
+
+    def test_status_is_lazy_and_precision_reuses_cached_status_and_neighbour_count(self):
+        self.write()
+        with nr.Result(self.filename, index=self.index) as result:
+            for token_index, offset, reason in ((2, 0, None),
+                (0, -1, 'outside_recording'), (1, 1, 'outside_model_outputs')):
+                with self.subTest(reason=reason):
+                    with mock.patch.object(h5py.Group, '__getitem__',
+                        side_effect=AssertionError('query creation must stay lazy')):
+                        query = result[token_index].offset(offset)
+                    with mock.patch.object(query, '_read_query_array',
+                        wraps=query._read_query_array) as read:
+                        read.assert_not_called()
+                        expected = query.precision(3)
+                        self.assertEqual(query.valid, reason is None)
+                        self.assertEqual(query.invalid_reason, reason)
+                        statuses = [call for call in read.call_args_list
+                            if call.args == ('status',)]
+                        self.assertEqual(len(statuses), 1)
+                    with mock.patch.object(h5py.Group, '__getitem__',
+                        side_effect=AssertionError('HDF5 access after caching')):
+                        self.assertEqual(query.valid, reason is None)
+                        self.assertEqual(query.invalid_reason, reason)
+                        for _ in range(2):
+                            actual = query.precision(3)
+                            if reason is None: self.assertEqual(actual, expected)
+                            else: self.assertTrue(np.isnan(actual))
+                        with self.assertRaisesRegex(ValueError, 'neighbour count'):
+                            query.precision(4)
+            cached_queries = [result[2].offset(0), result[0].offset(-1)]
+        for query in cached_queries:
+            for accessor in (lambda: query.valid, lambda: query.invalid_reason,
+                lambda: query.precision(3)):
+                with self.assertRaisesRegex(ValueError, 'closed'):
+                    accessor()
 
     def test_invalid_offsets_preserve_sentinels_and_return_missing_results(self):
         self.write()
@@ -103,12 +176,27 @@ class FrameOffsetResultsTests(unittest.TestCase):
                 self.assertFalse(query.valid)
                 self.assertEqual(query.invalid_reason, reason)
                 self.assertEqual(query.neighbours, ())
-                self.assertEqual(query.same, ())
+                self.assertEqual(query.ranked_same_type_matches, ())
                 self.assertTrue(np.isnan(query.query_time))
                 self.assertTrue(np.isnan(query.precision(3)))
                 self.assertTrue(np.all(query.neighbour_indices == nr.INVALID_INDEX))
                 self.assertTrue(np.isnan(query.same_type_similarities).all())
                 with self.assertRaises(ValueError): query.precision(4)
+
+    def test_batch_sizes_and_backends_preserve_external_query_results(self):
+        expected = None
+        for backend in ('faiss', 'brute_force'):
+            self.index = svs.VectorIndex(self.index.vectors,
+                self.index.metadatas, backend=backend)
+            for batch_size in (1, 2, 100):
+                with self.subTest(backend=backend, batch_size=batch_size):
+                    self.write(batch_size=batch_size, overwrite=True)
+                    with h5py.File(self.filename) as output:
+                        arrays = {name: output[name][:]
+                            for name in nr.ARRAY_DTYPES}
+                    if expected is None: expected = arrays
+                    for name, values in arrays.items():
+                        np.testing.assert_array_equal(values, expected[name])
 
     def test_defaults_include_minus100_center_and_plus100(self):
         self.write(max_offset=100)
@@ -136,7 +224,7 @@ class FrameOffsetResultsTests(unittest.TestCase):
         queries = list(self.queries())
         queries[1]['key'] = self.keys[0]
         with self.assertRaisesRegex(ValueError, 'selection order'):
-            nr.write_frame_offsets(self.index, self.filename, self.mapping,
+            nc.write_frame_offsets(self.index, self.filename, self.mapping,
                 self.keys, queries, max_offset=1, top_k=3, workspace=self.workspace)
         self.assertFalse(self.filename.exists())
         self.assertFalse(list(self.workspace.glob('*.tmp')))
@@ -195,7 +283,7 @@ class FrameOffsetResultsTests(unittest.TestCase):
     def assert_evaluation_rejected(self, message):
         words = [SimpleNamespace(key=key) for key in self.keys]
         with (mock.patch.object(evaluation, 'compute_contextual_embedding') as compute,
-            mock.patch.object(nr, 'write_frame_offsets') as write,
+            mock.patch.object(nc, 'write_frame_offsets') as write,
             self.assertRaisesRegex(ValueError, message)):
             evaluation.evaluate_words(words, self.index, 'model', self.filename,
                 workspace=self.workspace)

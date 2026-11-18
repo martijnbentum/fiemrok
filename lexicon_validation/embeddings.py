@@ -68,7 +68,8 @@ def create_store(path, model_name, architecture, cgn):
     '''Open a CGN store and register the version 1/checkpoint 200000 model.'''
     embedding_store = Store(path)
     try:
-        embedding_store.attach_phraser_store(lv_stores.CGN_SOURCE_ID, cgn)
+        embedding_store.attach_phraser_store(lv_stores.CGN_SOURCE_ID, cgn,
+            set_back_reference=False)
         if embedding_store.load_model_metadata(model_name) is None:
             checkpoint = model_paths.get_pretrained_model(architecture,
                 checkpoint=200_000, version=1)

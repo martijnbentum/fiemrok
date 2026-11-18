@@ -155,7 +155,7 @@ class FrameOffsetValidationTests(unittest.TestCase):
             Path('/tmp/lv/svs_data'))
         load.assert_called_once_with('/tmp/lv', 'hubert_word_2_6_mean')
 
-    def test_selection_uses_local_materials_in_saved_order_and_closes(self):
+    def test_selection_uses_shared_materials_in_saved_order_without_closing(self):
         keys = [self.word.key, b'x' * 22]
         index = SimpleNamespace(metadatas=[SimpleNamespace(
             source_echoframe_keys=[pack_hidden_state_key(1, 6, key, 500)])
@@ -176,7 +176,7 @@ class FrameOffsetValidationTests(unittest.TestCase):
                 materials.load_many.assert_called_once_with(keys)
                 evaluate.assert_called_once_with(items, index, 'model',
                     'results.h5', workspace=directory)
-                materials.close.assert_called_once()
+                materials.close.assert_not_called()
                 index.metadatas.reverse()
                 with self.assertRaisesRegex(ValueError, 'selection order'):
                     validation.evaluate_selection('hubert', 6, 'center', 'word',

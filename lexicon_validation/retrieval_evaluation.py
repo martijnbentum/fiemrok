@@ -26,7 +26,7 @@ def export_neighbours(model_name, layer, pooling, condition='word',
     workspace:  local lexicon-validation workspace with saved selections
     Returns {condition: HDF5 output path}. Annotation metadata is not exported.
     '''
-    from .neighbour_results import write_neighbours
+    from .neighbour_computation import write_neighbours
 
     models = {'hubert': 'hubert', 'wav2vec2': 'w2v', 'w2v': 'w2v'}
     if model_name not in models:

@@ -122,7 +122,7 @@ def evaluate_words(words, vector_index, model, output_path, nuclei=None,
     Invalid offsets remain present with NA results. Metrics are computed by
     Result on access. Callers own the model and vector index.
     '''
-    from .neighbour_results import write_frame_offsets
+    from .neighbour_computation import write_frame_offsets
 
     words = list(words)
     nuclei = [None] * len(words) if nuclei is None else list(nuclei)
@@ -197,13 +197,10 @@ def evaluate_selection(model, layer, pooling, condition, output_path,
     if not keys or index_keys != keys:
         raise ValueError('index does not match saved selection order')
     materials = lv_stores.load_phraser_store(workspace=workspace)
-    try:
-        items = list(materials.load_many(keys))
-        if (len(items) != len(keys) or any(item is None for item in items)
-            or [item.key for item in items] != keys):
-            raise ValueError('missing or reordered selected materials')
-        loaded_model = load_model(MODELS[model][0], gpu=gpu)
-        return evaluate_words(items, index, loaded_model, output_path,
-            workspace=workspace, **kwargs)
-    finally:
-        materials.close()
+    items = list(materials.load_many(keys))
+    if (len(items) != len(keys) or any(item is None for item in items)
+        or [item.key for item in items] != keys):
+        raise ValueError('missing or reordered selected materials')
+    loaded_model = load_model(MODELS[model][0], gpu=gpu)
+    return evaluate_words(items, index, loaded_model, output_path,
+        workspace=workspace, **kwargs)

@@ -59,6 +59,9 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
             return_value=Path('/unused/hubert/checkpoint_200000')))
         self.wav2vec_store, self.hubert_store = self.create_stores()
 
+    def test_created_stores_do_not_set_reverse_phraser_link(self):
+        self.assertFalse(hasattr(self.cgn, 'echoframe_store'))
+
     def test_setup_registers_one_checkpoint_per_store_from_model_paths(self):
         self.wav2vec_path.assert_called_once_with(200_000, 1)
         self.hubert_path.assert_called_once_with(200_000, 1)
@@ -116,11 +119,13 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
                 self.assertEqual(len(store.metadatas), 8)
 
     def test_frames_link_to_markers_and_repeat_skips_inference(self):
-        for compute, name in (
+        for compute, name, model_path in (
             (cross_embeddings.compute_embeddings_for_wv2,
-                'wav2vec2_nl1_checkpoint-200000'),
+                'wav2vec2_nl1_checkpoint-200000',
+                '/unused/wav2vec2/checkpoint_200000'),
             (cross_embeddings.compute_embeddings_for_hubert,
-                'huibert_nl1_checkpoint-200000')):
+                'huibert_nl1_checkpoint-200000',
+                '/unused/hubert/checkpoint_200000')):
             with self.subTest(model=name):
                 outputs = self.outputs()
                 with (mock.patch.object(echoframe.Store, 'load_model',
@@ -132,8 +137,9 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
                         workspace=self.root, verbose=False, gpu=True,
                         batch_size=2)
                     self.addCleanup(store.close)
-                load_model.assert_called_once_with(name, gpu=True)
+                load_model.assert_not_called()
                 inference.assert_called_once()
+                self.assertEqual(inference.call_args.kwargs['model'], model_path)
                 self.assertEqual(inference.call_args.kwargs['batch_size'], 2)
                 self.assertTrue(inference.call_args.kwargs['gpu'])
                 np.testing.assert_allclose(inference.call_args.kwargs['starts'],
@@ -163,7 +169,7 @@ class CrossBoundaryEmbeddingTests(unittest.TestCase):
                     'iter_filename_batch_to_vector',
                     side_effect=AssertionError('inference should not run'))):
                     resumed = compute(self.markers, condition='cross_boundary',
-                        workspace=self.root, verbose=False)
+                        workspace=self.root, verbose=False, gpu=True)
                     self.addCleanup(resumed.close)
                 self.assertEqual(len(resumed.metadatas), 8)
 

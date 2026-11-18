@@ -30,7 +30,7 @@ markers = cbl.load_markers(cgn)
 hubert_store = embeddings.compute_embeddings_for_hubert(
     markers, condition='cross_boundary', gpu=True, batch_size=32)
 hubert_store.close()
-cgn.close()
+lv_stores.close_stores()
 ```
 
 The wrappers derive the actual type count and name stores under

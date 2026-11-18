@@ -26,6 +26,7 @@ class PipelineTests(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
+        self.addCleanup(lv_stores.close_stores)
         self.root = Path(directory.name)
         self.workspace = self.root / 'validation'
         self.cgn = phraser.Store(path=self.root / 'cgn')
@@ -89,9 +90,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(path.parent, self.workspace)
             with path.open('rb') as handle:
                 self.assertEqual(pickle.load(handle), selected[condition])
-        local = phraser.Store(path=lv_locations.phraser_store_path(
-            workspace=self.workspace))
-        self.addCleanup(local.close)
+        local = lv_stores.load_phraser_store(workspace=self.workspace)
         markers = local.load_many(selected['cross_boundary'])
         self.assertEqual({marker.label for marker in markers}, {'a n', 'b m'})
         self.assertEqual(list(self.cgn.DB.audio_id_to_child_keys(
@@ -181,7 +180,7 @@ class PipelineTests(unittest.TestCase):
                 with neighbour_results.Result(
                     outputs[condition]) as results:
                     token = results[0].token
-                    self.assertEqual(token.metadata.phraser_object.key,
+                    self.assertEqual(token.phraser_metadata.key,
                         selected[condition][0])
                     context = results.context(0)
                     self.assertTrue(context['phone']['target'])
@@ -256,6 +255,7 @@ class PipelineTests(unittest.TestCase):
                 mock.patch.object(pipeline, '_load_items',
                     wraps=pipeline._load_items) as load,
                 mock.patch.object(embeddings, 'create_store') as create,
+                mock.patch.object(lv_stores, 'load_echoframe_store') as store,
                 mock.patch.object(embeddings, 'compute_embeddings')
                     as compute):
                 paths = pipeline.build_embeddings(workspace=self.workspace,
@@ -265,11 +265,14 @@ class PipelineTests(unittest.TestCase):
                     {condition for _, condition in expected})
                 self.assertEqual(create.call_count, len(expected))
                 self.assertEqual(compute.call_count, len(expected))
+                self.assertEqual(store.call_count, len(expected))
+                store.return_value.close.assert_not_called()
 
     def test_word_embedding_does_not_require_cross_boundary_selection(self):
         self.prepare()
         lv_locations.selection_path('cross_boundary', self.workspace).unlink()
         with (mock.patch.object(embeddings, 'create_store'),
+            mock.patch.object(lv_stores, 'load_echoframe_store'),
             mock.patch.object(embeddings, 'compute_embeddings')):
             paths = pipeline.build_embeddings(model='hubert', condition='word',
                 workspace=self.workspace)
@@ -400,25 +403,19 @@ class PipelineTests(unittest.TestCase):
         with mock.patch.object(pipeline.stores, 'load_phraser_cgn_store',
             side_effect=AssertionError('must not open shared source')):
             materials = lv_stores.load_phraser_store(workspace=self.workspace)
-            self.addCleanup(materials.close)
             embeddings = lv_stores.load_echoframe_store('w2v', 'word',
                 materials=materials, workspace=self.workspace)
-            self.addCleanup(embeddings.close)
             attached = embeddings.load_phraser_store(lv_stores.CGN_SOURCE_ID)
             self.assertIs(attached, materials)
             key = self.phrase.words[0].key
             self.assertEqual(attached.load(key).label, 'left')
-            embeddings.close()
-            self.assertTrue(materials.is_open())
-            materials.close()
-
             automatic = lv_stores.load_echoframe_store('w2v', 'word',
                 workspace=self.workspace)
-            self.addCleanup(automatic.close)
-            local = automatic.load_phraser_store(lv_stores.CGN_SOURCE_ID)
-            self.assertEqual(local.load(key).label, 'left')
-            automatic.close_phraser_stores()
-            self.assertFalse(local.is_open())
+            self.assertIs(automatic, embeddings)
+            self.assertIs(lv_stores.load_phraser_store(workspace=self.workspace),
+                materials)
+            lv_stores.close_stores()
+            self.assertFalse(materials.is_open())
 
     def test_store_loaders_do_not_create_missing_directories(self):
         workspace = self.root / 'not-built'
