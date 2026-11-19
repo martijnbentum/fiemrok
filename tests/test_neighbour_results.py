@@ -536,6 +536,19 @@ class ResultTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'missing selected word'):
                 results[0].token.phraser_metadata
 
+    def test_vectors_memory_map_saved_index_or_reuse_supplied_index(self):
+        self.write()
+        with nr.Result(self.filename) as results:
+            vectors = results.vectors
+            self.assertIsInstance(vectors, np.memmap)
+            self.assertIs(results.vectors, vectors)
+            np.testing.assert_array_equal(vectors, self.index.vectors)
+            np.testing.assert_allclose(np.linalg.norm(vectors, axis=1), 1)
+        with self.assertRaisesRegex(ValueError, 'closed'):
+            results.vectors
+        with nr.Result(self.filename, index=self.index) as results:
+            self.assertIs(results.vectors, self.index.vectors)
+
     def test_two_results_share_stores_and_closing_one_keeps_the_other_usable(self):
         self.write()
         stores = nr.lv_stores

@@ -14,6 +14,7 @@ import h5py
 import numpy as np
 from progressbar import progressbar
 from speech_vector_search.metadata import VectorMetadatas
+from speech_vector_search.search import make_vector_path
 
 from . import lv_stores
 from . import token_features
@@ -220,6 +221,29 @@ class Result:
                 raise ValueError('saved selection does not match results')
             self._items = items
         return self._items
+
+    @property
+    def vectors(self):
+        '''Pooled vectors in row order, L2-normalized as saved by SVS.
+
+        Uses the supplied index, otherwise memory-maps the saved .npy file
+        so indexing reads only the requested rows.
+        '''
+        self._check_open()
+        if self._vectors is None:
+            if self._index is not None: vectors = self._index.vectors
+            else: vectors = np.load(self._vector_path, mmap_mode='r')
+            if vectors.ndim != 2 or len(vectors) != len(self):
+                raise ValueError('vectors do not match the result rows')
+            self._vectors = vectors
+        return self._vectors
+
+    @property
+    def _vector_path(self):
+        '''Return the saved SVS vector file named in the result file.'''
+        attrs = self._file.attrs
+        directory = (self.filename.parent / attrs['index_directory']).resolve()
+        return make_vector_path(directory, attrs['index_name'])
 
     @property
     def features(self):
@@ -556,6 +580,7 @@ def close_result(result):
     result._file.close()
     result._items = None
     result._features = None
+    result._vectors = None
     for query in result._queries.values():
         query._clear()
     result._queries.clear()
@@ -570,6 +595,7 @@ def load_result(result, index=None, mapping_path=None):
     Close the file if loading fails; otherwise Result.close owns cleanup.
     '''
     result._file = h5py.File(result.filename, 'r')
+    result._index = index
     try:
         result.metadatas = _load_metadatas(result, index)
         result._mapping = _load_mapping(result, mapping_path)
@@ -616,6 +642,7 @@ def _initialize_result_views(result):
     result._queries = {}
     result._items = None
     result._features = None
+    result._vectors = None
     result._type_labels = {result.metadatas[int(indices[0])].label: i
         for i, indices in enumerate(result._mapping['type_indices'])}
     result._description = (f'model={result.model!r} '

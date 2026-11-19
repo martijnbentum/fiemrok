@@ -37,6 +37,7 @@ with Result(paths['word']) as results:
     results.phraser_store  # same local store attached to Echoframe
     results.items  # all Phraser words or markers in row order
     results.features['duration_ms']  # per-token arrays, row i = token i
+    results.vectors[[3, 42]]  # pooled, L2-normalized SVS vectors
     query.token.echoframe_metadata
     query.token.phraser_metadata  # results.items[query.token_index]
     neighbour.token.phraser_metadata
@@ -176,6 +177,11 @@ workspace. A missing table is built from the items (about 2 minutes per
 dataset) and saved; a table that no longer matches the selection raises.
 Cross-boundary `n_syllables` counts distinct syllables of the item's phones,
 so partially covered syllables count once.
+
+`results.vectors` returns the pooled vectors the results were computed from,
+in row order. SVS normalizes vectors when building an index, so the saved
+`.npy` holds unit-length rows; unnormalized vectors are not kept. Without a
+supplied `index=`, the file is memory-mapped and no FAISS index is built.
 
 Reading numeric results loads SVS metadata JSON and the shared mapping,
 but does not load vector arrays or open annotation stores. When metadata is
