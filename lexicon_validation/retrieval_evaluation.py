@@ -12,7 +12,7 @@ from . import lv_locations
 
 def export_neighbours(model_name, layer, pooling, condition='word',
     directory=None, top_k=30, batch_size=64, overwrite=False,
-    workspace=lv_locations.workspace, compression='lzf'):
+    workspace=lv_locations.workspace, compression='lzf', gpu=False):
     '''Export compact neighbours and all same-type ranks for one condition.
 
     model_name: hubert, w2v, or wav2vec2
@@ -24,6 +24,7 @@ def export_neighbours(model_name, layer, pooling, condition='word',
     batch_size: query rows of temporary all-candidate similarities, default 64
     overwrite:  explicitly replace existing results
     workspace:  local lexicon-validation workspace with saved selections
+    gpu:        score and rank on a CUDA GPU; raises without CUDA
     Returns {condition: HDF5 output path}. Annotation metadata is not exported.
     '''
     from .neighbour_computation import write_neighbours
@@ -49,7 +50,7 @@ def export_neighbours(model_name, layer, pooling, condition='word',
     write_neighbours(index, filename, mapping_path, selected_keys,
         top_k=top_k, batch_size=batch_size, overwrite=overwrite,
         compression=compression, model=model, condition=condition,
-        workspace=workspace)
+        workspace=workspace, gpu=gpu)
     print(f'Saved {filename}', flush=True)
     return {condition: filename}
 

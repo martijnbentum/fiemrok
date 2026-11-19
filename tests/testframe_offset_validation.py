@@ -175,8 +175,12 @@ class FrameOffsetValidationTests(unittest.TestCase):
                 local.assert_called_once_with(workspace=directory)
                 materials.load_many.assert_called_once_with(keys)
                 evaluate.assert_called_once_with(items, index, 'model',
-                    'results.h5', workspace=directory)
+                    'results.h5', workspace=directory, gpu=False)
                 materials.close.assert_not_called()
+                validation.evaluate_selection('hubert', 6, 'center', 'word',
+                    'results.h5', workspace=directory, gpu=True)
+                validation.load_model.assert_called_with(mock.ANY, gpu=True)
+                self.assertIs(evaluate.call_args.kwargs['gpu'], True)
                 index.metadatas.reverse()
                 with self.assertRaisesRegex(ValueError, 'selection order'):
                     validation.evaluate_selection('hubert', 6, 'center', 'word',

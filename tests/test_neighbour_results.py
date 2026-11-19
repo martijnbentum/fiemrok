@@ -49,6 +49,47 @@ def reference(index, token_index, top_k):
     return neighbours, scores[neighbours], same_type, ranks, scores[same_type]
 
 
+class FakeScorer:
+    '''NumPy stand-in for gpu_search.GpuScorer, scoring like the CPU path.'''
+
+    def __init__(self, vectors):
+        self.vectors = np.asarray(vectors).astype('float32')
+
+    def cosine_batches(self, query_vectors, batch_size):
+        for start in range(0, len(query_vectors), batch_size):
+            queries = query_vectors[start:start + batch_size]
+            queries = svs.util_math.l2_normalize_rows(queries)
+            yield start, queries.astype('float32') @ self.vectors.T
+
+
+def fake_neighbours(scores, top_k, excluded_indices):
+    neighbours = np.array([svs.ranking.k_nearest_neighbours(row, top_k,
+        excluded_index=excluded) for row, excluded in zip(scores,
+        excluded_indices)])
+    return neighbours, np.take_along_axis(scores, neighbours, 1)
+
+
+def fake_ranks(scores, candidates):
+    ranks = np.array([svs.ranking.global_ranks(row, same)
+        for row, same in zip(scores, candidates)])
+    return ranks, np.take_along_axis(scores, candidates.astype(np.intp), 1)
+
+
+def fake_gpu_search():
+    '''Patch gpu_search with NumPy row functions; torch stays unloaded.'''
+    fake = SimpleNamespace(GpuScorer=mock.Mock(side_effect=FakeScorer),
+        k_nearest_neighbours_rows=mock.Mock(side_effect=fake_neighbours),
+        global_ranks_rows=mock.Mock(side_effect=fake_ranks))
+    return mock.patch.object(nc, 'gpu_search', fake)
+
+
+def read_arrays(filename):
+    with h5py.File(filename) as handle:
+        return {name: handle[name][:] for name in ('neighbour_indices',
+            'neighbour_similarities', 'same_type_ranks',
+            'same_type_similarities')}
+
+
 class ResultTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -145,6 +186,27 @@ class ResultTests(unittest.TestCase):
         with h5py.File(self.filename) as handle:
             for name, values in original.items():
                 np.testing.assert_array_equal(handle[name][:], values)
+
+    def test_gpu_path_writes_the_same_results(self):
+        self.write()
+        expected = read_arrays(self.filename)
+        with fake_gpu_search() as fake:
+            self.write(gpu=True, overwrite=True)
+        fake.GpuScorer.assert_called_once()
+        np.testing.assert_array_equal(fake.GpuScorer.call_args.args[0],
+            self.index.vectors)
+        self.assertEqual(fake.global_ranks_rows.call_count, 3)
+        for name, values in read_arrays(self.filename).items():
+            np.testing.assert_array_equal(values, expected[name])
+
+    def test_gpu_without_cuda_fails_before_writing(self):
+        torch = SimpleNamespace(device=lambda name: SimpleNamespace(type=name),
+            cuda=SimpleNamespace(is_available=lambda: False))
+        with mock.patch.object(nc.gpu_search, 'import_torch',
+            return_value=torch):
+            with self.assertRaisesRegex(ValueError, 'CUDA'):
+                self.write(gpu=True)
+        self.assertFalse(self.filename.exists())
 
     def test_object_graph_shares_token_and_type_identities(self):
         self.write()

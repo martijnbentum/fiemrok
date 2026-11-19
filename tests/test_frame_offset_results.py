@@ -12,6 +12,7 @@ import speech_vector_search as svs
 from lexicon_validation import neighbour_computation as nc
 from lexicon_validation import neighbour_results as nr
 from lexicon_validation import frame_offset_evaluation as evaluation
+from tests.test_neighbour_results import fake_gpu_search, read_arrays
 
 
 class FrameOffsetResultsTests(unittest.TestCase):
@@ -259,6 +260,25 @@ class FrameOffsetResultsTests(unittest.TestCase):
                         np.testing.assert_array_equal(query.neighbour_indices, [1, 5, 2])
                         self.assertEqual(result[0].token.phraser_key, words[0].key)
                         self.assertEqual(result._file['reference_kinds'][0], b'word')
+
+    def test_gpu_path_writes_the_same_results(self):
+        self.write()
+        expected = read_arrays(self.filename)
+        with fake_gpu_search() as fake:
+            self.write(gpu=True, overwrite=True, batch_size=3)
+        fake.GpuScorer.assert_called_once()
+        # Each token's valid offsets fit in one batch of three.
+        self.assertEqual(fake.global_ranks_rows.call_count, 6)
+        for name, values in read_arrays(self.filename).items():
+            np.testing.assert_array_equal(values, expected[name])
+
+    def test_evaluation_passes_gpu_to_writer(self):
+        words = [SimpleNamespace(key=key) for key in self.keys]
+        with (mock.patch.object(evaluation, 'evaluate_word'),
+            mock.patch.object(nc, 'write_frame_offsets') as write):
+            evaluation.evaluate_words(words, self.index, 'model',
+                self.filename, workspace=self.workspace, gpu=True)
+        self.assertIs(write.call_args.kwargs['gpu'], True)
 
     def test_malformed_offset_shapes_are_rejected(self):
         self.write()

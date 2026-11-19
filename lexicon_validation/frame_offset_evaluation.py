@@ -111,7 +111,7 @@ def evaluate_word(word, model, nucleus=None, layer=6, max_offset=100,
 def evaluate_words(words, vector_index, model, output_path, nuclei=None,
     max_offset=100, base_collar_ms=2000, stride=0.02, field=0.025,
     top_k=30, *, workspace=lv_locations.workspace,
-    batch_size=32, overwrite=False, compression='lzf'):
+    batch_size=32, overwrite=False, compression='lzf', gpu=False):
     '''Stream contextual queries to the shared HDF5 result format.
 
     model is the caller-supplied speech model matching vector_index. Query
@@ -120,7 +120,8 @@ def evaluate_words(words, vector_index, model, output_path, nuclei=None,
     pooling belongs to the index; queries are single frames.
     Stores nearest non-self neighbours and every same-type rank/similarity.
     Invalid offsets remain present with NA results. Metrics are computed by
-    Result on access. Callers own the model and vector index.
+    Result on access. Callers own the model and vector index. gpu scores and
+    ranks on a CUDA GPU and raises without CUDA.
     '''
     from .neighbour_computation import write_frame_offsets
 
@@ -148,7 +149,7 @@ def evaluate_words(words, vector_index, model, output_path, nuclei=None,
         top_k=top_k, batch_size=batch_size, overwrite=overwrite,
         compression=compression, model=model_name, condition=condition,
         workspace=workspace, stride=stride, field=field,
-        base_collar_ms=base_collar_ms)
+        base_collar_ms=base_collar_ms, gpu=gpu)
 
 
 
@@ -182,6 +183,7 @@ def evaluate_selection(model, layer, pooling, condition, output_path,
     model: w2v or hubert; pooling describes the fixed candidate index.
     The query always uses individual frames. Optional nuclei must follow the
     saved selection order. Callers may pass evaluate_words options in kwargs.
+    gpu runs both the model and retrieval on a CUDA GPU.
     '''
     from .embeddings import MODELS
 
@@ -203,4 +205,4 @@ def evaluate_selection(model, layer, pooling, condition, output_path,
         raise ValueError('missing or reordered selected materials')
     loaded_model = load_model(MODELS[model][0], gpu=gpu)
     return evaluate_words(items, index, loaded_model, output_path,
-        workspace=workspace, **kwargs)
+        workspace=workspace, gpu=gpu, **kwargs)

@@ -13,7 +13,7 @@ from time import monotonic
 
 import h5py
 import numpy as np
-from speech_vector_search import ranking
+from speech_vector_search import gpu_search, ranking
 
 from . import lv_locations
 from .neighbour_helper import (ARRAY_DTYPES, INVALID_INDEX, STATUSES,
@@ -22,7 +22,8 @@ from .neighbour_helper import (ARRAY_DTYPES, INVALID_INDEX, STATUSES,
 
 def write_neighbours(index, filename, mapping_path, selected_keys,
     top_k=30, batch_size=64, overwrite=False, compression='lzf',
-    model='hubert', condition='word', workspace=lv_locations.workspace):
+    model='hubert', condition='word', workspace=lv_locations.workspace,
+    gpu=False):
     '''Write exact cosine neighbours and all same-type global ranks.
 
     index:         searched SVS index, in saved selection order
@@ -30,6 +31,7 @@ def write_neighbours(index, filename, mapping_path, selected_keys,
     mapping_path:  shared type mapping for this dataset
     batch_size:    bounds temporary similarities to this many query rows
     compression:   lossless HDF5 filter, or None
+    gpu:           score and rank on a CUDA GPU; raises without CUDA
     Returns the published HDF5 path; refuses existing results by default.
     '''
     validate_positive_integer(top_k, 'top_k')
@@ -50,6 +52,7 @@ def write_neighbours(index, filename, mapping_path, selected_keys,
     identity = index_identity(index.metadatas, selected_keys)
     mapping = _create_mapping(mapping_path, index.metadatas, identity)
     n_same_type = mapping['type_indices'].shape[1]
+    scorer = gpu_search.GpuScorer(index.vectors) if gpu else None
     with _atomic_output(filename, overwrite) as temporary:
         with h5py.File(temporary, 'w') as output:
             _result_attributes(output, index, identity, filename, mapping_path,
@@ -59,14 +62,14 @@ def write_neighbours(index, filename, mapping_path, selected_keys,
                 output.create_dataset(name, (n_tokens, width), dtype=dtype,
                     chunks=(min(batch_size, n_tokens), width),
                     compression=compression, shuffle=compression is not None)
-            _write_batches(output, index, mapping, top_k, batch_size)
+            _write_batches(output, index, scorer, mapping, top_k, batch_size)
     return filename
 
 
 def write_frame_offsets(index, filename, mapping_path, selected_keys, queries,
     max_offset=100, top_k=30, batch_size=32, overwrite=False, compression='lzf',
     model='hubert', condition='word', workspace=lv_locations.workspace,
-    stride=0.02, field=0.025, base_collar_ms=2000):
+    stride=0.02, field=0.025, base_collar_ms=2000, gpu=False):
     '''Stream one token's contextual frame queries at a time into HDF5.
 
     queries yields dictionaries in saved token order: key, records,
@@ -74,6 +77,7 @@ def write_frame_offsets(index, filename, mapping_path, selected_keys, queries,
     offset, center_index, query_time, invalid_reason and vector. All same-type
     ranks include self; neighbours exclude only the original query token.
     Temporary scores are bounded by batch_size * number of candidate tokens.
+    gpu scores and ranks on a CUDA GPU and raises without CUDA.
     '''
     if isinstance(max_offset, bool) or not isinstance(max_offset, Integral) or max_offset < 0:
         raise ValueError('max_offset must be a non-negative integer')
@@ -95,6 +99,7 @@ def write_frame_offsets(index, filename, mapping_path, selected_keys, queries,
     offsets = np.arange(-max_offset, max_offset + 1, dtype='int32')
     n_offsets = len(offsets)
     n_same = mapping['type_indices'].shape[1]
+    scorer = gpu_search.GpuScorer(index.vectors) if gpu else None
     with _atomic_output(filename, overwrite) as temporary:
         with h5py.File(temporary, 'w') as output:
             _result_attributes(output, index, identity, filename, mapping_path,
@@ -148,16 +153,13 @@ def write_frame_offsets(index, filename, mapping_path, selected_keys, queries,
                         np.nan if 'similarities' in name else INVALID_INDEX,
                         dtype=array_dtype) for name, array_dtype in ARRAY_DTYPES.items()}
                     same_type = mapping['type_indices'][mapping['token_types'][token_index]]
-                    for start, scores in index.cosine_batches(vectors, batch_size):
-                        positions = valid[start:start + len(scores)]
-                        for position, similarities in zip(positions, scores):
-                            neighbours = ranking.k_nearest_neighbours(
-                                similarities, top_k, excluded_index=token_index)
-                            batch['neighbour_indices'][position] = neighbours
-                            batch['neighbour_similarities'][position] = similarities[neighbours]
-                            batch['same_type_ranks'][position] = ranking.global_ranks(
-                                similarities, same_type)
-                            batch['same_type_similarities'][position] = similarities[same_type]
+                    excluded = np.full(len(vectors), token_index)
+                    same_types = np.tile(same_type, (len(vectors), 1))
+                    for start, values in _score_batches(index, scorer, vectors,
+                        excluded, same_types, top_k, batch_size):
+                        positions = valid[start:start + len(values['same_type_ranks'])]
+                        for name, array in values.items():
+                            batch[name][positions] = array
                     for name, values in batch.items():
                         output[name][token_index] = values
                 done = token_index + 1
@@ -216,22 +218,14 @@ def _result_attributes(output, index, identity, filename, mapping_path,
         workspace=os.path.relpath(Path(workspace).resolve(), filename.parent.resolve()))
 
 
-def _write_batches(output, index, mapping, top_k, batch_size):
+def _write_batches(output, index, scorer, mapping, top_k, batch_size):
     started, reported = monotonic(), 0
     n_tokens = len(index.metadatas)
-    for start, scores in index.cosine_batches(index.vectors, batch_size):
-        batch = {name: np.empty((len(scores), output[name].shape[1]),
-            dtype=dtype) for name, dtype in ARRAY_DTYPES.items()}
-        for offset, similarities in enumerate(scores):
-            token_index = start + offset
-            neighbours = ranking.k_nearest_neighbours(
-                similarities, top_k, excluded_index=token_index)
-            same_type = mapping['type_indices'][mapping['token_types'][token_index]]
-            batch['neighbour_indices'][offset] = neighbours
-            batch['neighbour_similarities'][offset] = similarities[neighbours]
-            batch['same_type_ranks'][offset] = ranking.global_ranks(similarities, same_type)
-            batch['same_type_similarities'][offset] = similarities[same_type]
-        done = start + len(scores)
+    excluded = np.arange(n_tokens)
+    same_types = mapping['type_indices'][mapping['token_types']]
+    for start, batch in _score_batches(index, scorer, index.vectors, excluded,
+        same_types, top_k, batch_size):
+        done = start + len(batch['same_type_ranks'])
         for name, values in batch.items():
             output[name][start:done] = values
         elapsed = monotonic() - started
@@ -239,3 +233,46 @@ def _write_batches(output, index, mapping, top_k, batch_size):
             print(f'Neighbours: {done:,}/{n_tokens:,} ({done / n_tokens:.1%}); '
                 f'{elapsed:.1f}s elapsed', flush=True)
             reported = elapsed
+
+
+def _score_batches(index, scorer, vectors, excluded, same_types, top_k,
+    batch_size):
+    '''Yield (start, result arrays) per batch, on the GPU when scorer is set.
+
+    excluded holds each query's own token; same_types holds one row of
+    same-type candidates per query.
+    '''
+    if scorer is not None:
+        for start, scores in scorer.cosine_batches(vectors, batch_size):
+            stop = start + len(scores)
+            neighbours, neighbour_scores = gpu_search.k_nearest_neighbours_rows(
+                scores, top_k, excluded_indices=excluded[start:stop])
+            ranks, same_scores = gpu_search.global_ranks_rows(scores,
+                same_types[start:stop])
+            yield start, _result_arrays(neighbours, neighbour_scores, ranks,
+                same_scores)
+        return
+    for start, scores in index.cosine_batches(vectors, batch_size):
+        batch = {name: np.empty((len(scores), top_k
+            if name.startswith('neighbour_') else same_types.shape[1]),
+            dtype=dtype) for name, dtype in ARRAY_DTYPES.items()}
+        for offset, similarities in enumerate(scores):
+            query = start + offset
+            neighbours = ranking.k_nearest_neighbours(similarities, top_k,
+                excluded_index=excluded[query])
+            same_type = same_types[query]
+            batch['neighbour_indices'][offset] = neighbours
+            batch['neighbour_similarities'][offset] = similarities[neighbours]
+            batch['same_type_ranks'][offset] = ranking.global_ranks(
+                similarities, same_type)
+            batch['same_type_similarities'][offset] = similarities[same_type]
+        yield start, batch
+
+
+def _result_arrays(neighbours, neighbour_scores, ranks, same_scores):
+    '''Cast row results to the saved array dtypes.'''
+    values = dict(neighbour_indices=neighbours,
+        neighbour_similarities=neighbour_scores, same_type_ranks=ranks,
+        same_type_similarities=same_scores)
+    return {name: values[name].astype(dtype)
+        for name, dtype in ARRAY_DTYPES.items()}
