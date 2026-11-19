@@ -26,6 +26,11 @@ fiemrok/
     samples/                         legacy selected and filtered word keys
     frame_analysis/                  frame counts and derived analyses
     svs_data/                        saved speech-vector indexes
+    neighbours/                      retrieval results and type mappings
+    token_features/                  per-token feature tables (.npz)
+    frequencies/                     store-wide word/syllable/phone and
+                                     cross-boundary sequence counts
+    feature_logs/                    feature and frequency build logs
     results/                         comparison summaries and plots
   sonority/
     stores/
