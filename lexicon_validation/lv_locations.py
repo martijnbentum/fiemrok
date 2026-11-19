@@ -39,6 +39,14 @@ def token_features_path(condition, workspace=workspace):
     return Path(workspace) / 'token_features' / f'{condition}.npz'
 
 
+def frequency_path(name, workspace=workspace):
+    '''Return a saved corpus frequency file for one unit.'''
+    names = ('word', 'syllable', 'phone', 'cross_boundary_sequence')
+    if name not in names:
+        raise ValueError(f'name must be one of {", ".join(names)}')
+    return Path(workspace) / 'frequencies' / f'{name}_counts.pkl'
+
+
 def store_path(model, condition, n_types, workspace=workspace):
     '''Name a store using its model, dataset, and actual type count.'''
     if model not in ('w2v', 'hubert'):

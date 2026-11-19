@@ -173,10 +173,29 @@ these items; `echoframe_metadata` still loads per token.
 `results.features` returns the per-token feature table from
 `token_features.load_token_features`: a dict of NumPy arrays (columns in
 `token_features.COLUMNS`) saved as `token_features/{condition}.npz` in the
-workspace. A missing table is built from the items (about 2 minutes per
-dataset) and saved; a table that no longer matches the selection raises.
+workspace. A missing table is built from the items and saved; a table that no longer matches the selection raises.
 Cross-boundary `n_syllables` counts distinct syllables of the item's phones,
 so partially covered syllables count once.
+`left_words` and `right_words` hold `n_context_words` (default 3) words of
+the same speaker in the recording, crossing phrase boundaries and padded
+with `*`. `articulation_rate` is phones per second over up to 30 s of the
+speaker's own phones on each side (`RATE_WINDOW_MS`), excluding the token;
+pauses and other speakers do not count. `rate_speech_s` is the speech used,
+below 60 s near recording edges; the rate is NaN without any. Loading each
+speaker's word and phone stream dominates the build, about 15 minutes per
+dataset; a table saved with another context size raises.
+
+Corpus frequencies come from `frequencies.py`. `build_frequencies()` counts
+every word, syllable and phone in the local store with count-only Phraser
+Lexicons (no eligibility filters; reports kept) and every cross-boundary
+phoneme sequence as the sampler enumerates them, saving
+`frequencies/{word,syllable,phone,cross_boundary_sequence}_counts.pkl`.
+`frequency_columns(features, load_frequencies())` returns log10(count + 1)
+arrays in row order: `word_log_freq` (word rows), `left_word_log_freq`,
+`right_word_log_freq` and `sequence_log_freq` (cross-boundary rows), plus
+`syllable_log_freq_mean`, `syllable_log_freq_min` and `phone_log_freq_mean`
+over the token's `syllables` and `phones`. They are computed on demand and
+not stored in the feature table.
 
 `results.vectors` returns the pooled vectors the results were computed from,
 in row order. SVS normalizes vectors when building an index, so the saved

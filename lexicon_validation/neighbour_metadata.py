@@ -178,8 +178,8 @@ def _segment_metadata(segment, n_phone_context, n_word_context, context_cache):
         if any(p.start < segment.start or p.end > segment.end for p in targets):
             raise ValueError('marker boundaries cut through a phone')
     if not targets: raise ValueError('target has no phones')
-    phone_record = _context(phones, targets, n_phone_context)
-    word_record = _context(words, target_words, n_word_context)
+    phone_record = context_labels(phones, targets, n_phone_context)
+    word_record = context_labels(words, target_words, n_word_context)
     boundary = None
     if len(target_words) == 2:
         boundary = next(i for i, phone in enumerate(targets)
@@ -205,7 +205,7 @@ def _validate_context_sizes(*sizes):
         raise ValueError('context sizes must be non-negative integers')
 
 
-def _context(items, targets, size):
+def context_labels(items, targets, size):
     '''Select context by occurrence key, keeping all labels in time order.'''
     positions = {item.key: i for i, item in enumerate(items)}
     indices = [positions[item.key] for item in targets]
