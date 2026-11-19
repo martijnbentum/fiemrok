@@ -22,7 +22,8 @@ def validate_positive_integer(value, name):
         raise ValueError(f'{name} must be a positive integer')
 
 
-def _fingerprint(values):
+def fingerprint(values):
+    '''Hash ordered keys or labels with length prefixes.'''
     digest = sha256()
     for value in values:
         if isinstance(value, str): value = value.encode('utf-8')
@@ -49,9 +50,9 @@ def index_identity(metadatas, selected_keys=None):
         raise ValueError('duplicate Phraser token identities')
     if selected_keys is not None and list(selected_keys) != phraser_keys:
         raise ValueError('vector index does not match saved selection order')
-    return dict(selection_fingerprint=_fingerprint(phraser_keys),
-        source_fingerprint=_fingerprint(source_keys),
-        label_fingerprint=_fingerprint(labels))
+    return dict(selection_fingerprint=fingerprint(phraser_keys),
+        source_fingerprint=fingerprint(source_keys),
+        label_fingerprint=fingerprint(labels))
 
 
 def type_mapping(metadatas):

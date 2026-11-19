@@ -2,7 +2,6 @@
 
 from contextlib import contextmanager
 from pathlib import Path
-import pickle
 from time import monotonic
 
 import model_paths
@@ -11,6 +10,7 @@ from . import cross_boundary_lexicon as cbl
 from . import cross_boundary_sampling as sampling
 from . import lv_locations
 from . import lv_stores
+from . import token_features
 from . import word_lexicon
 
 
@@ -147,17 +147,6 @@ def _load_word_inventory(store, n_tokens, path):
     return words
 
 
-def _load_items(condition, cgn, workspace):
-    '''Load the frozen sample in saved key order.'''
-    path = lv_locations.selection_path(condition, workspace)
-    with path.open('rb') as handle: keys = pickle.load(handle)
-    if not keys: raise ValueError(f'empty {condition} selection')
-    items = list(cgn.load_many(keys))
-    if len(items) != len(keys) or any(item is None for item in items):
-        raise ValueError(f'missing selected {condition} items')
-    return keys, items
-
-
 def build_embeddings(layers=LAYERS, collar=2000, gpu=False, batch_size=32,
     verbose=True, cgn=None, workspace=lv_locations.workspace,
     components=lv_locations.default_components,
@@ -179,7 +168,8 @@ def build_embeddings(layers=LAYERS, collar=2000, gpu=False, batch_size=32,
         layers = tuple(layers)
         paths = {}
         for condition in conditions:
-            _, items = _load_items(condition, cgn, workspace)
+            _, items = token_features.load_selected_items(condition, cgn,
+                workspace)
             n_types = len({item.label for item in items})
             for model in models:
                 model_name = MODELS[model]
@@ -260,7 +250,8 @@ def build_indexes(layers=LAYERS, collar=2000, overwrite=False, cgn=None,
         layers = tuple(layers)
         paths = {}
         for condition in conditions:
-            keys, items = _load_items(condition, cgn, workspace)
+            keys, items = token_features.load_selected_items(condition,
+                cgn, workspace)
             n_types = len({item.label for item in items})
             unit_type = 'word' if condition == 'word' else 'marker'
             for model in models:

@@ -16,8 +16,10 @@ from progressbar import progressbar
 from speech_vector_search.metadata import VectorMetadatas
 
 from . import lv_stores
+from . import token_features
 from .neighbour_helper import (ARRAY_DTYPES, INVALID_INDEX, STATUSES,
-    index_identity, load_shared_mapping, validate_positive_integer)
+    fingerprint, index_identity, load_shared_mapping,
+    validate_positive_integer)
 
 
 class Result:
@@ -26,7 +28,8 @@ class Result:
     index: optional existing SVS index; otherwise load only its metadata
     store: optional caller-owned Echoframe store with local Phraser attached
     Numeric reads need no annotation store. Metadata access uses module-owned
-    shared local stores when none was passed. Closing this result closes only
+    shared local stores when none was passed. Phraser items are loaded in
+    bulk from the saved selection and shared by results of one dataset. Closing this result closes only
     its HDF5 file; call lv_stores.close_stores() when all store users are done.
     '''
 
@@ -174,10 +177,14 @@ class Result:
         self._check_open()
         if self._store is None:
             f = lv_stores.load_echoframe_store
-            workspace_path = self._file.attrs['workspace']
-            workspace = self.filename.parent / workspace_path
-            self._store = f(self.model, self.condition, workspace=workspace)
+            self._store = f(self.model, self.condition,
+                workspace=self._workspace)
         return self._store
+
+    @property
+    def _workspace(self):
+        '''Return the validation workspace recorded in the result file.'''
+        return self.filename.parent / self._file.attrs['workspace']
 
     @property
     def phraser_store(self):
@@ -197,13 +204,42 @@ class Result:
         if metadata is None: raise ValueError('Echoframe metadata not found')
         return metadata
 
+    @property
+    def items(self):
+        '''Phraser words or markers in row order, loaded once per dataset.
+
+        Uses the Phraser store attached to a caller-owned Echoframe store,
+        otherwise the shared local store; the Echoframe store stays unopened.
+        '''
+        self._check_open()
+        if self._items is None:
+            store = None if self._store is None else self.phraser_store
+            keys, items = token_features.load_selected_items(self.condition,
+                store, workspace=self._workspace)
+            if fingerprint(keys) != self.attributes['selection_fingerprint']:
+                raise ValueError('saved selection does not match results')
+            self._items = items
+        return self._items
+
+    @property
+    def features(self):
+        '''Per-token feature arrays in row order; see token_features.
+
+        Loads the saved table, building it first when missing.
+        '''
+        self._check_open()
+        if self._features is None:
+            store = None if self._store is None else self.phraser_store
+            f = token_features.load_token_features
+            self._features = f(self.condition, store,
+                workspace=self._workspace,
+                selection_fingerprint=self.attributes['selection_fingerprint'])
+        return self._features
+
     def phraser_metadata(self, token_index):
-        '''Return the linked Phraser annotation object, such as a word or marker.'''
-        metadata = self.echoframe_metadata(token_index)
-        annotation = metadata.phraser_object
-        if annotation is None:
-            raise ValueError('Phraser annotation not found')
-        return annotation
+        '''Return the Phraser annotation object, such as a word or marker.'''
+        token_index = self._token_index(token_index)
+        return self.items[token_index]
 
     def context(self, token_index, n_phone_context=10, n_word_context=3):
         '''Build phone/word context on demand using the existing helpers.'''
@@ -445,7 +481,7 @@ class Token:
 
     @property
     def phraser_metadata(self):
-        '''Return the token annotation from Phraser through its Echoframe metadata.'''
+        '''Return the token annotation from the bulk-loaded Phraser items.'''
         return self.result.phraser_metadata(self.index)
 
     def context(self, n_phone_context=10, n_word_context=3):
@@ -518,6 +554,8 @@ class Match:
 def close_result(result):
     '''Close the HDF5 file and clear cached views without closing stores.'''
     result._file.close()
+    result._items = None
+    result._features = None
     for query in result._queries.values():
         query._clear()
     result._queries.clear()
@@ -576,6 +614,8 @@ def _initialize_result_views(result):
     result._tokens = {}
     result._types = {}
     result._queries = {}
+    result._items = None
+    result._features = None
     result._type_labels = {result.metadatas[int(indices[0])].label: i
         for i, indices in enumerate(result._mapping['type_indices'])}
     result._description = (f'model={result.model!r} '

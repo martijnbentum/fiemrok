@@ -35,8 +35,10 @@ with Result(paths['word']) as results:
 
     # Annotation stores open only when annotations are requested.
     results.phraser_store  # same local store attached to Echoframe
+    results.items  # all Phraser words or markers in row order
+    results.features['duration_ms']  # per-token arrays, row i = token i
     query.token.echoframe_metadata
-    query.token.phraser_metadata
+    query.token.phraser_metadata  # results.items[query.token_index]
     neighbour.token.phraser_metadata
     query.token.context(n_phone_context=10, n_word_context=3)
 
@@ -159,6 +161,21 @@ name, and verifies the shared mapping. Fingerprints do not detect changed
 vector values under unchanged keys. Rebuild results after rebuilding vectors.
 Relative dependency paths and identity fields are stored inside the result
 file; no separate manifests or annotation exports are created.
+
+`results.items` loads every selected Phraser word or marker with one
+`load_many` call on the saved selection PKL, checked against the result's
+selection fingerprint. `token_features.load_selected_items` caches the
+items per selection file, so all 16 results of a dataset share them;
+`lv_stores.close_stores()` clears that cache. `phraser_metadata` reads from
+these items; `echoframe_metadata` still loads per token.
+
+`results.features` returns the per-token feature table from
+`token_features.load_token_features`: a dict of NumPy arrays (columns in
+`token_features.COLUMNS`) saved as `token_features/{condition}.npz` in the
+workspace. A missing table is built from the items (about 2 minutes per
+dataset) and saved; a table that no longer matches the selection raises.
+Cross-boundary `n_syllables` counts distinct syllables of the item's phones,
+so partially covered syllables count once.
 
 Reading numeric results loads SVS metadata JSON and the shared mapping,
 but does not load vector arrays or open annotation stores. When metadata is

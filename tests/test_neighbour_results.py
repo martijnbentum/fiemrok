@@ -1,4 +1,5 @@
 from pathlib import Path
+import pickle
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -488,36 +489,51 @@ class ResultTests(unittest.TestCase):
         store.close.assert_not_called()
         store.close_phraser_stores.assert_not_called()
 
-    def test_phraser_access_reuses_attached_store_and_metadata(self):
+    def write_selection(self, keys=None):
+        if keys is None: keys = self.selected
+        path = self.workspace / 'word_keys.pkl'
+        with path.open('wb') as handle: pickle.dump(list(keys), handle)
+        self.addCleanup(nr.token_features.clear_cache)
+
+    def test_phraser_access_bulk_loads_items_from_attached_store(self):
         self.write()
+        self.write_selection()
         store = mock.Mock()
-        annotation = object()
-        metadata = SimpleNamespace(phraser_object=annotation)
-        store.load_metadata.return_value = metadata
         materials = store.load_phraser_store.return_value
+        annotations = [object() for _ in self.selected]
+        materials.load_many.return_value = annotations
         with (mock.patch.object(nr.lv_stores, 'load_phraser_store') as loader,
-            nr.Result(self.filename, index=self.index, store=store) as results):
+            nr.Result(self.filename, index=self.index, store=store) as results,
+            nr.Result(self.filename, index=self.index, store=store) as other):
             self.assertIs(results.phraser_store, materials)
-            self.assertIs(results.phraser_store, materials)
-            self.assertIs(results[0].token.echoframe_metadata, metadata)
-            self.assertIs(results[0].token.phraser_metadata, annotation)
-            self.assertIs(results.phraser_metadata(1), annotation)
-            store.load_phraser_store.assert_has_calls(
-                [mock.call('cgn'), mock.call('cgn')])
+            self.assertIs(results[0].token.phraser_metadata, annotations[0])
+            self.assertIs(results.phraser_metadata(1), annotations[1])
+            self.assertEqual(results.items, tuple(annotations))
+            self.assertIs(other.items, results.items)
+            materials.load_many.assert_called_once_with(self.selected)
+            store.load_metadata.assert_not_called()
             loader.assert_not_called()
         store.close.assert_not_called()
         store.close_phraser_stores.assert_not_called()
         for accessor in (lambda: results.phraser_store,
-            lambda: results.phraser_metadata(0)):
+            lambda: results.phraser_metadata(0), lambda: results.items):
             with self.assertRaisesRegex(ValueError, 'closed'):
                 accessor()
 
-    def test_missing_phraser_annotation_is_reported(self):
+    def test_selection_mismatch_and_missing_items_are_reported(self):
         self.write()
         store = mock.Mock()
-        store.load_metadata.return_value = SimpleNamespace(phraser_object=None)
+        materials = store.load_phraser_store.return_value
+        self.write_selection(reversed(self.selected))
+        materials.load_many.return_value = [object() for _ in self.selected]
         with nr.Result(self.filename, index=self.index, store=store) as results:
-            with self.assertRaisesRegex(ValueError, 'Phraser annotation not found'):
+            with self.assertRaisesRegex(ValueError, 'does not match results'):
+                results.items
+        nr.token_features.clear_cache()
+        self.write_selection()
+        materials.load_many.return_value = [None] * len(self.selected)
+        with nr.Result(self.filename, index=self.index, store=store) as results:
+            with self.assertRaisesRegex(ValueError, 'missing selected word'):
                 results[0].token.phraser_metadata
 
     def test_two_results_share_stores_and_closing_one_keeps_the_other_usable(self):

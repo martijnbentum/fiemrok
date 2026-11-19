@@ -213,8 +213,8 @@ class PipelineTests(unittest.TestCase):
                     for model in pipeline.MODELS})]
         for selectors, expected in cases:
             with (self.subTest(selectors=selectors),
-                mock.patch.object(pipeline, '_load_items',
-                    wraps=pipeline._load_items) as load,
+                mock.patch.object(pipeline.token_features, 'load_selected_items',
+                    wraps=pipeline.token_features.load_selected_items) as load,
                 mock.patch.object(lv_stores, 'load_echoframe_store') as store,
                 mock.patch.object(vector_indices,
                     'make_vector_search_index_for_layer',
@@ -252,8 +252,8 @@ class PipelineTests(unittest.TestCase):
                 {(model, 'cross_boundary') for model in pipeline.MODELS})]
         for selectors, expected in cases:
             with (self.subTest(selectors=selectors),
-                mock.patch.object(pipeline, '_load_items',
-                    wraps=pipeline._load_items) as load,
+                mock.patch.object(pipeline.token_features, 'load_selected_items',
+                    wraps=pipeline.token_features.load_selected_items) as load,
                 mock.patch.object(embeddings, 'create_store') as create,
                 mock.patch.object(lv_stores, 'load_echoframe_store') as store,
                 mock.patch.object(embeddings, 'compute_embeddings')

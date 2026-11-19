@@ -33,6 +33,12 @@ def selection_path(condition, workspace=workspace):
     return Path(workspace) / names[condition]
 
 
+def token_features_path(condition, workspace=workspace):
+    '''Return the saved per-token feature table for one dataset.'''
+    selection_path(condition, workspace)
+    return Path(workspace) / 'token_features' / f'{condition}.npz'
+
+
 def store_path(model, condition, n_types, workspace=workspace):
     '''Name a store using its model, dataset, and actual type count.'''
     if model not in ('w2v', 'hubert'):

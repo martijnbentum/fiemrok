@@ -108,11 +108,14 @@ def _register_materials(materials):
 def close_stores():
     '''Close all module-owned handles, leaving caller-owned materials open.
 
-    Call only after all users have finished. Subsequent loader calls open fresh
-    module-owned handles. Supplied Echoframe stores bypassing these loaders are
-    unaffected.
+    Also clears cached selection items. Call only after all users have
+    finished. Subsequent loader calls open fresh module-owned handles.
+    Supplied Echoframe stores bypassing these loaders are unaffected.
     '''
+    from . import token_features
+
     with _store_lock:
+        token_features.clear_cache()
         stores = [entry['store'] for entry in _embeddings.values()]
         stores.extend(entry['store'] for entry in _materials.values()
             if entry['owned'])
