@@ -76,6 +76,9 @@ class FrameOffsetCurveTests(unittest.TestCase):
         rank = arrays['same_type_ranks'][1, 1, column]
         self.assertAlmostEqual(curves['self_rank'][1, middle],
             np.log10(rank + 1), places=5)
+        others = np.delete(arrays['same_type_ranks'][1, 1], column)
+        self.assertAlmostEqual(curves['type_rank'][1, middle],
+            np.log10(others.min() + 1), places=5)
         self.assertTrue(np.isnan(curves['precision'][:, self.grid(0.3)]).all())
         self.assertTrue(np.isnan(curves['precision'][0, self.grid(0.4333)]))
         self.assertFalse(np.isnan(curves['precision'][1, self.grid(0.4333)]))

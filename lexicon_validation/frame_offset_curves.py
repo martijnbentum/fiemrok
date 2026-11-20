@@ -19,7 +19,8 @@ ONSET_MS = np.arange(-1000, 501, 20)
 OFFSET_MS = np.arange(-500, 1001, 20)
 MAX_GAP_MS = 100
 WORD_SLOTS = ('a', 'b', 'prev', 'next')
-CURVES = ('precision', 'self_rank', 'prev', 'next', 'onset', 'offset')
+CURVES = ('precision', 'self_rank', 'type_rank', 'prev', 'next', 'onset',
+    'offset')
 
 
 def load_curves(model, condition, layer, pooling, n_neighbours=10,
@@ -64,6 +65,7 @@ def compute_curves(result, adjacency=None, n_neighbours=10, chunk_size=500):
                 next_gap per token; adjacent curves stay NaN without it
     precision is the fraction of the first n_neighbours with the token's
     type; self_rank is log10(global rank of the token's own vector + 1);
+    type_rank is the same for the best-ranked other token of its type;
     prev/next are the fraction with the adjacent word's type, only for
     tokens whose adjacent word is a lexicon type within MAX_GAP_MS.
     '''
@@ -245,7 +247,7 @@ def type_bootstrap(values, token_types, n_boot=1000, seed=0):
 def _grids():
     '''Return each curve's grid.'''
     position = dict(precision=POSITION_GRID, self_rank=POSITION_GRID,
-        prev=POSITION_GRID, next=POSITION_GRID)
+        type_rank=POSITION_GRID, prev=POSITION_GRID, next=POSITION_GRID)
     return {**position, 'onset': ONSET_MS, 'offset': OFFSET_MS}
 
 
@@ -266,7 +268,11 @@ def _offset_values(arrays, token_types, adjacent, self_columns, start, stop,
     rows = np.arange(stop - start)
     ranks = arrays['same_type_ranks'][rows, :, self_columns[start:stop]]
     ranks = np.where(valid, ranks, 0).astype(float)
+    others = arrays['same_type_ranks'].astype(float)
+    others[rows, :, self_columns[start:stop]] = np.inf
+    nearest = np.where(valid, others.min(-1), 0)
     values = dict(self_rank=np.log10(ranks + 1),
+        type_rank=np.log10(nearest + 1),
         precision=(neighbours == token_types[start:stop, None, None]).mean(-1))
     for side in ('prev', 'next'):
         types = adjacent[side][start:stop, None, None]
@@ -282,7 +288,7 @@ def _interpolate_token(curves, arrays, values, row, token, adjacent):
     start = arrays['reference_starts'][row]
     end = arrays['reference_ends'][row]
     position = (times - start) / (end - start)
-    for name in ('precision', 'self_rank', 'prev', 'next'):
+    for name in ('precision', 'self_rank', 'type_rank', 'prev', 'next'):
         if name in adjacent and adjacent[name][token] < 0: continue
         curves[name][token] = _interpolate(POSITION_GRID, position,
             values[name][row, valid])

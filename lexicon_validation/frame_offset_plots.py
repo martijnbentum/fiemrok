@@ -74,6 +74,9 @@ def _plot_pooling(axes, pooling, values):
             label=f'{pooling} median')
         axes['self_rank'].fill_between(grid, q25, q75, color=color,
             alpha=0.2, lw=0)
+        median = 10 ** np.nanmedian(values['type_rank'], 0)
+        axes['self_rank'].plot(grid, median, '--', color=color,
+            label=f'{pooling} nearest same type')
     for side, style in (('prev', '-'), ('next', '--')):
         used = ~np.isnan(values[side]).all(1)
         if not used.any(): continue
@@ -107,8 +110,9 @@ def _style_axes(axes, condition, n_neighbours):
     axes['precision'].set_ylabel(f'{precision} (target type)')
     axes['precision'].set_title(f'{precision} by query position')
     axes['self_rank'].set_yscale('log')
-    axes['self_rank'].set_ylabel('global rank of own pooled vector (+1)')
-    axes['self_rank'].set_title('Self rank (median, IQR band)')
+    axes['self_rank'].set_ylabel('global rank (+1)')
+    title = 'Rank of own pooled vector (median, IQR) and nearest same type'
+    axes['self_rank'].set_title(title)
     axes['adjacent'].set_ylabel(f'{precision} (adjacent word type)')
     title = f'Previous/next word (in lexicon, gap < {foc.MAX_GAP_MS} ms)'
     if condition != 'word': title = 'Previous/next word: words only'

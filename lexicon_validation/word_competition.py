@@ -215,7 +215,7 @@ def regions(x, mask):
     '''Return (first, last) x of each run of True values in mask.'''
     edges = np.diff(np.concatenate([[0], mask.astype(int), [0]]))
     starts, stops = np.flatnonzero(edges == 1), np.flatnonzero(edges == -1)
-    return [(x[a], x[b - 1]) for a, b in zip(starts, stops)]
+    return [(float(x[a]), float(x[b - 1])) for a, b in zip(starts, stops)]
 
 
 def exclusion_table(curves):
@@ -229,9 +229,11 @@ def _check_pair(own, cross, n_neighbours):
     attrs = cross.attrs
     if attrs['result_kind'] != 'cross_frame_offsets':
         raise ValueError('expected cross-boundary vs word results')
+    # Results written before query_pooling was recorded used single frames.
+    pooling = own.attributes.get('query_pooling', 'center')
     same = (own.attributes['selection_fingerprint']
         == attrs['selection_fingerprint']
-        and own.attributes['query_pooling'] == attrs['query_pooling']
+        and pooling == attrs['query_pooling']
         and np.array_equal(own.offsets, cross['offsets'][:]))
     if not same: raise ValueError('results hold different queries')
     stored = min(own._file['neighbour_indices'].shape[-1],
