@@ -128,3 +128,29 @@ def neighbour_results_path(model, condition, layer, pooling,
     _index_condition(model, condition, layer, pooling)
     return (Path(workspace) / 'neighbours' / condition / model /
         f'layer{layer:02d}_{pooling}.h5')
+
+
+def frame_offset_path(model, condition, layer, pooling, workspace=workspace):
+    '''Return the frame-offset retrieval results for one condition.'''
+    _index_condition(model, condition, layer, pooling)
+    return (Path(workspace) / 'frame_offsets' / condition / model /
+        f'layer{layer:02d}_{pooling}.h5')
+
+
+def frame_offset_curves_path(model, condition, layer, pooling,
+    workspace=workspace):
+    '''Return the cached per-token frame-offset curves for one condition.'''
+    _index_condition(model, condition, layer, pooling)
+    return (Path(workspace) / 'frame_offset_curves' / condition / model /
+        f'layer{layer:02d}_{pooling}.npz')
+
+
+def adjacency_path(condition, workspace=workspace):
+    '''Return the cached previous/next word table for one dataset.'''
+    selection_path(condition, workspace)
+    return Path(workspace) / 'frame_offset_curves' / f'adjacency_{condition}.npz'
+
+
+def figure_path(name, workspace=workspace):
+    '''Return a figure path in the validation workspace.'''
+    return Path(workspace) / 'figures' / name

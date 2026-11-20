@@ -27,6 +27,10 @@ fiemrok/
     frame_analysis/                  frame counts and derived analyses
     svs_data/                        saved speech-vector indexes
     neighbours/                      retrieval results and type mappings
+    frame_offsets/                   frame-offset retrieval results (.h5)
+    frame_offset_curves/             per-token frame-offset curves and
+                                     word adjacency caches (.npz)
+    figures/                         generated validation figures
     token_features/                  per-token feature tables (.npz)
     frequencies/                     store-wide word/syllable/phone and
                                      cross-boundary sequence counts
