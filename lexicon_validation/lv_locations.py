@@ -60,10 +60,12 @@ def pair_model_path(model, condition, layer, pooling, workspace=workspace):
     return Path(workspace) / 'factor_models' / name
 
 
-def word_effect_path(model, layer, pooling, workspace=workspace):
-    '''Return the saved joint word-effect model summary.'''
+def word_effect_path(model, layer, pooling, workspace=workspace,
+    check=None):
+    '''Return the saved joint word-effect model summary or one check.'''
     _index_condition(model, 'word', layer, pooling)
-    name = f'word_effect_{model}_layer{layer:02d}_{pooling}.json'
+    suffix = '' if check is None else f'_{check}'
+    name = f'word_effect_{model}_layer{layer:02d}_{pooling}{suffix}.json'
     return Path(workspace) / 'factor_models' / name
 
 
@@ -71,6 +73,20 @@ def precision_model_path(model, layer, pooling, workspace=workspace):
     '''Return the saved per-query precision model summary.'''
     _index_condition(model, 'word', layer, pooling)
     name = f'precision_{model}_layer{layer:02d}_{pooling}.json'
+    return Path(workspace) / 'factor_models' / name
+
+
+def joint_neighbours_path(model, layer, pooling, workspace=workspace):
+    '''Return the saved joint word and cross-boundary neighbour lists.'''
+    _index_condition(model, 'word', layer, pooling)
+    name = f'layer{layer:02d}_{pooling}.npz'
+    return Path(workspace) / 'neighbours' / 'joint' / model / name
+
+
+def joint_precision_path(model, layer, pooling, workspace=workspace):
+    '''Return the saved joint-index precision model summary.'''
+    _index_condition(model, 'word', layer, pooling)
+    name = f'joint_precision_{model}_layer{layer:02d}_{pooling}.json'
     return Path(workspace) / 'factor_models' / name
 
 

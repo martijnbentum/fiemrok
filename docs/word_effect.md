@@ -180,6 +180,29 @@ segments, or different morphosyntactic contexts).
   effect conservative there. This is not modelled; a check reports the word
   effect by phone count.
 
+## Checks
+
+`run_word_effect_model(checks=CHECKS)` fits robustness variants of the
+similarity model. Word effect (`same_type_x_is_word`), HuBERT layer 9:
+
+| check | mean pooling | center pooling |
+|---|---|---|
+| main model | +0.043 [0.039, 0.046] | +0.037 [0.032, 0.043] |
+| every term also per dataset (`interacted`) | +0.054 [0.051, 0.057] | +0.053 [0.048, 0.058] |
+| `same_type × same_speaker × is_word` | +0.052 [0.049, 0.056] | +0.053 [0.048, 0.058] |
+| phone distance for all pairs | +0.059 [0.055, 0.062] | +0.050 [0.045, 0.055] |
+| by phone count 2-3 / 4-5 / 6-7 / 8+ | +0.029 / +0.025 / +0.017 / +0.024 | +0.075 / +0.038 / +0.025 / +0.012 |
+
+Two checks move the estimate beyond its interval. The speaker boost for
+same-type pairs is smaller for words (three-way term -0.022 mean, -0.038
+center), so a shared speaker term pushes part of it into the word effect.
+And the phone-count matching is incomplete for long items (8+ phones: 22%
+of word types, 12% of cross-boundary types); under mean pooling the
+same-type gain rises with length (0.13 for 2-3 phones to 0.28 for 8+), so
+words also get credit for being longer. Both are open decisions for the
+main model. At identical phones the word effect is about 0.015 larger:
+the cost of pronunciation variation, which the main model keeps.
+
 ## Retrieval: precision@10
 
 `lexicon_validation/precision_model.py` (`run_precision_model`) models a
@@ -200,12 +223,20 @@ HuBERT layer 9, `is_word` in precision@10 (95% type-bootstrap CI):
 | cross-speaker (main) | +0.174 [0.167, 0.182] | +0.145 [0.139, 0.151] |
 | all neighbours | +0.167 | +0.136 |
 | index-size control | +0.181 (range 0.179-0.182) | +0.150 |
+| joint index, cross-speaker | +0.164 [0.156, 0.172] | +0.135 [0.128, 0.140] |
 | 2-3 phones | +0.168 | +0.234 |
 | 4-5 phones | +0.139 | +0.143 |
 | 6-7 phones | +0.198 | +0.141 |
 | 8+ phones | +0.254 | +0.112 |
 
 A larger word index works against words, so equal sizes slightly raise the
-estimate. The retrieval effect is much larger than the similarity effect
+estimate. In the joint index (`lexicon_validation/joint_retrieval.py`) every
+token is searched against all word and cross-boundary tokens, so both
+datasets face the same competitors; a neighbour is correct when it has the
+query's type within the same dataset. Shared competitors lower the word
+effect by about 0.01, so index density explains only a small part of it. Of
+the top 10 neighbours, 16% (mean pooling) and 24% (center) of a word
+query's are cross-boundary tokens, and 21% of a cross-boundary query's are
+words. The retrieval effect is much larger than the similarity effect
 because retrieval is a ranking: a consistent similarity gain moves
 same-type tokens above many competitors.

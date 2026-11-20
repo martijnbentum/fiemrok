@@ -29,10 +29,13 @@ TERMS = ('is_word', 'same_type', 'same_type_x_is_word',
     'shared_next_word', 'cb_same_left_word', 'cb_same_right_word',
     'other_type_distance')
 DERIVED = {'same_type_words': ('same_type', 'same_type_x_is_word')}
+CHECKS = ('interacted', 'speaker_by_dataset', 'distance_all_pairs',
+    'by_length')
+LENGTH_GROUPS = ((2, 3), (4, 5), (6, 7), (8, np.inf))
 
 
 def run_word_effect_model(model='hubert', layer=9, pooling='mean',
-    n_bootstrap=200, seed=0, workspace=lv_locations.workspace):
+    n_bootstrap=200, seed=0, checks=(), workspace=lv_locations.workspace):
     '''Fit the joint word-effect model for one model, layer and pooling.
 
     model:        hubert or w2v
@@ -40,21 +43,77 @@ def run_word_effect_model(model='hubert', layer=9, pooling='mean',
     pooling:      center or mean
     n_bootstrap:  type resamples per dataset for confidence intervals
     seed:         bootstrap seed; pair samples are loaded as saved
+    checks:       names from CHECKS to fit as well, see check_design
     workspace:    validation workspace; output goes to factor_models/
-    Returns the summary dict, also saved as JSON.
+    Returns the summary dict, also saved as JSON; checks are saved with
+    their name appended.
     '''
+    unknown = set(checks) - set(CHECKS)
+    if unknown: raise ValueError(f'unknown checks: {sorted(unknown)}')
     parts = [load_dataset_pairs(condition, model, layer, pooling, workspace)
         for condition in CONDITIONS]
     design, centre = joint_design(parts)
     similarity = np.concatenate([part['similarity'] for part in parts])
     groups = _type_groups(parts)
-    summary = fit_word_effect(design, similarity, groups, n_bootstrap, seed)
-    summary.update(model=model, layer=layer, pooling=pooling, seed=seed,
-        n_bootstrap=n_bootstrap, distance_centre=centre,
-        pairs={part['condition']: _stratum_counts(part) for part in parts})
-    path = lv_locations.word_effect_path(model, layer, pooling, workspace)
-    fm._save_text(path, json.dumps(summary, indent=1))
-    return summary
+    pairs = {part['condition']: _stratum_counts(part) for part in parts}
+    summaries = {}
+    for check in (None,) + tuple(checks):
+        fitted = check_design(design, parts, centre, check)
+        summary = fit_word_effect(fitted, similarity, groups, n_bootstrap,
+            seed)
+        summary.update(model=model, layer=layer, pooling=pooling, seed=seed,
+            n_bootstrap=n_bootstrap, distance_centre=centre, pairs=pairs,
+            check=check)
+        path = lv_locations.word_effect_path(model, layer, pooling,
+            workspace, check)
+        fm._save_text(path, json.dumps(summary, indent=1))
+        summaries[check] = summary
+    return summaries[None] if not checks else summaries
+
+
+def check_design(design, parts, centre, check=None):
+    '''Return the design for the main model or one robustness check.
+
+    interacted:          every term also gets its own slope for words
+    speaker_by_dataset:  adds same_type x same_speaker x is_word
+    distance_all_pairs:  phone distance for same-type pairs too, so the
+                         word effect is estimated at equal phones
+    by_length:           same_type and the word effect per phone-count
+                         group of the query (LENGTH_GROUPS)
+    '''
+    design = dict(design)
+    is_word, same_type = design['is_word'], design['same_type']
+    if check == 'interacted':
+        skip = ('is_word', 'same_type', 'same_type_x_is_word',
+            'cb_same_left_word', 'cb_same_right_word')
+        for name in [n for n in design if n not in skip]:
+            design[f'{name}_x_is_word'] = design[name] * is_word
+    elif check == 'speaker_by_dataset':
+        design['same_type_x_same_speaker_x_is_word'] = (
+            design['same_type_x_same_speaker'] * is_word)
+    elif check == 'distance_all_pairs':
+        distance = np.concatenate([_normalised_distance(p) for p in parts])
+        design['other_type_distance'] = distance - centre
+    elif check == 'by_length':
+        n_phones = np.concatenate([p['features']['n_phones'][p['queries']]
+            for p in parts])
+        for name in ('same_type', 'same_type_x_is_word'):
+            values = design.pop(name)
+            for low, high in LENGTH_GROUPS:
+                group = (n_phones >= low) & (n_phones <= high)
+                design[f'{name}_{_length_name(low, high)}'] = values * group
+    elif check is not None: raise ValueError(f'unknown check: {check}')
+    return design
+
+
+def _normalised_distance(part):
+    f, q, o = part['features'], part['queries'], part['others']
+    longer = np.maximum(f['n_phones'][q], f['n_phones'][o])
+    return pf.phone_edit_distance(f, q, o) / longer
+
+
+def _length_name(low, high):
+    return f'{low}plus' if high == np.inf else f'{low}_{high}'
 
 
 def load_dataset_pairs(condition, model, layer, pooling,
@@ -108,7 +167,6 @@ def pair_terms(features, queries, others, is_word):
     '''
     f, q, o = features, queries, others
     zeros = np.zeros(len(q))
-    longer = np.maximum(f['n_phones'][q], f['n_phones'][o])
     terms = dict(is_word=zeros + is_word,
         same_type=(f['label'][q] == f['label'][o]).astype(float),
         same_speaker=pf.same_speaker(f, q, o).astype(float),
@@ -117,7 +175,8 @@ def pair_terms(features, queries, others, is_word):
         same_gender=np.nan_to_num(pf.same_gender(f, q, o)),
         shared_previous_word=np.nan_to_num(pf.shared_previous_word(f, q, o)),
         shared_next_word=np.nan_to_num(pf.shared_next_word(f, q, o)),
-        normalised_distance=pf.phone_edit_distance(f, q, o) / longer)
+        normalised_distance=_normalised_distance(dict(features=f,
+            queries=q, others=o)))
     if is_word: terms.update(cb_same_left_word=zeros, cb_same_right_word=zeros)
     else:
         terms.update(cb_same_left_word=pf.shared_left_word(f, q,
@@ -178,7 +237,8 @@ def _with_derived(names, coefficients):
     '''Return coefficients by name with the DERIVED sums appended.'''
     values = dict(zip(names, map(float, coefficients)))
     for name, parts in DERIVED.items():
-        values[name] = sum(values[part] for part in parts)
+        if all(part in values for part in parts):
+            values[name] = sum(values[part] for part in parts)
     return values
 
 

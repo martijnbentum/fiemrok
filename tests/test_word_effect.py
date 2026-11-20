@@ -89,6 +89,27 @@ class WordEffectTests(unittest.TestCase):
             pooling='mean', distance_centre=0.9))
         self.assertIn('same_type_x_is_word', text)
 
+    def test_checks_keep_the_planted_word_effect(self):
+        design, centre = we.joint_design(self.parts)
+        similarity = np.concatenate([p['similarity'] for p in self.parts])
+        groups = we._type_groups(self.parts)
+        for check in we.CHECKS:
+            fitted = we.check_design(design, self.parts, centre, check)
+            fit = we.fit_word_effect(fitted, similarity, groups, 0)
+            coefficients = fit['coefficients']
+            names = [n for n in coefficients
+                if n.startswith('same_type_x_is_word')]
+            self.assertTrue(names, check)
+            for name in names:
+                if not np.isfinite(coefficients[name]['estimate']): continue
+                base = fitted.get(name.replace('_x_is_word', ''))
+                if base is not None and not base[fitted['is_word'] == 0].any():
+                    continue
+                self.assertAlmostEqual(coefficients[name]['estimate'], 0.15,
+                    delta=0.02, msg=f'{check} {name}')
+        with self.assertRaisesRegex(ValueError, 'unknown check'):
+            we.check_design(design, self.parts, centre, 'nope')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -161,6 +161,16 @@ def fit_precision(parts, cross_speaker=True, n_bootstrap=200, seed=0,
     return _fit(design, outcome, parts, keep, n_bootstrap, seed)
 
 
+def fit_outcome(parts, outcome, n_bootstrap=200, seed=0):
+    '''Fit a precomputed per-query outcome on the joint design.
+
+    outcome: one value per query, words first, then cross-boundary items;
+             NaN rows are left out
+    '''
+    return _fit(joint_design(parts), outcome, parts, np.isfinite(outcome),
+        n_bootstrap, seed)
+
+
 def _fit(design, outcome, parts, keep, n_bootstrap, seed):
     '''Fit OLS on the kept rows; resample query types within datasets.'''
     names = [name for name, values in design.items()
