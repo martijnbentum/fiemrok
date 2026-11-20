@@ -47,11 +47,17 @@ def compute_contextual_embedding(word, window_start, window_end, model,
 
 
 def select_query_frames(outputs, word, nucleus, window_start, max_offset,
-    layer, stride=0.02, field=0.025):
-    '''Return offsets around the word center, or an optional supplied nucleus.
+    layer, stride=0.02, field=0.025, pooling='center'):
+    '''Return queries at signed frame offsets around the word reference.
 
-    Frames must be fully within the recording; padding is context only.
+    center pooling queries single frames around the reference center frame.
+    mean pooling queries the mean of the reference's fully contained frames,
+    shifted together by each offset, matching the index's mean pooling.
+    Every query frame must be fully within the recording; padding is
+    context only.
     '''
+    if pooling not in ('center', 'mean'):
+        raise ValueError(f'unknown pooling method {pooling}')
     frames = frame.make_frames_from_outputs(outputs, stride=stride,
         field=field, start_time=window_start)
     word_frames = frames.select_frames(word.start_seconds, word.end_seconds,
@@ -66,41 +72,49 @@ def select_query_frames(outputs, word, nucleus, window_start, max_offset,
     if hidden.ndim == 3: hidden = hidden[0]
     if len(hidden) != len(frames):
         raise ValueError('hidden-state frame count does not match alignment')
+    first, last = center.index, center.index
+    if pooling == 'mean':
+        first, last = reference_frames[0].index, reference_frames[-1].index
     records = []
     audio_end = float(word.audio.duration) / 1000
     for offset in range(-max_offset, max_offset + 1):
         index = center.index + offset
-        query_start = window_start + index * stride
+        start, stop = first + offset, last + offset
+        query_start = window_start + start * stride
+        query_end = window_start + stop * stride + field
         in_recording = (query_start >= -1e-9
-            and query_start + field <= audio_end + 1e-9)
-        in_outputs = 0 <= index < len(frames)
+            and query_end <= audio_end + 1e-9)
+        in_outputs = 0 <= start and stop < len(frames)
         valid = in_recording and in_outputs
         reason = (None if valid else 'outside_recording' if not in_recording
             else 'outside_model_outputs')
+        vector = None
+        if valid and pooling == 'center': vector = hidden[index]
+        elif valid: vector = hidden[start:stop + 1].mean(axis=0)
         records.append(dict(offset=offset, center_index=center.index,
             invalid_reason=reason,
             word_left_index=word_frames[0].index,
             word_right_index=word_frames[-1].index,
             query_index=index if valid else None,
-            query_time=(frames[index].start_time + field / 2)
-                if valid else None,
-            vector=hidden[index] if valid else None,
-            valid=valid))
+            query_time=(query_start + query_end) / 2 if valid else None,
+            vector=vector, valid=valid))
     return records
 
 
 def evaluate_word(word, model, nucleus=None, layer=6, max_offset=100,
-    base_collar_ms=2000, stride=0.02, field=0.025):
-    '''Compute one token's query frames; retrieval and storage are shared.
+    base_collar_ms=2000, stride=0.02, field=0.025, pooling='center'):
+    '''Compute one token's queries; retrieval and storage are shared.
 
-    The reference is the middle fully contained word frame, unless a nucleus
-    is supplied. Negative recording-start padding is context only.
+    The reference is the word, unless a nucleus is supplied. center pooling
+    queries single frames around its middle fully contained frame; mean
+    pooling queries its shifted frame mean. Negative recording-start padding
+    is context only.
     '''
     window_start, window_end = collared_window(word, max_offset,
         base_collar_ms=base_collar_ms, stride=stride)
     outputs = compute_contextual_embedding(word, window_start, window_end, model)
     records = select_query_frames(outputs, word, nucleus, window_start,
-        max_offset, layer, stride=stride, field=field)
+        max_offset, layer, stride=stride, field=field, pooling=pooling)
     reference = word if nucleus is None else nucleus
     return dict(key=word.key, records=records, window_start=window_start,
         window_end=window_end, reference_start=reference.start_seconds,
@@ -116,8 +130,9 @@ def evaluate_words(words, vector_index, model, output_path, nuclei=None,
 
     model is the caller-supplied speech model matching vector_index. Query
     layer comes from the source keys and must match the parsed index name.
-    Saved model name and dataset condition come from that name. Candidate
-    pooling belongs to the index; queries are single frames.
+    Saved model name, dataset condition and pooling come from that name.
+    Queries follow the index pooling: single frames for center, shifted
+    reference-frame means for mean.
     Stores nearest non-self neighbours and every same-type rank/similarity.
     Invalid offsets remain present with NA results. Metrics are computed by
     Result on access. Callers own the model and vector index. gpu scores and
@@ -140,16 +155,17 @@ def evaluate_words(words, vector_index, model, output_path, nuclei=None,
         raise ValueError(f'index name specifies layer {settings["layer"]}, '
             f'but source keys specify layer {layer}')
     model_name, condition = settings['model'], settings['condition']
+    pooling = settings['pooling']
     queries = (evaluate_word(word, model, nucleus=nucleus, layer=layer,
         max_offset=max_offset, base_collar_ms=base_collar_ms, stride=stride,
-        field=field) for word, nucleus in zip(words, nuclei))
+        field=field, pooling=pooling) for word, nucleus in zip(words, nuclei))
     mapping_path = lv_locations.neighbour_mapping_path(condition, workspace)
     return write_frame_offsets(vector_index, output_path, mapping_path,
         [word.key for word in words], queries, max_offset=max_offset,
         top_k=top_k, batch_size=batch_size, overwrite=overwrite,
         compression=compression, model=model_name, condition=condition,
         workspace=workspace, stride=stride, field=field,
-        base_collar_ms=base_collar_ms, gpu=gpu)
+        base_collar_ms=base_collar_ms, gpu=gpu, query_pooling=pooling)
 
 
 
@@ -180,8 +196,8 @@ def evaluate_selection(model, layer, pooling, condition, output_path,
     workspace=lv_locations.workspace, gpu=False, **kwargs):
     '''Evaluate the frozen selection in order, using local materials only.
 
-    model: w2v or hubert; pooling describes the fixed candidate index.
-    The query always uses individual frames. Optional nuclei must follow the
+    model: w2v or hubert; pooling selects the candidate index and the query
+    pooling (single frames for center, shifted frame means for mean). Optional nuclei must follow the
     saved selection order. Callers may pass evaluate_words options in kwargs.
     gpu runs both the model and retrieval on a CUDA GPU.
     '''

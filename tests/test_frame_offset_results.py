@@ -280,6 +280,23 @@ class FrameOffsetResultsTests(unittest.TestCase):
                 self.filename, workspace=self.workspace, gpu=True)
         self.assertIs(write.call_args.kwargs['gpu'], True)
 
+    def test_query_pooling_follows_index_and_is_recorded(self):
+        words = [SimpleNamespace(key=key) for key in self.keys]
+        for pooling in ('center', 'mean'):
+            with self.subTest(pooling=pooling):
+                self.index.metadatas.name = f'hubert_word_2_9_{pooling}'
+                with (mock.patch.object(evaluation, 'evaluate_word'),
+                    mock.patch.object(nc, 'write_frame_offsets') as write):
+                    evaluation.evaluate_words(words, self.index, 'model',
+                        self.filename, workspace=self.workspace)
+                kwargs = write.call_args.kwargs
+                self.assertEqual(kwargs['query_pooling'], pooling)
+        self.write(query_pooling='mean')
+        with nr.Result(self.filename, index=self.index) as result:
+            self.assertEqual(result.attributes['query_pooling'], 'mean')
+        with self.assertRaisesRegex(ValueError, 'unknown query pooling'):
+            self.write(query_pooling='max', overwrite=True)
+
     def test_malformed_offset_shapes_are_rejected(self):
         self.write()
         with h5py.File(self.filename, 'r+') as output:

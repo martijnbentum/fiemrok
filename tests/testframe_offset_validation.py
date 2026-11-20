@@ -127,6 +127,46 @@ class FrameOffsetValidationTests(unittest.TestCase):
         self.assertFalse(rows[0]['valid'])
         self.assertFalse(rows[-1]['valid'])
 
+    def test_mean_queries_average_shifted_reference_frames(self):
+        hidden = np.arange(500 * 2, dtype=float).reshape(1, 500, 2)
+        outputs = SimpleNamespace(hidden_states=(hidden,))
+        rows = validation.select_query_frames(outputs, self.word, None, 0.0,
+            3, layer=0, pooling='mean')
+        frames = frame.make_frames_from_outputs(outputs, stride=0.02,
+            field=0.025, start_time=0.0).select_frames(1.0, 2.0,
+            percentage_overlap=100)
+        first, last = frames[0].index, frames[-1].index
+        for row in rows:
+            start, stop = first + row['offset'], last + row['offset']
+            with self.subTest(offset=row['offset']):
+                np.testing.assert_allclose(row['vector'],
+                    hidden[0, start:stop + 1].mean(axis=0))
+                self.assertAlmostEqual(row['query_time'],
+                    (start * 0.02 + stop * 0.02 + 0.025) / 2)
+                self.assertEqual(row['query_index'],
+                    row['center_index'] + row['offset'])
+
+    def test_mean_window_partly_outside_outputs_is_invalid(self):
+        frames = frame.Frames(500, start_time=0.0).select_frames(1.0, 2.0,
+            percentage_overlap=100)
+        n_frames = frames[-1].index + 11
+        outputs = SimpleNamespace(hidden_states=(np.zeros((1, n_frames, 2)),))
+        center = validation.select_query_frames(outputs, self.word, None,
+            0.0, 11, layer=0)
+        mean = validation.select_query_frames(outputs, self.word, None,
+            0.0, 11, layer=0, pooling='mean')
+        self.assertTrue(center[-1]['valid'])
+        self.assertTrue(mean[-2]['valid'])
+        self.assertFalse(mean[-1]['valid'])
+        self.assertEqual(mean[-1]['invalid_reason'], 'outside_model_outputs')
+        self.assertIsNone(mean[-1]['vector'])
+
+    def test_unknown_query_pooling_is_rejected(self):
+        outputs = SimpleNamespace(hidden_states=(np.zeros((1, 200, 2)),))
+        with self.assertRaisesRegex(ValueError, 'unknown pooling'):
+            validation.select_query_frames(outputs, self.word, None, 0.0, 0,
+                layer=0, pooling='max')
+
     def test_evaluate_word_defaults_to_201_offsets_and_word_center(self):
         outputs = SimpleNamespace(hidden_states=tuple(
             np.zeros((1, 400, 2)) for _ in range(7)))

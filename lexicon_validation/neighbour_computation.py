@@ -69,7 +69,8 @@ def write_neighbours(index, filename, mapping_path, selected_keys,
 def write_frame_offsets(index, filename, mapping_path, selected_keys, queries,
     max_offset=100, top_k=30, batch_size=32, overwrite=False, compression='lzf',
     model='hubert', condition='word', workspace=lv_locations.workspace,
-    stride=0.02, field=0.025, base_collar_ms=2000, gpu=False):
+    stride=0.02, field=0.025, base_collar_ms=2000, gpu=False,
+    query_pooling='center'):
     '''Stream one token's contextual frame queries at a time into HDF5.
 
     queries yields dictionaries in saved token order: key, records,
@@ -78,7 +79,11 @@ def write_frame_offsets(index, filename, mapping_path, selected_keys, queries,
     ranks include self; neighbours exclude only the original query token.
     Temporary scores are bounded by batch_size * number of candidate tokens.
     gpu scores and ranks on a CUDA GPU and raises without CUDA.
+    query_pooling records whether queries are single frames (center) or
+    shifted frame means (mean).
     '''
+    if query_pooling not in ('center', 'mean'):
+        raise ValueError(f'unknown query pooling {query_pooling}')
     if isinstance(max_offset, bool) or not isinstance(max_offset, Integral) or max_offset < 0:
         raise ValueError('max_offset must be a non-negative integer')
     validate_positive_integer(top_k, 'top_k')
@@ -105,7 +110,8 @@ def write_frame_offsets(index, filename, mapping_path, selected_keys, queries,
             _result_attributes(output, index, identity, filename, mapping_path,
                 workspace, model, condition, 'frame_offsets')
             output.attrs.update(stride=stride, field=field,
-                base_collar_ms=base_collar_ms, max_offset=max_offset)
+                base_collar_ms=base_collar_ms, max_offset=max_offset,
+                query_pooling=query_pooling)
             output.create_dataset('offsets', data=offsets)
             for name, array_dtype in ARRAY_DTYPES.items():
                 width = top_k if name.startswith('neighbour_') else n_same
