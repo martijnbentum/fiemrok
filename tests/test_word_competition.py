@@ -173,7 +173,7 @@ class WordCompetitionTests(unittest.TestCase):
         self.assertEqual(wc.regions(x, np.array([0, 1, 1, 0, 1], bool)),
             [(1, 2), (4, 4)])
 
-    def test_plot_saves_png_and_pdf(self):
+    def fake_curves(self):
         rng = np.random.default_rng(0)
         grid = len(wc.SECTION_GRID)
         curves = {name: rng.random((4, grid)) for name in wc.CURVES}
@@ -181,13 +181,32 @@ class WordCompetitionTests(unittest.TestCase):
             marker_start=rng.random(4) + 1, marker_end=rng.random(4) + 2,
             n_markers=4, n_words=8,
             **{f'{slot}_status': np.zeros(4, 'int8') for slot in wc.SLOTS})
-        with mock.patch.object(fop.wc, 'load_curves', return_value=curves):
+        return curves
+
+    def test_plot_saves_png_and_pdf(self):
+        with mock.patch.object(fop.wc, 'load_curves',
+            return_value=self.fake_curves()):
             fop.plot_word_competition('hubert', 9, workspace=self.workspace)
         figure = lv_locations.figure_path('word_competition_hubert_layer09',
             self.workspace)
         for suffix in ('png', 'pdf'):
             path = figure.with_name(f'{figure.name}.{suffix}')
             self.assertTrue(path.exists())
+
+    def test_cross_boundary_frame_offsets_show_word_shares(self):
+        grids = wc.foc._grids()
+        offsets = {name: np.random.default_rng(1).random((4, len(grid)))
+            for name, grid in grids.items()}
+        offsets['token_types'] = np.array([0, 0, 1, 1])
+        for side in ('prev', 'next'): offsets[side][:] = np.nan
+        with (mock.patch.object(fop.foc, 'load_curves', return_value=offsets),
+            mock.patch.object(fop.wc, 'load_curves',
+                return_value=self.fake_curves())):
+            figure = fop.plot_frame_offsets('hubert', 'cross_boundary', 9,
+                workspace=self.workspace)
+        lines = figure.axes[2].get_lines()
+        self.assertEqual(sum(line.get_linestyle() == '--' for line in lines
+            if line.get_label().startswith('mean')), 5)
 
 
 if __name__ == '__main__':

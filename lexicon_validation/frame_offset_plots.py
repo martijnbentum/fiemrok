@@ -27,8 +27,9 @@ def plot_frame_offsets(model, condition, layer, n_neighbours=10,
     overwrite:     recompute cached curves
     output:        figure path without suffix; defaults to the workspace
                    figures folder. Saves .png and .pdf.
-    Returns the matplotlib figure. Cross-boundary figures leave the
-    adjacent-word panel empty.
+    Returns the matplotlib figure. Cross-boundary figures show the
+    word-competition shares (center solid, mean dashed) instead of the
+    adjacent-word panel.
     '''
     import matplotlib
     matplotlib.use('Agg')
@@ -46,6 +47,9 @@ def plot_frame_offsets(model, condition, layer, n_neighbours=10,
     axes['offset'] = figure.add_subplot(grid[1, 3], sharey=axes['onset'])
     for pooling, values in curves.items():
         _plot_pooling(axes, pooling, values)
+    if condition == 'cross_boundary':
+        _plot_word_shares(axes['adjacent'], model, layer, n_neighbours,
+            overwrite, workspace)
     _style_axes(axes, condition, n_neighbours)
     title = (f'{model} layer {layer}, {condition}: frame-offset retrieval '
         '(token-weighted means, 95% CI bootstrapped over types)')
@@ -98,7 +102,9 @@ def _band(ax, x, values, types, color, label, style='-'):
 def _style_axes(axes, condition, n_neighbours):
     '''Add reference lines, ticks, labels and titles.'''
     precision = f'P@{n_neighbours}'
-    for name in ('precision', 'self_rank', 'adjacent'):
+    names = ('precision', 'self_rank', 'adjacent')
+    if condition != 'word': names = names[:2]
+    for name in names:
         ax = axes[name]
         ax.axvline(0, color='grey', lw=0.8)
         ax.axvline(1, color='grey', lw=0.8)
@@ -113,10 +119,10 @@ def _style_axes(axes, condition, n_neighbours):
     axes['self_rank'].set_ylabel('global rank (+1)')
     title = 'Rank of own pooled vector (median, IQR) and nearest same type'
     axes['self_rank'].set_title(title)
-    axes['adjacent'].set_ylabel(f'{precision} (adjacent word type)')
-    title = f'Previous/next word (in lexicon, gap < {foc.MAX_GAP_MS} ms)'
-    if condition != 'word': title = 'Previous/next word: words only'
-    axes['adjacent'].set_title(title)
+    if condition == 'word':
+        axes['adjacent'].set_ylabel(f'{precision} (adjacent word type)')
+        title = f'Previous/next word (in lexicon, gap < {foc.MAX_GAP_MS} ms)'
+        axes['adjacent'].set_title(title)
     for name, label in (('onset', 'ms from onset'), ('offset', 'ms from offset')):
         axes[name].axvline(0, color='grey', lw=0.8)
         axes[name].set_xlabel(label)
@@ -168,11 +174,7 @@ def _plot_competition(axes, curves, pooling, n_neighbours):
     '''Draw one pooling's column.'''
     x, types = wc.SECTION_GRID, curves['token_types']
     shares, differences, ranks, pools = axes
-    for name, color in SLOT_COLORS.items():
-        values = curves[name]
-        n = int((~np.isnan(values).all(1)).sum())
-        label = 'own type' if name == 'own' else SECTION_LABELS[name]
-        _clipped_band(shares, x, values, types, color, f'{label} (N={n:,})')
+    _plot_shares(shares, curves)
     for name in ('a', 'b'):
         values = curves['own'] - curves[name]
         mean, low, high = wc.simultaneous_band(values, types)
@@ -212,12 +214,38 @@ def _plot_competition(axes, curves, pooling, n_neighbours):
     _style_sections(axes, curves)
 
 
-def _clipped_band(ax, x, values, types, color, label):
+def _plot_word_shares(ax, model, layer, n_neighbours, overwrite, workspace):
+    '''Draw word-competition shares, center solid and mean dashed.'''
+    for pooling, style in (('center', '-'), ('mean', '--')):
+        curves = wc.load_curves(model, layer, pooling, n_neighbours,
+            overwrite, workspace)
+        _plot_shares(ax, curves, style, f'{pooling}: ')
+    _style_sections([ax], curves)
+    # Leave room above the curves for the two-column legend.
+    ax.set_ylim(0, ax.get_ylim()[1] * 1.45)
+    ax.legend(frameon=False, fontsize=7, ncol=2, loc='upper left')
+    ax.set_ylabel(f'share of merged top {n_neighbours}')
+    ax.set_title('Word competition: own type vs words '
+        '(cross-boundary + word index)')
+
+
+def _plot_shares(ax, curves, style='-', prefix=''):
+    '''Plot own-type and word shares on the section axis.'''
+    for name, color in SLOT_COLORS.items():
+        values = curves[name]
+        n = int((~np.isnan(values).all(1)).sum())
+        label = 'own type' if name == 'own' else SECTION_LABELS[name]
+        label = f'{prefix}{label} (N={n:,})'
+        _clipped_band(ax, wc.SECTION_GRID, values, curves['token_types'],
+            color, label, style)
+
+
+def _clipped_band(ax, x, values, types, color, label, style='-'):
     '''Plot a mean band, hiding grid points with low coverage.'''
     mean, low, high = foc.type_weighted_mean(values, types)
     hidden = wc.coverage(values) < MIN_COVERAGE
     for array in (mean, low, high): array[hidden] = np.nan
-    ax.plot(x, mean, color=color, label=label)
+    ax.plot(x, mean, style, color=color, label=label)
     ax.fill_between(x, low, high, color=color, alpha=.25, lw=0)
 
 
