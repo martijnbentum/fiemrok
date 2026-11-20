@@ -61,6 +61,38 @@ def shared_right_word(features, queries, others):
     return _equal(features, 'right_word', queries, others)
 
 
+def shared_previous_word(features, queries, others):
+    '''Return 1.0 where the words just before both tokens match.
+
+    NaN where either token has no preceding word: an empty context or the
+    '*' padding at recording edges.
+    '''
+    return _shared_context(features, 'left_words', queries, others, -1)
+
+
+def shared_next_word(features, queries, others):
+    '''Return 1.0 where the words just after both tokens match; see above.'''
+    return _shared_context(features, 'right_words', queries, others, 0)
+
+
+def shared_context_word(features, queries, others):
+    '''Return True where the tokens share any left or right context word.'''
+    words = [_context_words(features, side, queries, others)
+        for side in ('left_words', 'right_words')]
+    (query_left, other_left), (query_right, other_right) = words
+    pairs = zip(query_left.flat, query_right.flat, other_left.flat,
+        other_right.flat)
+    shared = [bool((set(a.split() + b.split()) & set(c.split() + d.split()))
+        - {'*'}) for a, b, c, d in pairs]
+    return np.asarray(shared).reshape(other_left.shape)
+
+
+def absolute_difference(features, name, queries, others):
+    '''Return the absolute difference of a numeric feature column.'''
+    query, other = _values(features, name, queries, others)
+    return np.abs(query.astype(float) - other.astype(float))
+
+
 def phone_edit_distance(features, queries, others):
     '''Return Levenshtein distance between the tokens' phone sequences.'''
     return _sequence_distances(features, queries, others, _phone_distance)
@@ -132,6 +164,30 @@ def _values(features, name, queries, others):
 def _equal(features, name, queries, others):
     query, other = _values(features, name, queries, others)
     return query == other
+
+
+def _context_words(features, name, queries, others):
+    '''Return query and other context strings with the other rows' shape.'''
+    query, other = _values(features, name, queries, others)
+    return np.broadcast_to(query, other.shape), other
+
+
+def _shared_context(features, name, queries, others, position):
+    '''Compare the context word at position; NaN where either is missing.'''
+    query, other = _context_words(features, name, queries, others)
+    query = np.array([_word_at(text, position) for text in query.flat],
+        dtype=object)
+    other = np.array([_word_at(text, position) for text in other.flat],
+        dtype=object)
+    missing = (query == '') | (other == '')
+    shared = np.where(missing, np.nan, (query == other).astype(float))
+    return shared.reshape(np.shape(others))
+
+
+def _word_at(text, position):
+    '''Return the context word at position; '' for padding or no context.'''
+    word = text.split()[position] if text else ''
+    return '' if word == '*' else word
 
 
 def _check_cross_boundary(features):

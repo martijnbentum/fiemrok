@@ -88,6 +88,20 @@ class PairFeatureTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'shape|must be'):
             pf.same_speaker(self.features, self.queries, np.array([1]))
 
+    def test_context_words_and_absolute_difference(self):
+        features = table(left_words=['de groene', '* *', 'een groene', 'de'],
+            right_words=['staat *', 'valt', 'staat hier', '* *'],
+            articulation_rate=[10., 12., 13., np.nan])
+        q, o = np.array([0, 0, 1]), np.array([2, 1, 3])
+        np.testing.assert_array_equal(pf.shared_previous_word(features, q, o),
+            [1, np.nan, np.nan])
+        np.testing.assert_array_equal(pf.shared_next_word(features, q, o),
+            [1, 0, np.nan])
+        np.testing.assert_array_equal(pf.shared_context_word(features, q, o),
+            [True, False, False])
+        np.testing.assert_array_equal(pf.absolute_difference(features,
+            'articulation_rate', q, o), [3, 2, np.nan])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -47,6 +47,19 @@ def frequency_path(name, workspace=workspace):
     return Path(workspace) / 'frequencies' / f'{name}_counts.pkl'
 
 
+def pair_sample_path(condition, workspace=workspace):
+    '''Return the saved pair sample for the pair similarity models.'''
+    selection_path(condition, workspace)
+    return Path(workspace) / 'factor_models' / f'pairs_{condition}.npz'
+
+
+def pair_model_path(model, condition, layer, pooling, workspace=workspace):
+    '''Return the saved pair-model summary for one retrieval condition.'''
+    _index_condition(model, condition, layer, pooling)
+    name = f'{condition}_{model}_layer{layer:02d}_{pooling}.json'
+    return Path(workspace) / 'factor_models' / name
+
+
 def store_path(model, condition, n_types, workspace=workspace):
     '''Name a store using its model, dataset, and actual type count.'''
     if model not in ('w2v', 'hubert'):
