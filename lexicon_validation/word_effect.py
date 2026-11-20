@@ -80,7 +80,9 @@ def joint_design(parts):
     parts: load_dataset_pairs output for each dataset
     other_type_distance is the phone edit distance over the longer item's
     phone count, centred on the mean of random different-type pairs of
-    both datasets, and 0 for same-type pairs.
+    both datasets, and 0 for same-type and homophone pairs: both share a
+    form, so they are compared with a typical unrelated item rather than
+    with a distance extrapolated to 0.
     '''
     columns = [pair_terms(part['features'], part['queries'], part['others'],
         part['condition'] == 'word') for part in parts]
@@ -91,8 +93,8 @@ def joint_design(parts):
     distance = design.pop('normalised_distance')
     centre = float(distance[random].mean())
     same_type = design['same_type']
-    design['other_type_distance'] = np.where(same_type == 1, 0,
-        distance - centre)
+    same_form = (same_type == 1) | (design['same_form_different_label'] == 1)
+    design['other_type_distance'] = np.where(same_form, 0, distance - centre)
     design['same_type_x_is_word'] = same_type * design['is_word']
     design['same_type_x_same_speaker'] = same_type * design['same_speaker']
     return {name: design[name] for name in TERMS}, centre

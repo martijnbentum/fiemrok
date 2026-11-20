@@ -68,7 +68,11 @@ similarity ~ is_word
 
 `other_type_distance` is the phone Levenshtein distance divided by the
 longer item's phone count, centred on the mean of random different-type
-pairs with one centre for both datasets, and 0 for same-type pairs. It makes
+pairs with one centre for both datasets, and 0 for same-type and homophone
+pairs. Homophones share a form, so like same-type pairs they are compared
+with a typical unrelated item; otherwise their split between the homophone
+and distance terms would rest on extrapolating the distance slope to 0,
+where only homophones lie. It makes
 the baseline a typical unrelated item, so oversampled near neighbours do not
 shift it. Same-type pairs are not adjusted, so pronunciation variants count
 against words, as the definition requires. The scale is linear: similarity
@@ -140,13 +144,13 @@ Joint model, HuBERT layer 9 (cosine units, 95% type-bootstrap CI):
 | `same_type_x_same_speaker` | +0.062 | +0.089 |
 | `cb_same_left_word` | +0.038 | +0.035 |
 | `cb_same_right_word` | +0.056 | +0.033 |
-| `same_form_different_label` | +0.045 | +0.173 |
-| `other_type_distance` (per unit) | -0.163 | -0.112 |
+| `same_form_different_label` | +0.171 | +0.260 |
+| `other_type_distance` (per unit) | -0.208 | -0.120 |
 | R2 | 0.65 | 0.42 |
 
-The homophone term is now the gain beyond what phone closeness predicts:
-homophones have normalised distance near 0, so the distance term already
-adds about 0.15 (mean pooling) relative to a typical unrelated item.
+Homophones are compared with a typical unrelated item, like same-type
+pairs. They get about 70% (mean pooling) and 90% (center pooling) of the
+same-type gain for words.
 
 Earlier per-dataset models:
 
