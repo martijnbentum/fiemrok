@@ -297,6 +297,73 @@ class FrameOffsetResultsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unknown query pooling'):
             self.write(query_pooling='max', overwrite=True)
 
+    def write_cross(self, **kwargs):
+        query_keys = [bytes([i + 101]) * 22 for i in range(3)]
+        context = [(self.keys[0], self.keys[1], b'', self.keys[3]),
+            (b'x' * 22, b'', b'', b''), (self.keys[2], b'', b'', b'')]
+        labels = [('a', 'b'), ('a', 'zzz'), ('b', 'b')]
+        queries = list(self.queries(1))[:3]
+        for query, key in zip(queries, query_keys): query['key'] = key
+        options = dict(max_offset=1, top_k=1, batch_size=2,
+            workspace=self.workspace, model='hubert')
+        options.update(kwargs)
+        nc.write_cross_frame_offsets(self.index, self.filename, query_keys,
+            queries, context, labels, **options)
+        return queries, context, labels
+
+    def test_cross_queries_exclude_context_and_rank_without_it(self):
+        queries, context, labels = self.write_cross()
+        rows = {key: row for row, key in enumerate(self.keys)}
+        with h5py.File(self.filename) as handle:
+            self.assertEqual(handle.attrs['result_kind'], 'cross_frame_offsets')
+            self.assertEqual(handle.attrs['index_condition'], 'word')
+            for token, query in enumerate(queries):
+                excluded = [rows[k] for k in context[token] if k in rows]
+                kept = [r for r in range(6) if r not in excluded]
+                for position, record in enumerate(query['records']):
+                    if record['invalid_reason'] is not None:
+                        self.assertEqual(handle['neighbour_indices'][token,
+                            position, 0], nc.INVALID_INDEX)
+                        continue
+                    vector = record['vector'] / np.linalg.norm(record['vector'])
+                    scores = self.index.vectors[kept] @ vector
+                    order = np.asarray(kept)[np.argsort(-scores, kind='stable')]
+                    np.testing.assert_array_equal(
+                        handle['neighbour_indices'][token, position], order[:1])
+                    for slot, label in zip('ab', labels[token]):
+                        targets = handle[f'{slot}_type_indices'][token]
+                        ranks = handle[f'{slot}_type_ranks'][token, position]
+                        expected = [r for r in kept
+                            if self.index.metadatas[r].label == label]
+                        np.testing.assert_array_equal(
+                            targets[:len(expected)], expected)
+                        self.assertTrue(np.all(targets[len(expected):]
+                            == nc.INVALID_INDEX))
+                        for target, rank in zip(targets, ranks):
+                            if target == nc.INVALID_INDEX:
+                                self.assertEqual(rank, nc.INVALID_INDEX)
+                            else:
+                                self.assertEqual(rank,
+                                    list(order).index(target))
+
+    def test_cross_gpu_path_writes_the_same_results(self):
+        self.write_cross()
+        names = ('neighbour_indices', 'neighbour_similarities',
+            'a_type_ranks', 'a_type_similarities', 'b_type_ranks',
+            'b_type_similarities')
+        with h5py.File(self.filename) as handle:
+            expected = {name: handle[name][:] for name in names}
+        with fake_gpu_search():
+            self.write_cross(gpu=True, overwrite=True, batch_size=3)
+        with h5py.File(self.filename) as handle:
+            for name in names:
+                np.testing.assert_array_equal(handle[name][:], expected[name])
+
+    def test_cross_rejects_misaligned_context(self):
+        with self.assertRaisesRegex(ValueError, 'follow the queries'):
+            nc.write_cross_frame_offsets(self.index, self.filename,
+                [b'q' * 22], [], [], [('a', 'b')], workspace=self.workspace)
+
     def test_malformed_offset_shapes_are_rejected(self):
         self.write()
         with h5py.File(self.filename, 'r+') as output:

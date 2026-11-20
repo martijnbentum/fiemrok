@@ -150,6 +150,13 @@ def frame_offset_path(model, condition, layer, pooling, workspace=workspace):
         f'layer{layer:02d}_{pooling}.h5')
 
 
+def cross_frame_offset_path(model, layer, pooling, workspace=workspace):
+    '''Return cross-boundary frame-offset results searched in the word index.'''
+    _index_condition(model, 'word', layer, pooling)
+    return (Path(workspace) / 'frame_offsets' / 'cross_boundary_vs_word' /
+        model / f'layer{layer:02d}_{pooling}.h5')
+
+
 def frame_offset_curves_path(model, condition, layer, pooling,
     workspace=workspace):
     '''Return the cached per-token frame-offset curves for one condition.'''

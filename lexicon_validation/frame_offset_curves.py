@@ -18,6 +18,7 @@ POSITION_GRID = np.linspace(-1, 2, 91)
 ONSET_MS = np.arange(-1000, 501, 20)
 OFFSET_MS = np.arange(-500, 1001, 20)
 MAX_GAP_MS = 100
+WORD_SLOTS = ('a', 'b', 'prev', 'next')
 CURVES = ('precision', 'self_rank', 'prev', 'next', 'onset', 'offset')
 
 
@@ -107,14 +108,16 @@ def adjacent_types(result, adjacency):
 
 def load_adjacency(condition, store=None, overwrite=False,
     workspace=lv_locations.workspace, selection_fingerprint=None):
-    '''Load the previous/next word per token, building it when missing.
+    '''Load each token's neighbouring words, building them when missing.
 
-    Only words are supported; cross-boundary adjacency needs a separate
-    definition. Gaps are in ms; edges of the speaker's stream have no label
-    and a NaN gap.
+    Words get the previous/next word (build_adjacency); cross-boundary
+    markers get their two words and the words just outside them
+    (build_marker_adjacency). Gaps are in ms; edges of the speaker's stream
+    have no label and a NaN gap.
     '''
-    if condition != 'word':
-        raise ValueError('adjacency is only defined for word results')
+    builders = dict(word=build_adjacency, cross_boundary=build_marker_adjacency)
+    if condition not in builders:
+        raise ValueError(f'adjacency is not defined for {condition}')
     path = lv_locations.adjacency_path(condition, workspace)
     if path.exists() and not overwrite:
         adjacency = _load_npz(path)
@@ -128,7 +131,7 @@ def load_adjacency(condition, store=None, overwrite=False,
     expected = fingerprint(keys)
     if selection_fingerprint not in (None, expected):
         raise ValueError('saved selection does not match results')
-    adjacency = build_adjacency(items)
+    adjacency = builders[condition](items)
     _save_npz(path, adjacency, selection_fingerprint=expected)
     return adjacency
 
@@ -164,6 +167,47 @@ def build_adjacency(items, stream_words=None):
             adjacency['next_gap'][index] = word.start - item.end
     for side in ('prev', 'next'):
         adjacency[f'{side}_label'] = adjacency[f'{side}_label'].astype(str)
+    return adjacency
+
+
+def build_marker_adjacency(items, stream_words=None):
+    '''Find each marker's two words and the words just outside them.
+
+    a and b are the marker's first and second word; prev precedes a and
+    next follows b in the speaker's stream. Per slot the table holds label,
+    Phraser key, start and end (ms); missing words have an empty label and
+    key. prev_gap and next_gap are measured from a and b.
+    '''
+    if stream_words is None: stream_words = _speaker_words()
+    n_items = len(items)
+    adjacency = {f'{slot}_{name}': np.full(n_items, fill, dtype)
+        for slot in WORD_SLOTS for name, fill, dtype in (('label', '', object),
+        ('key', b'', object), ('start', np.nan, float), ('end', np.nan, float))}
+    order = sorted(range(n_items),
+        key=lambda i: token_features._stream_key(items[i]))
+    words, positions = None, {}
+    for index in progressbar(order):
+        item = items[index]
+        _, (first, second) = token_features._target_phones_and_words(item)
+        stream = stream_words(item)
+        if stream is not words:
+            words = stream
+            positions = {word.key: i for i, word in enumerate(words)}
+        before, after = positions[first.key] - 1, positions[second.key] + 1
+        slots = dict(a=first, b=second,
+            prev=words[before] if before >= 0 else None,
+            next=words[after] if after < len(words) else None)
+        for slot, word in slots.items():
+            if word is None: continue
+            adjacency[f'{slot}_label'][index] = word.label
+            adjacency[f'{slot}_key'][index] = word.key
+            adjacency[f'{slot}_start'][index] = word.start
+            adjacency[f'{slot}_end'][index] = word.end
+    for slot in WORD_SLOTS:
+        adjacency[f'{slot}_label'] = adjacency[f'{slot}_label'].astype(str)
+        adjacency[f'{slot}_key'] = adjacency[f'{slot}_key'].astype(bytes)
+    adjacency['prev_gap'] = adjacency['a_start'] - adjacency['prev_end']
+    adjacency['next_gap'] = adjacency['next_start'] - adjacency['b_end']
     return adjacency
 
 

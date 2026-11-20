@@ -62,7 +62,8 @@ class FakeScorer:
             yield start, queries.astype('float32') @ self.vectors.T
 
 
-def fake_neighbours(scores, top_k, excluded_indices):
+def fake_neighbours(scores, top_k, excluded_indices=None):
+    if excluded_indices is None: excluded_indices = [None] * len(scores)
     neighbours = np.array([svs.ranking.k_nearest_neighbours(row, top_k,
         excluded_index=excluded) for row, excluded in zip(scores,
         excluded_indices)])

@@ -144,18 +144,9 @@ def evaluate_words(words, vector_index, model, output_path, nuclei=None,
     nuclei = [None] * len(words) if nuclei is None else list(nuclei)
     if len(words) != len(nuclei):
         raise ValueError('words and supplied nuclei must have equal lengths')
-    settings = lv_locations.parse_index_name(vector_index.metadatas.name)
-    layers = {unpack_echoframe_key(key)['layer']
-        for metadata in vector_index.metadatas
-        for key in metadata.source_echoframe_keys}
-    if len(layers) != 1:
-        raise ValueError(f'expected one source layer; found {sorted(layers)}')
-    layer = layers.pop()
-    if layer != settings['layer']:
-        raise ValueError(f'index name specifies layer {settings["layer"]}, '
-            f'but source keys specify layer {layer}')
+    settings = _index_settings(vector_index)
     model_name, condition = settings['model'], settings['condition']
-    pooling = settings['pooling']
+    layer, pooling = settings['layer'], settings['pooling']
     queries = (evaluate_word(word, model, nucleus=nucleus, layer=layer,
         max_offset=max_offset, base_collar_ms=base_collar_ms, stride=stride,
         field=field, pooling=pooling) for word, nucleus in zip(words, nuclei))
@@ -167,6 +158,65 @@ def evaluate_words(words, vector_index, model, output_path, nuclei=None,
         workspace=workspace, stride=stride, field=field,
         base_collar_ms=base_collar_ms, gpu=gpu, query_pooling=pooling)
 
+
+
+def evaluate_cross_selection(model, layer, pooling, output_path=None,
+    max_offset=100, base_collar_ms=2000, stride=0.02, field=0.025, top_k=30,
+    batch_size=32, overwrite=False, compression='lzf',
+    workspace=lv_locations.workspace, gpu=False):
+    '''Query the frozen cross-boundary selection against the word index.
+
+    model:        w2v or hubert
+    pooling:      selects the word index and the query pooling (single
+                  frames for center, shifted marker-frame means for mean)
+    output_path:  defaults to lv_locations.cross_frame_offset_path
+    Queries match the cross-boundary frame-offset runs. Each marker's word
+    a, word b, prev and next occurrences are excluded from its neighbours
+    and ranks; the a and b types are ranked. gpu runs both the model and
+    retrieval on a CUDA GPU.
+    '''
+    from .embeddings import MODELS
+    from .frame_offset_curves import WORD_SLOTS, load_adjacency
+    from .neighbour_computation import write_cross_frame_offsets
+    from .neighbour_helper import fingerprint
+    from .token_features import load_selected_items
+
+    if output_path is None:
+        output_path = lv_locations.cross_frame_offset_path(model, layer,
+            pooling, workspace)
+    index = load_index(model, layer, pooling, 'word', workspace)
+    settings = _index_settings(index)
+    keys, items = load_selected_items('cross_boundary', workspace=workspace)
+    adjacency = load_adjacency('cross_boundary', workspace=workspace,
+        selection_fingerprint=fingerprint(keys))
+    context_keys = np.stack([adjacency[f'{slot}_key'] for slot in WORD_SLOTS],
+        axis=1)
+    target_labels = np.stack([adjacency['a_label'], adjacency['b_label']],
+        axis=1)
+    loaded_model = load_model(MODELS[model][0], gpu=gpu)
+    queries = (evaluate_word(item, loaded_model, layer=settings['layer'],
+        max_offset=max_offset, base_collar_ms=base_collar_ms, stride=stride,
+        field=field, pooling=pooling) for item in items)
+    return write_cross_frame_offsets(index, output_path, keys, queries,
+        context_keys, target_labels, max_offset=max_offset, top_k=top_k,
+        batch_size=batch_size, overwrite=overwrite, compression=compression,
+        model=model, workspace=workspace, stride=stride, field=field,
+        base_collar_ms=base_collar_ms, gpu=gpu, query_pooling=pooling)
+
+
+def _index_settings(vector_index):
+    '''Parse the index name and check it against the source key layer.'''
+    settings = lv_locations.parse_index_name(vector_index.metadatas.name)
+    layers = {unpack_echoframe_key(key)['layer']
+        for metadata in vector_index.metadatas
+        for key in metadata.source_echoframe_keys}
+    if len(layers) != 1:
+        raise ValueError(f'expected one source layer; found {sorted(layers)}')
+    layer = layers.pop()
+    if layer != settings['layer']:
+        raise ValueError(f'index name specifies layer {settings["layer"]}, '
+            f'but source keys specify layer {layer}')
+    return settings
 
 
 def load_model(model_name=model_paths.wav2vec2_nl1_name, gpu=False):

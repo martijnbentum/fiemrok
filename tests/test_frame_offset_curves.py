@@ -129,9 +129,28 @@ class FrameOffsetCurveTests(unittest.TestCase):
             foc.load_curves('hubert', 'word', 9, 'mean', n_neighbours=2,
                 workspace=self.workspace)
 
-    def test_cross_boundary_has_no_adjacency(self):
-        with self.assertRaisesRegex(ValueError, 'only defined for word'):
-            foc.load_adjacency('cross_boundary', workspace=self.workspace)
+    def test_adjacency_rejects_unknown_conditions(self):
+        with self.assertRaisesRegex(ValueError, 'not defined for'):
+            foc.load_adjacency('phrase', workspace=self.workspace)
+
+    def test_build_marker_adjacency_finds_outer_words_and_gaps(self):
+        stream = [SimpleNamespace(key=k.encode(), label=k, start=s, end=e,
+            audio_key='r', speaker_key='s') for k, s, e in (('w1', 0, 100),
+            ('w2', 150, 300), ('w3', 300, 400), ('w4', 400, 500))]
+        markers = [SimpleNamespace(words=stream[1:3], audio_key='r',
+            speaker_key='s'), SimpleNamespace(words=stream[2:4],
+            audio_key='r', speaker_key='s')]
+        with mock.patch.object(foc.token_features, '_target_phones_and_words',
+            side_effect=lambda item: ([], item.words)):
+            adjacency = foc.build_marker_adjacency(markers,
+                stream_words=lambda item: stream)
+        np.testing.assert_array_equal(adjacency['a_label'], ['w2', 'w3'])
+        np.testing.assert_array_equal(adjacency['b_key'], [b'w3', b'w4'])
+        np.testing.assert_array_equal(adjacency['prev_label'], ['w1', 'w2'])
+        np.testing.assert_array_equal(adjacency['next_key'], [b'w4', b''])
+        np.testing.assert_array_equal(adjacency['prev_gap'], [50, 0])
+        np.testing.assert_array_equal(adjacency['next_gap'], [0, np.nan])
+        np.testing.assert_array_equal(adjacency['next_end'], [500, np.nan])
 
     def test_build_adjacency_uses_stream_neighbours_and_gaps(self):
         stream = [SimpleNamespace(key=k, label=k, start=s, end=e,
