@@ -179,3 +179,33 @@ segments, or different morphosyntactic contexts).
   the control is therefore partly a familiar word part, which makes the word
   effect conservative there. This is not modelled; a check reports the word
   effect by phone count.
+
+## Retrieval: precision@10
+
+`lexicon_validation/precision_model.py` (`run_precision_model`) models a
+query's precision@10 over both datasets with `is_word`, CGN component,
+gender, age group, phone count, articulation rate and the type's spread
+(distinct speakers and recordings among its tokens). The main outcome is
+cross-speaker precision@10: same-speaker neighbours are removed from the
+saved neighbour list before the top 10 are scored. Each dataset was searched
+in its own index, so `is_word` also contains index differences: a control
+shrinks the word index to the cross-boundary type count (20 random subsets,
+rescored from the saved neighbours); competitor density is only addressed
+by a joint index (planned follow-up).
+
+HuBERT layer 9, `is_word` in precision@10 (95% type-bootstrap CI):
+
+| | mean pooling | center pooling |
+|---|---|---|
+| cross-speaker (main) | +0.174 [0.167, 0.182] | +0.145 [0.139, 0.151] |
+| all neighbours | +0.167 | +0.136 |
+| index-size control | +0.181 (range 0.179-0.182) | +0.150 |
+| 2-3 phones | +0.168 | +0.234 |
+| 4-5 phones | +0.139 | +0.143 |
+| 6-7 phones | +0.198 | +0.141 |
+| 8+ phones | +0.254 | +0.112 |
+
+A larger word index works against words, so equal sizes slightly raise the
+estimate. The retrieval effect is much larger than the similarity effect
+because retrieval is a ranking: a consistent similarity gain moves
+same-type tokens above many competitors.

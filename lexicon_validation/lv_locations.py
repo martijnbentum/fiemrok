@@ -67,6 +67,13 @@ def word_effect_path(model, layer, pooling, workspace=workspace):
     return Path(workspace) / 'factor_models' / name
 
 
+def precision_model_path(model, layer, pooling, workspace=workspace):
+    '''Return the saved per-query precision model summary.'''
+    _index_condition(model, 'word', layer, pooling)
+    name = f'precision_{model}_layer{layer:02d}_{pooling}.json'
+    return Path(workspace) / 'factor_models' / name
+
+
 def store_path(model, condition, n_types, workspace=workspace):
     '''Name a store using its model, dataset, and actual type count.'''
     if model not in ('w2v', 'hubert'):
