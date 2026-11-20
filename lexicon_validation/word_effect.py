@@ -5,10 +5,14 @@ reuse their saved pair samples from factor_models, without the close_phones
 and homophone strata: the model has no homophone term, and their defining
 features would otherwise shift the baseline. Homophones are analysed as a
 separate contrast in factor_models.
-The word effect is the same_type_x_is_word coefficient: the extra gain in
-cosine similarity for the same type when that type is a word rather than a
-cross-boundary phone string. Confidence intervals resample query types
-within each dataset.
+The word effect is the extra gain in cosine similarity for the same type
+when that type is a word rather than a cross-boundary phone string, for
+tokens from different speakers. The same-type terms are fitted per
+phone-count group of the query, because the phone-count matching between
+the datasets is incomplete and the same-type gain depends on length; the
+overall same_type and same_type_x_is_word are averages over the groups,
+weighted by the pooled share of same-type pairs per group. Confidence
+intervals resample query types within each dataset.
 '''
 
 import json
@@ -23,14 +27,13 @@ from .neighbour_results import Result
 
 CONDITIONS = ('word', 'cross_boundary')
 EXCLUDED_STRATA = ('close_phones', 'homophone')
-TERMS = ('is_word', 'same_type', 'same_type_x_is_word',
-    'same_type_x_same_speaker', 'same_speaker', 'same_recording',
+TERMS = ('is_word', 'same_type_x_same_speaker',
+    'same_type_x_same_speaker_x_is_word', 'same_speaker', 'same_recording',
     'same_component', 'same_gender', 'shared_previous_word',
     'shared_next_word', 'cb_same_left_word', 'cb_same_right_word',
     'other_type_distance')
-DERIVED = {'same_type_words': ('same_type', 'same_type_x_is_word')}
-CHECKS = ('interacted', 'speaker_by_dataset', 'distance_all_pairs',
-    'by_length')
+GROUPED = ('same_type', 'same_type_x_is_word')
+CHECKS = ('interacted', 'distance_all_pairs', 'no_length_groups')
 LENGTH_GROUPS = ((2, 3), (4, 5), (6, 7), (8, np.inf))
 
 
@@ -53,6 +56,7 @@ def run_word_effect_model(model='hubert', layer=9, pooling='mean',
     parts = [load_dataset_pairs(condition, model, layer, pooling, workspace)
         for condition in CONDITIONS]
     design, centre = joint_design(parts)
+    weights = length_weights(design)
     similarity = np.concatenate([part['similarity'] for part in parts])
     groups = _type_groups(parts)
     pairs = {part['condition']: _stratum_counts(part) for part in parts}
@@ -60,10 +64,10 @@ def run_word_effect_model(model='hubert', layer=9, pooling='mean',
     for check in (None,) + tuple(checks):
         fitted = check_design(design, parts, centre, check)
         summary = fit_word_effect(fitted, similarity, groups, n_bootstrap,
-            seed)
+            seed, weights)
         summary.update(model=model, layer=layer, pooling=pooling, seed=seed,
             n_bootstrap=n_bootstrap, distance_centre=centre, pairs=pairs,
-            check=check)
+            check=check, length_weights=weights)
         path = lv_locations.word_effect_path(model, layer, pooling,
             workspace, check)
         fm._save_text(path, json.dumps(summary, indent=1))
@@ -74,34 +78,26 @@ def run_word_effect_model(model='hubert', layer=9, pooling='mean',
 def check_design(design, parts, centre, check=None):
     '''Return the design for the main model or one robustness check.
 
-    interacted:          every term also gets its own slope for words
-    speaker_by_dataset:  adds same_type x same_speaker x is_word
+    interacted:          every other term also gets its own slope for words
     distance_all_pairs:  phone distance for same-type pairs too, so the
                          word effect is estimated at equal phones
-    by_length:           same_type and the word effect per phone-count
-                         group of the query (LENGTH_GROUPS)
+    no_length_groups:    one same_type and word-effect term for all lengths
     '''
     design = dict(design)
-    is_word, same_type = design['is_word'], design['same_type']
+    is_word = design['is_word']
     if check == 'interacted':
-        skip = ('is_word', 'same_type', 'same_type_x_is_word',
-            'cb_same_left_word', 'cb_same_right_word')
-        for name in [n for n in design if n not in skip]:
+        skip = ('is_word', 'cb_same_left_word', 'cb_same_right_word')
+        for name in [n for n in design if n not in skip
+            and not n.startswith('same_type')]:
             design[f'{name}_x_is_word'] = design[name] * is_word
-    elif check == 'speaker_by_dataset':
-        design['same_type_x_same_speaker_x_is_word'] = (
-            design['same_type_x_same_speaker'] * is_word)
     elif check == 'distance_all_pairs':
         distance = np.concatenate([_normalised_distance(p) for p in parts])
         design['other_type_distance'] = distance - centre
-    elif check == 'by_length':
-        n_phones = np.concatenate([p['features']['n_phones'][p['queries']]
-            for p in parts])
-        for name in ('same_type', 'same_type_x_is_word'):
-            values = design.pop(name)
-            for low, high in LENGTH_GROUPS:
-                group = (n_phones >= low) & (n_phones <= high)
-                design[f'{name}_{_length_name(low, high)}'] = values * group
+    elif check == 'no_length_groups':
+        for name in GROUPED:
+            columns = [design.pop(_grouped_name(name, group))
+                for group in LENGTH_GROUPS]
+            design[name] = np.sum(columns, axis=0)
     elif check is not None: raise ValueError(f'unknown check: {check}')
     return design
 
@@ -112,8 +108,17 @@ def _normalised_distance(part):
     return pf.phone_edit_distance(f, q, o) / longer
 
 
-def _length_name(low, high):
-    return f'{low}plus' if high == np.inf else f'{low}_{high}'
+def _grouped_name(name, group):
+    low, high = group
+    suffix = f'{low}plus' if high == np.inf else f'{low}_{high}'
+    return f'{name}_{suffix}'
+
+
+def length_weights(design):
+    '''Return each length group's share of the same-type pairs.'''
+    counts = [design[_grouped_name('same_type', group)].sum()
+        for group in LENGTH_GROUPS]
+    return [float(count / sum(counts)) for count in counts]
 
 
 def load_dataset_pairs(condition, model, layer, pooling,
@@ -136,12 +141,13 @@ def load_dataset_pairs(condition, model, layer, pooling,
 
 
 def joint_design(parts):
-    '''Return the joint design columns keyed by TERMS and the distance centre.
+    '''Return the joint design columns and the distance centre.
 
     parts: load_dataset_pairs output for each dataset
-    other_type_distance is the phone edit distance over the longer item's
-    phone count, centred on the mean of random different-type pairs of
-    both datasets, and 0 for same-type pairs.
+    same_type and same_type_x_is_word get one column per LENGTH_GROUPS
+    group of the query's phone count. other_type_distance is the phone edit
+    distance over the longer item's phone count, centred on the mean of
+    random different-type pairs of both datasets, and 0 for same-type pairs.
     '''
     columns = [pair_terms(part['features'], part['queries'], part['others'],
         part['condition'] == 'word') for part in parts]
@@ -151,12 +157,22 @@ def joint_design(parts):
         'different_word') for part in parts])
     distance = design.pop('normalised_distance')
     centre = float(distance[random].mean())
-    same_type = design['same_type']
+    same_type, is_word = design['same_type'], design['is_word']
     design['other_type_distance'] = np.where(same_type == 1, 0,
         distance - centre)
-    design['same_type_x_is_word'] = same_type * design['is_word']
-    design['same_type_x_same_speaker'] = same_type * design['same_speaker']
-    return {name: design[name] for name in TERMS}, centre
+    speaker = same_type * design['same_speaker']
+    design['same_type_x_same_speaker'] = speaker
+    design['same_type_x_same_speaker_x_is_word'] = speaker * is_word
+    result = {name: design[name] for name in TERMS}
+    n_phones = np.concatenate([p['features']['n_phones'][p['queries']]
+        for p in parts])
+    for group in LENGTH_GROUPS:
+        low, high = group
+        in_group = (n_phones >= low) & (n_phones <= high)
+        result[_grouped_name('same_type', group)] = same_type * in_group
+        result[_grouped_name('same_type_x_is_word', group)] = (
+            same_type * is_word * in_group)
+    return result, centre
 
 
 def pair_terms(features, queries, others, is_word):
@@ -193,16 +209,17 @@ def _type_groups(parts):
         for i, part in enumerate(parts)]
 
 
-def fit_word_effect(design, similarity, groups, n_bootstrap=200, seed=0):
+def fit_word_effect(design, similarity, groups, n_bootstrap=200, seed=0,
+    weights=None):
     '''Fit the joint model with confidence intervals from type resamples.
 
     design:      columns keyed by term name, see joint_design
     similarity:  cosine similarity per pair
     groups:      per dataset a (row mask, query type per masked row) pair;
                  types are resampled within each dataset
+    weights:     length-group weights for the overall same-type terms
     Coefficients are in cosine units; other_type_distance is per unit of
-    normalised distance. DERIVED adds sums of coefficients, such as the
-    same-type gain for words.
+    normalised distance. Derived values are added, see _with_derived.
     '''
     names = list(design)
     X = np.column_stack([np.ones(len(similarity))] +
@@ -212,10 +229,10 @@ def fit_word_effect(design, similarity, groups, n_bootstrap=200, seed=0):
     generator = np.random.default_rng(seed)
     samples = []
     for _ in range(n_bootstrap):
-        weights = _resample_weights(groups, len(similarity), generator)
-        samples.append(fm.fit_ols(X, similarity, weights)[0])
-    estimates = _with_derived(names, coefficients)
-    samples = [_with_derived(names, sample) for sample in samples]
+        resample = _resample_weights(groups, len(similarity), generator)
+        samples.append(fm.fit_ols(X, similarity, resample)[0])
+    estimates = _with_derived(names, coefficients, weights)
+    samples = [_with_derived(names, sample, weights) for sample in samples]
     labels = list(estimates)
     return dict(r2=float(r2), n=len(similarity),
         coefficients=fm._with_intervals(labels, list(estimates.values()),
@@ -233,12 +250,25 @@ def _resample_weights(groups, n_rows, generator):
     return weights
 
 
-def _with_derived(names, coefficients):
-    '''Return coefficients by name with the DERIVED sums appended.'''
+def _with_derived(names, coefficients, weights=None):
+    '''Return coefficients by name with derived values appended.
+
+    same_type and same_type_x_is_word: weighted averages over the length
+    groups when fitted per group; same_type_words: their sum, the gain for
+    words across speakers; word_effect_same_speaker: the word effect for
+    tokens from one speaker.
+    '''
     values = dict(zip(names, map(float, coefficients)))
-    for name, parts in DERIVED.items():
-        if all(part in values for part in parts):
-            values[name] = sum(values[part] for part in parts)
+    for name in GROUPED:
+        grouped = [_grouped_name(name, group) for group in LENGTH_GROUPS]
+        if all(column in values for column in grouped):
+            values[name] = float(np.dot(weights, [values[column]
+                for column in grouped]))
+    values['same_type_words'] = (values['same_type']
+        + values['same_type_x_is_word'])
+    if 'same_type_x_same_speaker_x_is_word' in values:
+        values['word_effect_same_speaker'] = (values['same_type_x_is_word']
+            + values['same_type_x_same_speaker_x_is_word'])
     return values
 
 

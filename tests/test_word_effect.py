@@ -12,7 +12,7 @@ from lexicon_validation import word_effect as we
 
 WORDS = {'boom': 'b oː m', 'boon': 'b oː n', 'kat': 'k ɑ t',
     'kast': 'k ɑ s t', 'bom': 'b oː m'}
-STRINGS = ('ə b', 'ə k', 'n d ə', 't ɑ', 's x ɪ')
+STRINGS = ('ə b', 'ə k', 'n d ə', 't ɑ', 's x ɪ', 'ə k ɑ t', 'n b oː m')
 
 
 def table(labels, phones, generator, cross=False):
@@ -62,21 +62,29 @@ class WordEffectTests(unittest.TestCase):
 
     def test_design_codes_dataset_specific_terms(self):
         design, centre = we.joint_design(self.parts)
-        self.assertEqual(tuple(design), we.TERMS)
+        self.assertEqual(tuple(design)[:len(we.TERMS)], we.TERMS)
         is_word = design['is_word'] == 1
         self.assertFalse(design['cb_same_left_word'][is_word].any())
         self.assertTrue(design['cb_same_left_word'][~is_word].any())
-        same_type = design['same_type'] == 1
+        same_type = sum(design[n] for n in design
+            if n.startswith('same_type_') and n[10].isdigit()) == 1
         self.assertFalse(design['other_type_distance'][same_type].any())
         self.assertGreater(centre, 0)
-        np.testing.assert_array_equal(design['same_type_x_is_word'],
-            same_type & is_word)
+        word_effect = sum(design[n] for n in design
+            if n.startswith('same_type_x_is_word_'))
+        np.testing.assert_array_equal(word_effect, same_type & is_word)
+        np.testing.assert_array_equal(
+            design['same_type_x_same_speaker_x_is_word'],
+            design['same_type_x_same_speaker'] * is_word)
+        weights = we.length_weights(design)
+        self.assertAlmostEqual(sum(weights), 1)
+        self.assertGreater(weights[1], 0)
 
     def test_fit_recovers_the_word_effect(self):
         design, _ = we.joint_design(self.parts)
         similarity = np.concatenate([p['similarity'] for p in self.parts])
         summary = we.fit_word_effect(design, similarity,
-            we._type_groups(self.parts), n_bootstrap=20)
+            we._type_groups(self.parts), 20, 0, we.length_weights(design))
         coefficients = summary['coefficients']
         for name, expected in (('same_type', 0.1),
             ('same_type_x_is_word', 0.15), ('same_type_words', 0.25),
@@ -93,20 +101,13 @@ class WordEffectTests(unittest.TestCase):
         design, centre = we.joint_design(self.parts)
         similarity = np.concatenate([p['similarity'] for p in self.parts])
         groups = we._type_groups(self.parts)
+        weights = we.length_weights(design)
         for check in we.CHECKS:
             fitted = we.check_design(design, self.parts, centre, check)
-            fit = we.fit_word_effect(fitted, similarity, groups, 0)
-            coefficients = fit['coefficients']
-            names = [n for n in coefficients
-                if n.startswith('same_type_x_is_word')]
-            self.assertTrue(names, check)
-            for name in names:
-                if not np.isfinite(coefficients[name]['estimate']): continue
-                base = fitted.get(name.replace('_x_is_word', ''))
-                if base is not None and not base[fitted['is_word'] == 0].any():
-                    continue
-                self.assertAlmostEqual(coefficients[name]['estimate'], 0.15,
-                    delta=0.02, msg=f'{check} {name}')
+            fit = we.fit_word_effect(fitted, similarity, groups, 0, 0,
+                weights)
+            effect = fit['coefficients']['same_type_x_is_word']['estimate']
+            self.assertAlmostEqual(effect, 0.15, delta=0.02, msg=check)
         with self.assertRaisesRegex(ValueError, 'unknown check'):
             we.check_design(design, self.parts, centre, 'nope')
 
