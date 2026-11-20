@@ -3,7 +3,8 @@
 This pipeline belongs to `lexicon_validation`, independently of
 `fiemrok_experiment`. Run from `repo/` with the workspace environment active.
 CGN and the two model checkpoints must be accessible for the full rebuild.
-Use Phraser 0.3.13 or newer for saved Lexicon support.
+Use Phraser 0.3.13 or newer for saved Lexicon support. What the validation
+measures as a word effect is defined in [word_effect.md](word_effect.md).
 
 ```python
 from lexicon_validation import pipeline
