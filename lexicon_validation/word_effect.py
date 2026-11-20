@@ -2,7 +2,9 @@
 
 The model and its terms are defined in docs/word_effect.md. Both datasets
 reuse their saved pair samples from factor_models, without the close_phones
-stratum, whose defining phone distance enters only as other_type_distance.
+and homophone strata: the model has no homophone term, and their defining
+features would otherwise shift the baseline. Homophones are analysed as a
+separate contrast in factor_models.
 The word effect is the same_type_x_is_word coefficient: the extra gain in
 cosine similarity for the same type when that type is a word rather than a
 cross-boundary phone string. Confidence intervals resample query types
@@ -20,12 +22,12 @@ from .neighbour_results import Result
 
 
 CONDITIONS = ('word', 'cross_boundary')
-EXCLUDED_STRATA = ('close_phones',)
+EXCLUDED_STRATA = ('close_phones', 'homophone')
 TERMS = ('is_word', 'same_type', 'same_type_x_is_word',
     'same_type_x_same_speaker', 'same_speaker', 'same_recording',
     'same_component', 'same_gender', 'shared_previous_word',
     'shared_next_word', 'cb_same_left_word', 'cb_same_right_word',
-    'same_form_different_label', 'other_type_distance')
+    'other_type_distance')
 DERIVED = {'same_type_words': ('same_type', 'same_type_x_is_word')}
 
 
@@ -80,9 +82,7 @@ def joint_design(parts):
     parts: load_dataset_pairs output for each dataset
     other_type_distance is the phone edit distance over the longer item's
     phone count, centred on the mean of random different-type pairs of
-    both datasets, and 0 for same-type and homophone pairs: both share a
-    form, so they are compared with a typical unrelated item rather than
-    with a distance extrapolated to 0.
+    both datasets, and 0 for same-type pairs.
     '''
     columns = [pair_terms(part['features'], part['queries'], part['others'],
         part['condition'] == 'word') for part in parts]
@@ -93,8 +93,8 @@ def joint_design(parts):
     distance = design.pop('normalised_distance')
     centre = float(distance[random].mean())
     same_type = design['same_type']
-    same_form = (same_type == 1) | (design['same_form_different_label'] == 1)
-    design['other_type_distance'] = np.where(same_form, 0, distance - centre)
+    design['other_type_distance'] = np.where(same_type == 1, 0,
+        distance - centre)
     design['same_type_x_is_word'] = same_type * design['is_word']
     design['same_type_x_same_speaker'] = same_type * design['same_speaker']
     return {name: design[name] for name in TERMS}, centre
@@ -103,8 +103,8 @@ def joint_design(parts):
 def pair_terms(features, queries, others, is_word):
     '''Return one dataset's pair columns before joining and centring.
 
-    Cross-boundary terms are 0 for words and the homophone term is 0 for
-    cross-boundary pairs. Every selected speaker has a known gender.
+    Cross-boundary terms are 0 for words. Every selected speaker has a
+    known gender.
     '''
     f, q, o = features, queries, others
     zeros = np.zeros(len(q))
@@ -118,14 +118,11 @@ def pair_terms(features, queries, others, is_word):
         shared_previous_word=np.nan_to_num(pf.shared_previous_word(f, q, o)),
         shared_next_word=np.nan_to_num(pf.shared_next_word(f, q, o)),
         normalised_distance=pf.phone_edit_distance(f, q, o) / longer)
-    if is_word:
-        terms.update(cb_same_left_word=zeros, cb_same_right_word=zeros,
-            same_form_different_label=pf.same_form_different_label(f, q,
-                o).astype(float))
+    if is_word: terms.update(cb_same_left_word=zeros, cb_same_right_word=zeros)
     else:
-        terms.update(same_form_different_label=zeros,
-            cb_same_left_word=pf.shared_left_word(f, q, o).astype(float),
-            cb_same_right_word=pf.shared_right_word(f, q, o).astype(float))
+        terms.update(cb_same_left_word=pf.shared_left_word(f, q,
+            o).astype(float), cb_same_right_word=pf.shared_right_word(f, q,
+            o).astype(float))
     return terms
 
 

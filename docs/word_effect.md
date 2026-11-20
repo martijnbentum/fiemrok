@@ -21,8 +21,10 @@ included. The orthographic label is a proxy for the lexical entry:
   their most common phone string with another label), mostly spelling-only
   differences (*word/wordt*, *bedoeld/bedoelt*) and inflections merged by
   n-deletion (*alle/allen*, *bijdrage/bijdragen*). The most common phone
-  string per label is only used to detect them. Homophones are not merged;
-  they enter the model as a separate factor.
+  string per label is only used to detect them. Homophones are not merged
+  and are not in the word-effect model: a homophone term would describe
+  same-form pairs as a form effect next to the word effect as defined
+  here. They are analysed as a separate contrast.
 
 **Control.** A cross-boundary item is a phone string spanning the boundary
 between two adjacent words. Its type is the exact phone string, and the
@@ -50,7 +52,6 @@ similarity ~ is_word
            + same_component + same_gender               # speaker and channel
            + shared_previous_word + shared_next_word    # context
            + cb_same_left_word + cb_same_right_word     # cb only, 0 for words
-           + same_form_different_label                  # words only
            + other_type_distance                        # different types only
 ```
 
@@ -63,16 +64,11 @@ similarity ~ is_word
 | speaker and channel | nuisance, one slope for both datasets |
 | context | shared word just before or after the item; for cross-boundary items the words outside its two constituent words |
 | `cb_same_left_word`, `cb_same_right_word` | gain when two cross-boundary tokens share a constituent word: the word effect inside the control |
-| `same_form_different_label` | homophones: same most common phone string, different label |
 | `other_type_distance` | phonetic distance of a different-type pair, 0 for same-type pairs |
 
 `other_type_distance` is the phone Levenshtein distance divided by the
 longer item's phone count, centred on the mean of random different-type
-pairs with one centre for both datasets, and 0 for same-type and homophone
-pairs. Homophones share a form, so like same-type pairs they are compared
-with a typical unrelated item; otherwise their split between the homophone
-and distance terms would rest on extrapolating the distance slope to 0,
-where only homophones lie. It makes
+pairs with one centre for both datasets, and 0 for same-type pairs. It makes
 the baseline a typical unrelated item, so oversampled near neighbours do not
 shift it. Same-type pairs are not adjusted, so pronunciation variants count
 against words, as the definition requires. The scale is linear: similarity
@@ -86,10 +82,12 @@ The model is implemented in `lexicon_validation/word_effect.py`
 (`run_word_effect_model`); summaries are saved as
 `factor_models/word_effect_{model}_layer{layer}_{pooling}.json`.
 
-**Pairs.** All strata except close phones: same type, same type with same
-speaker, different type, different type with same speaker, and homophones
-(words). Every oversampled feature has a model term, so the stratum sizes do
-not bias the estimates.
+**Pairs.** Same type, same type with same speaker, different type, and
+different type with same speaker. The close-phone and homophone strata are
+left out: their defining features have no term in the model, so their
+oversampled pairs would shift the baseline. Every oversampled feature that
+remains has a model term, so the stratum sizes do not bias the estimates.
+In random pairs homophones are negligible (0.001%).
 
 **Dropped.** Age, duration, length, rate and the token-level phone distance
 covariate.
@@ -144,13 +142,13 @@ Joint model, HuBERT layer 9 (cosine units, 95% type-bootstrap CI):
 | `same_type_x_same_speaker` | +0.062 | +0.089 |
 | `cb_same_left_word` | +0.038 | +0.035 |
 | `cb_same_right_word` | +0.056 | +0.033 |
-| `same_form_different_label` | +0.171 | +0.260 |
 | `other_type_distance` (per unit) | -0.208 | -0.120 |
-| R2 | 0.65 | 0.42 |
+| R2 | 0.70 | 0.45 |
 
-Homophones are compared with a typical unrelated item, like same-type
-pairs. They get about 70% (mean pooling) and 90% (center pooling) of the
-same-type gain for words.
+Homophone contrast (same contrast framework, not part of the model): with a
+homophone term and stratum added, homophones reach about 70% (mean pooling)
+and 90% (center pooling) of the same-type gain for words; the word effect
+is the same with or without them (+0.043 and +0.037).
 
 Earlier per-dataset models:
 

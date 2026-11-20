@@ -37,7 +37,8 @@ def table(labels, phones, generator, cross=False):
 
 def part(condition, features, effect, generator):
     pairs = fm.sample_pairs(features, n_pairs=400, seed=1)
-    keep = pairs['stratum'] != fm.STRATA.index('close_phones')
+    excluded = [fm.STRATA.index(name) for name in we.EXCLUDED_STRATA]
+    keep = ~np.isin(pairs['stratum'], excluded)
     q, o = pairs['queries'][keep], pairs['others'][keep]
     same_type = features['label'][q] == features['label'][o]
     same_speaker = features['speaker'][q] == features['speaker'][o]
@@ -64,12 +65,9 @@ class WordEffectTests(unittest.TestCase):
         self.assertEqual(tuple(design), we.TERMS)
         is_word = design['is_word'] == 1
         self.assertFalse(design['cb_same_left_word'][is_word].any())
-        self.assertFalse(design['same_form_different_label'][~is_word].any())
-        self.assertTrue(design['same_form_different_label'][is_word].any())
-        same_form = (design['same_type'] == 1) | (
-            design['same_form_different_label'] == 1)
-        self.assertFalse(design['other_type_distance'][same_form].any())
+        self.assertTrue(design['cb_same_left_word'][~is_word].any())
         same_type = design['same_type'] == 1
+        self.assertFalse(design['other_type_distance'][same_type].any())
         self.assertGreater(centre, 0)
         np.testing.assert_array_equal(design['same_type_x_is_word'],
             same_type & is_word)
