@@ -67,15 +67,20 @@ similarity ~ is_word
 | `other_type_distance` | phonetic distance of a different-type pair, 0 for same-type pairs |
 
 `other_type_distance` is the phone Levenshtein distance divided by the
-longer item's phone count, on a log-like scale, centred on the mean of
-random different-type pairs with one centre for both datasets. It makes the
-baseline a typical unrelated item, so oversampled near neighbours do not
-shift it, and it levels the datasets' difference in how close unrelated
-items are (mean edit distance 6.4 for words, 5.8 for cross-boundary
-strings). Same-type pairs are not adjusted, so pronunciation variants count
-against words, as the definition requires. The exact transform is chosen
-from the observed similarity by distance; homophones can have distance 0,
-so a plain log needs an offset.
+longer item's phone count, centred on the mean of random different-type
+pairs with one centre for both datasets, and 0 for same-type pairs. It makes
+the baseline a typical unrelated item, so oversampled near neighbours do not
+shift it. Same-type pairs are not adjusted, so pronunciation variants count
+against words, as the definition requires. The scale is linear: similarity
+falls roughly linearly with normalised distance (random pairs from about
+0.63 near 0.2 to 0.43 near 1.0, mean pooling). Normalising by length also
+removes the datasets' difference in how close unrelated items are: random
+pairs average 0.900 (words) and 0.907 (cross-boundary), against 6.4 and 5.8
+raw phones.
+
+The model is implemented in `lexicon_validation/word_effect.py`
+(`run_word_effect_model`); summaries are saved as
+`factor_models/word_effect_{model}_layer{layer}_{pooling}.json`.
 
 **Pairs.** All strata except close phones: same type, same type with same
 speaker, different type, different type with same speaker, and homophones
@@ -125,7 +130,26 @@ for both datasets), unit frequency and their interactions with
 
 ## Results so far
 
-Per-dataset pair models (not yet the joint model), HuBERT layer 9:
+Joint model, HuBERT layer 9 (cosine units, 95% type-bootstrap CI):
+
+| term | mean pooling | center pooling |
+|---|---|---|
+| `same_type` (cross-boundary, no shared word) | +0.204 [0.201, 0.206] | +0.251 [0.246, 0.255] |
+| `same_type_x_is_word` (**word effect**) | +0.043 [0.039, 0.046] | +0.037 [0.032, 0.043] |
+| same-type gain for words | +0.246 | +0.288 |
+| `same_type_x_same_speaker` | +0.062 | +0.089 |
+| `cb_same_left_word` | +0.038 | +0.035 |
+| `cb_same_right_word` | +0.056 | +0.033 |
+| `same_form_different_label` | +0.045 | +0.173 |
+| `other_type_distance` (per unit) | -0.163 | -0.112 |
+| R2 | 0.65 | 0.42 |
+
+The homophone term is now the gain beyond what phone closeness predicts:
+homophones have normalised distance near 0, so the distance term already
+adds about 0.15 (mean pooling) relative to a typical unrelated item.
+
+Earlier per-dataset models:
+
 
 | | words, mean | words, center | cb, mean | cb, center |
 |---|---|---|---|---|
