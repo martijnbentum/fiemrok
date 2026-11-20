@@ -217,6 +217,14 @@ def type_weighted_mean(values, token_types, n_boot=1000, seed=0):
     The mean weights tokens equally; the 95% interval resamples types.
     NaN values are skipped.
     '''
+    mean, boot = type_bootstrap(values, token_types, n_boot, seed)
+    if not np.isfinite(boot).any(): return mean, mean.copy(), mean.copy()
+    low, high = np.nanpercentile(boot, [2.5, 97.5], axis=0)
+    return mean, low, high
+
+
+def type_bootstrap(values, token_types, n_boot=1000, seed=0):
+    '''Return the token-weighted mean and n_boot type-resampled means.'''
     values = np.asarray(values, dtype=float)
     present = ~np.isnan(values)
     n_types = int(token_types.max()) + 1
@@ -231,9 +239,7 @@ def type_weighted_mean(values, token_types, n_boot=1000, seed=0):
         weights = np.zeros((n_boot, n_types))
         np.add.at(weights, (np.arange(n_boot)[:, None], draws), 1)
         boot = (weights @ sums) / (weights @ counts)
-    if not np.isfinite(boot).any(): return mean, mean.copy(), mean.copy()
-    low, high = np.nanpercentile(boot, [2.5, 97.5], axis=0)
-    return mean, low, high
+    return mean, boot
 
 
 def _grids():

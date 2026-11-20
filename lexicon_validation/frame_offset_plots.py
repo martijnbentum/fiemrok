@@ -6,10 +6,15 @@ import numpy as np
 
 from . import frame_offset_curves as foc
 from . import lv_locations
+from . import word_competition as wc
 
 COLORS = dict(center='#1b6ca8', mean='#d9622b')
 POSITION_TICKS = [-1, -0.5, 0, 0.5, 1, 1.5, 2]
 POSITION_LABELS = ['-1', '-0.5', 'onset', '0.5', 'offset', '+0.5', '+1']
+SLOT_COLORS = dict(own='#333333', a='#1b6ca8', b='#d9622b', prev='#5e9c3a',
+    next='#8e5ea2')
+SECTION_LABELS = dict(prev='prev', a='word 1', b='word 2', next='next')
+MIN_COVERAGE = .5
 
 
 def plot_frame_offsets(model, condition, layer, n_neighbours=10,
@@ -114,3 +119,117 @@ def _style_axes(axes, condition, n_neighbours):
         axes[name].set_title(f'{name.capitalize()} aligned')
     axes['onset'].set_ylabel(f'{precision} (target type)')
     axes['onset'].legend(frameon=False, fontsize=8)
+
+
+def plot_word_competition(model, layer, n_neighbours=10, overwrite=False,
+    workspace=lv_locations.workspace, output=None):
+    '''Plot own-type versus word shares for cross-boundary queries.
+
+    model:         hubert or w2v
+    n_neighbours:  size of the merged neighbour list
+    overwrite:     recompute cached curves
+    output:        figure path without suffix; defaults to the workspace
+                   figures folder. Saves .png and .pdf.
+    Columns are center and mean pooling. Rows: shares of the merged
+    neighbours, own minus word 1/word 2 with a simultaneous band, nearest
+    ranks, and the marker share with coverage. Grid points covered by
+    fewer than MIN_COVERAGE of a curve's tokens are not drawn. Prints the
+    exclusion table and the regions where a difference band excludes 0.
+    '''
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    figure, axes = plt.subplots(4, 2, figsize=(14, 15), sharex=True,
+        sharey='row', constrained_layout=True)
+    for column, pooling in enumerate(COLORS):
+        curves = wc.load_curves(model, layer, pooling, n_neighbours,
+            overwrite, workspace)
+        print(pooling, wc.exclusion_table(curves))
+        _plot_competition(axes[:, column], curves, pooling, n_neighbours)
+    title = (f'{model} layer {layer}, cross_boundary queries: own type vs '
+        'words (token-weighted means, bands bootstrapped over marker types)')
+    figure.suptitle(title)
+    if output is None:
+        name = f'word_competition_{model}_layer{layer:02d}'
+        output = lv_locations.figure_path(name, workspace)
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    for suffix in ('png', 'pdf'):
+        figure.savefig(output.with_name(f'{output.name}.{suffix}'), dpi=150)
+    return figure
+
+
+def _plot_competition(axes, curves, pooling, n_neighbours):
+    '''Draw one pooling's column.'''
+    x, types = wc.SECTION_GRID, curves['token_types']
+    shares, differences, ranks, pools = axes
+    for name, color in SLOT_COLORS.items():
+        values = curves[name]
+        n = int((~np.isnan(values).all(1)).sum())
+        label = 'own type' if name == 'own' else SECTION_LABELS[name]
+        _clipped_band(shares, x, values, types, color, f'{label} (N={n:,})')
+    for name in ('a', 'b'):
+        values = curves['own'] - curves[name]
+        mean, low, high = wc.simultaneous_band(values, types)
+        hidden = wc.coverage(values) < MIN_COVERAGE
+        for array in (mean, low, high): array[hidden] = np.nan
+        label = f'own - {SECTION_LABELS[name]}'
+        differences.plot(x, mean, color=SLOT_COLORS[name], label=label)
+        differences.fill_between(x, low, high, color=SLOT_COLORS[name],
+            alpha=.25, lw=0)
+        found = wc.regions(x, (low > 0) | (high < 0))
+        print(pooling, label, 'band excludes 0 at',
+            [(round(a, 2), round(b, 2)) for a, b in found])
+    for name, pool, label in (('own', 'n_markers', 'own type'),
+        ('a', 'n_words', 'word 1'), ('b', 'n_words', 'word 2')):
+        values = curves[f'{name}_rank']
+        median = 10 ** np.nanmedian(values, 0)
+        median[wc.coverage(values) < MIN_COVERAGE] = np.nan
+        color = SLOT_COLORS[name]
+        ranks.plot(x, median, color=color, label=f'nearest {label}')
+        ranks.axhline(curves[pool] / 31, color=color, ls=':', lw=.8)
+    _clipped_band(pools, x, curves['marker'], types, SLOT_COLORS['own'],
+        'marker share')
+    pools.plot(x, wc.coverage(curves['own']), color='grey', ls='--',
+        label='coverage (own curve)')
+    precision = f'top {n_neighbours}'
+    shares.set_title(f'{pooling}: share of merged {precision}')
+    shares.set_ylabel(f'share of merged {precision}')
+    differences.axhline(0, color='grey', lw=.8)
+    differences.set_ylabel('own minus word share')
+    differences.set_title('own type minus word (95% simultaneous band)')
+    ranks.set_yscale('log')
+    ranks.set_ylabel('median nearest rank (+1)')
+    ranks.set_title('nearest own / word token (dotted: chance N/31)')
+    pools.set_ylim(0, 1)
+    pools.set_ylabel('fraction')
+    pools.set_title('marker share of merged list; query coverage')
+    _style_sections(axes, curves)
+
+
+def _clipped_band(ax, x, values, types, color, label):
+    '''Plot a mean band, hiding grid points with low coverage.'''
+    mean, low, high = foc.type_weighted_mean(values, types)
+    hidden = wc.coverage(values) < MIN_COVERAGE
+    for array in (mean, low, high): array[hidden] = np.nan
+    ax.plot(x, mean, color=color, label=label)
+    ax.fill_between(x, low, high, color=color, alpha=.25, lw=0)
+
+
+def _style_sections(axes, curves):
+    '''Mark section edges, the marker span and label the sections.'''
+    starts, ends = curves['marker_start'], curves['marker_end']
+    for ax in axes:
+        for edge in (1, 2, 3): ax.axvline(edge, color='grey', lw=.8)
+        for values in (starts, ends):
+            if np.isnan(values).all(): continue
+            q25, median, q75 = np.nanpercentile(values, [25, 50, 75])
+            ax.axvspan(q25, q75, color='grey', alpha=.1, lw=0)
+            ax.axvline(median, color='grey', ls='--', lw=.8)
+        ax.set_xlim(0, 4)
+        if ax.get_legend_handles_labels()[0]:
+            ax.legend(frameon=False, fontsize=8)
+    axes[-1].set_xticks([.5, 1.5, 2.5, 3.5], list(SECTION_LABELS.values()))
+    axes[-1].set_xlabel('query position (each word stretched to unit width; '
+        'dashed: median marker edges, IQR shaded)')

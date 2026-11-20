@@ -195,6 +195,13 @@ def frame_offset_curves_path(model, condition, layer, pooling,
         f'layer{layer:02d}_{pooling}.npz')
 
 
+def word_competition_path(model, layer, pooling, workspace=workspace):
+    '''Return cached word-competition curves for cross-boundary queries.'''
+    _index_condition(model, 'word', layer, pooling)
+    return (Path(workspace) / 'frame_offset_curves' / 'cross_boundary_vs_word'
+        / model / f'layer{layer:02d}_{pooling}.npz')
+
+
 def adjacency_path(condition, workspace=workspace):
     '''Return the cached previous/next word table for one dataset.'''
     selection_path(condition, workspace)
