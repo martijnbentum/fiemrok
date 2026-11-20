@@ -11,7 +11,7 @@ from lexicon_validation import factor_models as fm
 
 
 WORDS = {'boom': 'b oː m', 'boon': 'b oː n', 'been': 'b eː n',
-    'kat': 'k ɑ t', 'kast': 'k ɑ s t', 'mat': 'm ɑ t'}
+    'kat': 'k ɑ t', 'kast': 'k ɑ s t', 'mat': 'm ɑ t', 'bom': 'b oː m'}
 
 
 def table(n_per_word=8, seed=0):
@@ -59,6 +59,16 @@ class FactorModelTests(unittest.TestCase):
         self.assertTrue(np.all((distance >= 1) & (distance <= 2)))
         np.testing.assert_array_equal(f['n_phones'][q[close]],
             f['n_phones'][o[close]])
+        homophone = stratum == fm.STRATA.index('homophone')
+        pairs = {tuple(sorted(f['label'][[a, b]]))
+            for a, b in zip(q[homophone], o[homophone])}
+        self.assertEqual(pairs, {('bom', 'boom')})
+        design = fm.pair_design(f, q, o)
+        flagged = design['same_form_different_label'] == 1
+        self.assertTrue(np.all(flagged[homophone]))
+        flagged_pairs = {tuple(sorted(f['label'][[a, b]]))
+            for a, b in zip(q[flagged], o[flagged])}
+        self.assertEqual(flagged_pairs, {('bom', 'boom')})
 
     def test_models_recover_a_word_effect(self):
         f, p = self.features, self.pairs

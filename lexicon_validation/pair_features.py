@@ -6,6 +6,7 @@ neighbour_indices or same-type indices; it returns an array shaped like the
 other rows. Float outputs use NaN where a comparison is undefined.
 '''
 
+from collections import Counter, defaultdict
 from functools import lru_cache
 
 from dutch_syllabifier import sonority
@@ -91,6 +92,30 @@ def absolute_difference(features, name, queries, others):
     '''Return the absolute difference of a numeric feature column.'''
     query, other = _values(features, name, queries, others)
     return np.abs(query.astype(float) - other.astype(float))
+
+
+def modal_forms(features):
+    '''Return each token's phonological form: the most common phone
+    string among the tokens of its label; ties go to the first seen.
+    '''
+    counts = defaultdict(Counter)
+    for label, phones in zip(features['label'], features['phones']):
+        counts[label][phones] += 1
+    modal = {label: count.most_common(1)[0][0]
+        for label, count in counts.items()}
+    return np.array([modal[label] for label in features['label']],
+        dtype=object)
+
+
+def same_form_different_label(features, queries, others, forms=None):
+    '''Return True for homophone pairs: different labels, same modal form.
+
+    forms: optional precomputed modal_forms(features)
+    '''
+    if forms is None: forms = modal_forms(features)
+    query, other = _values(dict(features, form=forms), 'form', queries,
+        others)
+    return (query == other) & ~_equal(features, 'label', queries, others)
 
 
 def phone_edit_distance(features, queries, others):

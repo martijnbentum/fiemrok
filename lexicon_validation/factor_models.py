@@ -10,6 +10,7 @@ Confidence intervals come from resampling query types.
 '''
 
 import json
+from collections import defaultdict
 from pathlib import Path
 import tempfile
 
@@ -22,7 +23,7 @@ from .neighbour_results import Result
 
 
 STRATA = ('same_word', 'same_word_same_speaker', 'different_word',
-    'different_word_same_speaker', 'close_phones')
+    'different_word_same_speaker', 'close_phones', 'homophone')
 
 
 def run_pair_models(condition, model='hubert', layer=9, pooling='mean',
@@ -95,7 +96,9 @@ def sample_pairs(features, n_pairs=100_000, seed=0, max_distance=2):
     seed:          random seed
     max_distance:  largest phone edit distance in the close_phones stratum
     Strata are listed in STRATA; close_phones holds different-label pairs
-    with equal phone count and phone edit distance 1 to max_distance.
+    with equal phone count and phone edit distance 1 to max_distance;
+    homophone holds different-label pairs with the same modal form, and
+    is empty when no labels share one.
     Returns queries, others and stratum index arrays.
     '''
     generator = np.random.default_rng(seed)
@@ -116,9 +119,23 @@ def sample_pairs(features, n_pairs=100_000, seed=0, max_distance=2):
     queries, others = _close_phone_pairs(features, n_pairs, max_distance,
         generator)
     parts.append((queries, others, len(groups)))
+    queries, others = _draw_within(_homophone_groups(features), labels,
+        False, n_pairs, generator)
+    parts.append((queries, others, len(groups) + 1))
     return dict(queries=np.concatenate([p[0] for p in parts]),
         others=np.concatenate([p[1] for p in parts]),
         stratum=np.concatenate([np.full(len(p[0]), p[2]) for p in parts]))
+
+
+def _homophone_groups(features):
+    '''Group tokens by modal form; tokens of unshared forms get own groups.'''
+    forms = pf.modal_forms(features)
+    labels_per_form = defaultdict(set)
+    for label, form in zip(features['label'], forms):
+        labels_per_form[form].add(label)
+    shared = np.array([len(labels_per_form[form]) > 1 for form in forms])
+    own = np.char.add('\x00', np.arange(len(forms)).astype(str))
+    return np.where(shared, forms.astype(str), own)
 
 
 def _draw_within(group, labels, same_label, n_pairs, generator,
@@ -126,6 +143,7 @@ def _draw_within(group, labels, same_label, n_pairs, generator,
     '''Draw pairs within groups whose labels are equal or differ.'''
     ids, counts = np.unique(group, return_inverse=True, return_counts=True)[1:]
     eligible = np.flatnonzero(counts[ids] > 1)
+    if not len(eligible): return np.array([], int), np.array([], int)
     order = np.argsort(ids, kind='stable')
     starts = np.concatenate([[0], np.cumsum(counts)[:-1]])
     queries = generator.choice(eligible, size=n_pairs)
@@ -196,7 +214,9 @@ def pair_design(features, queries, others):
         shared_previous_word=np.nan_to_num(pf.shared_previous_word(f, q, o)),
         shared_next_word=np.nan_to_num(pf.shared_next_word(f, q, o)),
         frequency_difference=pf.absolute_difference(f, frequency, q, o),
-        mean_n_phones=(f['n_phones'][q] + f['n_phones'][o]) / 2)
+        mean_n_phones=(f['n_phones'][q] + f['n_phones'][o]) / 2,
+        same_form_different_label=pf.same_form_different_label(f, q,
+            o).astype(float))
     if cross:
         design['shared_left_word'] = pf.shared_left_word(f, q, o).astype(float)
         design['shared_right_word'] = pf.shared_right_word(f, q,
@@ -301,6 +321,9 @@ def matched_contrasts(design, similarity, stratum, cells, weights):
     other_speaker:      same word vs random different word, other speakers
     phone_distance_1/2: same word vs close_phones pair at equal distance,
                         other speakers; words only, NaN if too few pairs
+    homophone:          same word vs homophone pair, other speakers; NaN
+                        without homophone pairs
+    homophone_distance_0: as homophone, both with identical phones
     matched_cells:      differences within match_cells, weighted by
                         same-word pairs; phones are not matched
     '''
@@ -322,6 +345,12 @@ def matched_contrasts(design, similarity, stratum, cells, weights):
         enough = min(same.sum(), close.sum()) >= 30
         contrasts[f'phone_distance_{d}'] = (mean(same) - mean(close)
             if enough else np.nan)
+    homophone = in_stratum['homophone'] & ~same_speaker
+    other_speaker = same_word & ~same_speaker
+    contrasts['homophone'] = mean(other_speaker) - mean(homophone)
+    exact = distance == 0
+    contrasts['homophone_distance_0'] = (mean(other_speaker & exact)
+        - mean(homophone & exact))
     contrasts['matched_cells'] = _cell_contrast(design['same_word'] == 1,
         similarity, cells, weights)
     return contrasts
