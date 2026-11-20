@@ -1,8 +1,7 @@
 # Word identity and the word effect
 
 This note defines what the lexicon validation measures as a word effect and
-how it is estimated. It belongs to `lexicon_validation` only. Open points
-are listed at the end and will be settled one by one.
+how it is estimated. It belongs to `lexicon_validation` only.
 
 ## Word identity
 
@@ -43,37 +42,86 @@ matching.
 pairs sampled on predictors only (`lexicon_validation/factor_models.py`):
 
 ```
-similarity ~ same_type × is_word
+similarity ~ is_word
+           + same_type
+           + same_type × is_word                        # word effect
            + same_type × same_speaker
-           + same_type × shared_left_word + same_type × shared_right_word   (cb)
-           + same_form_different_label                                       (words)
-           + phone_edit_distance + log_duration_ratio + mean_n_phones
-           + same_recording + same_component + same_gender + age_difference
-           + rate_difference + shared_previous_word + shared_next_word
-           + frequency_difference
-           (× is_word for duration, length and phone distance)
+           + same_speaker + same_recording
+           + same_component + same_gender               # speaker and channel
+           + shared_previous_word + shared_next_word    # context
+           + cb_same_left_word + cb_same_right_word     # cb only, 0 for words
+           + same_form_different_label                  # words only
+           + other_type_distance                        # different types only
 ```
 
-- `same_type × is_word` is the word effect.
-- `same_type` is phone-string identity: the cross-boundary baseline.
-- `same_type × shared_left/right_word` measures how much of cross-boundary
-  similarity is carried by the words a string is part of. Shared words are
-  modelled, not excluded, to keep the control set large. A possible
-  refinement is the share of the string's phones that come from a shared
-  word.
-- `same_form_different_label` is the homophone effect.
-- `same_type × same_speaker` shows whether identity holds across speakers.
+| term | meaning |
+|---|---|
+| `is_word` | baseline similarity difference between the datasets |
+| `same_type` | gain for the same phone string (cross-boundary), across speakers |
+| `same_type × is_word` | **the word effect**: extra gain when the string is a word |
+| `same_type × same_speaker` | extra gain when a same-type pair also shares the speaker |
+| speaker and channel | nuisance, one slope for both datasets |
+| context | shared word just before or after the item; for cross-boundary items the words outside its two constituent words |
+| `cb_same_left_word`, `cb_same_right_word` | gain when two cross-boundary tokens share a constituent word: the word effect inside the control |
+| `same_form_different_label` | homophones: same most common phone string, different label |
+| `other_type_distance` | phonetic distance of a different-type pair, 0 for same-type pairs |
 
-Confidence intervals come from resampling query types.
+`other_type_distance` is the phone Levenshtein distance divided by the
+longer item's phone count, on a log-like scale, centred on the mean of
+random different-type pairs with one centre for both datasets. It makes the
+baseline a typical unrelated item, so oversampled near neighbours do not
+shift it, and it levels the datasets' difference in how close unrelated
+items are (mean edit distance 6.4 for words, 5.8 for cross-boundary
+strings). Same-type pairs are not adjusted, so pronunciation variants count
+against words, as the definition requires. The exact transform is chosen
+from the observed similarity by distance; homophones can have distance 0,
+so a plain log needs an offset.
+
+**Pairs.** All strata except close phones: same type, same type with same
+speaker, different type, different type with same speaker, and homophones
+(words). Every oversampled feature has a model term, so the stratum sizes do
+not bias the estimates.
+
+**Dropped.** Age, duration, length, rate and the token-level phone distance
+covariate.
+
+Confidence intervals come from resampling query types. Covariates have one
+slope for both datasets.
+
+**Checks.**
+
+- Every term with its own slope per dataset (`× is_word`); a shift of the
+  word effect beyond its confidence interval is reported.
+- `same_type × same_speaker × is_word`.
+- Phone distance for all pairs, which estimates the word effect at
+  identical phones; the difference with the main model is the cost of
+  pronunciation variation.
+- Boundary covariates (see below).
+- Center pooling.
+- The word effect by phone count.
+
+The main model has no frequency terms. Recurrence as a unit may be the
+mechanism behind the effect, so frequency is treated as a mediator: a
+second model will add string frequency (all occurrences of the phone
+string in running speech, within or across words, counted the same way
+for both datasets), unit frequency and their interactions with
+`same_type`, and report how much the word effect changes.
 
 **Interpretation.**
 
 - Word pairs include pronunciation variants, cross-boundary pairs are
-  phone-identical by construction. With phone edit distance as a
-  covariate, the estimate is conservative.
+  phone-identical by construction. Same-type pairs are not adjusted for
+  phone distance, so the estimate is conservative.
 - HuBERT has no stored lexicon. A positive effect means word units are
   represented more consistently than recurring strings that cross a word
   boundary.
+- Boundary cues are part of the effect. A word is a unit without an
+  internal boundary, and the acoustic realisation of a boundary (final
+  lengthening, pauses, assimilation, coarticulation) is part of what makes
+  a string not a word. The main model therefore has no boundary covariates.
+  A sensitivity model may add them (relative duration of the boundary
+  phones, a pause flag) to show how much of the effect runs through
+  boundary acoustics.
 
 ## Results so far
 
@@ -90,13 +138,18 @@ mainly a form effect. Same-word pairs with identical phones remain about
 a smaller label-specific part (possibly residual acoustic traces of deleted
 segments, or different morphosyntactic contexts).
 
-## Open points
+## Decisions
 
-1. Boundary cues: part of the effect, or a confound to control?
-2. Frequency: mediator of the effect or nuisance covariate? Needs counts
-   that are comparable for words and cross-boundary strings.
-3. Dataset-specific slopes for duration, length and phone distance only,
-   with a fully interacted model as a robustness check?
-4. Word and cross-boundary tokens with the same phone string: an extra
-   stratum in the joint model, or a separate contrast?
-5. Mean pooling as the main analysis and center pooling as a check?
+- Mean pooling is the main analysis; center pooling is a check, since a
+  cross-boundary item's centre frame can sit on the word boundary.
+- Cross-boundary strings identical to a word form are an edge case and get
+  no model term: 49 cross-boundary types (0.9%) equal a sampled word type's
+  most common form, 100 (1.9%) equal some sampled word token, and 261
+  (4.8%) occur as a whole word somewhere in the store. They are mostly 2-3
+  phones (*maar*, *naam*, *kop*, *moe*).
+- Short cross-boundary strings often occur inside words
+  (`frequencies/cross_boundary_string_counts.pkl`): 66% of the occurrences
+  of 2-phone and 48% of 3-phone types lie within one word. For short items
+  the control is therefore partly a familiar word part, which makes the word
+  effect conservative there. This is not modelled; a check reports the word
+  effect by phone count.
